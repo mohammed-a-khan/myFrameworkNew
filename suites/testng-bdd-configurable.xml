@@ -1,0 +1,57 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="CS Framework BDD Suite - Configurable" parallel="false" verbose="2">
+    
+    <!-- Example of configurable BDD test execution -->
+    <test name="BDD Tests with Custom Configuration">
+        <!-- Features path now supports:
+             - Single directory: "features"
+             - Multiple directories: "features/smoke,features/regression"
+             - Specific files: "features/login.feature,features/employee.feature"
+             - Mix of both: "features/core,features/api/users.feature"
+        -->
+        <parameter name="featuresPath" value="features"/>
+        <parameter name="tags" value="@smoke,@regression"/>
+        <parameter name="excludeTags" value="@ignore,@wip"/>
+        <!-- Specify step definition packages - comma separated -->
+        <parameter name="stepDefPackages" value="com.orangehrm.stepdefs,com.mycompany.steps,com.custom.stepdefs"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Example with different configuration -->
+    <test name="API Tests Only">
+        <parameter name="featuresPath" value="features/api"/>
+        <parameter name="tags" value="@api"/>
+        <parameter name="stepDefPackages" value="com.orangehrm.stepdefs.api,com.testforge.api.steps"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Example with multiple feature paths -->
+    <test name="Mixed Feature Tests">
+        <!-- Run specific feature files from different directories -->
+        <parameter name="featuresPath" value="features/employee-management.feature,features/leave-management.feature,features/api"/>
+        <parameter name="tags" value="@critical"/>
+        <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Example running features from multiple directories -->
+    <test name="All Module Tests">
+        <!-- Scan multiple directories for feature files -->
+        <parameter name="featuresPath" value="features/hr,features/finance,features/inventory"/>
+        <parameter name="stepDefPackages" value="com.modules.hr.steps,com.modules.finance.steps,com.modules.inventory.steps"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

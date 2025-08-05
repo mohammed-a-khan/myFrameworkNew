@@ -1,0 +1,32 @@
+[
+  {
+    "TestCaseID": "API_TC01",
+    "FirstName": "Alice",
+    "LastName": "Johnson",
+    "EmployeeID": "API001",
+    "Email": "alice.johnson@company.com",
+    "JobTitle": "Software Engineer",
+    "StatusCode": 201,
+    "Priority": "High"
+  },
+  {
+    "TestCaseID": "API_TC02",
+    "FirstName": "Bob",
+    "LastName": "Smith",
+    "EmployeeID": "API002",
+    "Email": "bob.smith@company.com",
+    "JobTitle": "QA Engineer",
+    "StatusCode": 201,
+    "Priority": "High"
+  },
+  {
+    "TestCaseID": "API_TC03",
+    "FirstName": "Charlie",
+    "LastName": "Brown",
+    "EmployeeID": "API003",
+    "Email": "charlie.brown@company.com",
+    "JobTitle": "DevOps Engineer",
+    "StatusCode": 201,
+    "Priority": "Medium"
+  }
+]

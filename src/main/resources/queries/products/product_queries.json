@@ -1,0 +1,95 @@
+{
+  "findProductById": {
+    "sql": "SELECT p.id, p.name, p.description, p.price, p.category_id, p.stock_quantity, p.status FROM products p WHERE p.id = :productId AND p.status = 'ACTIVE'",
+    "description": "Find active product by ID",
+    "category": "products",
+    "tags": ["read", "single"],
+    "parameters": {
+      "productId": {
+        "type": "long",
+        "required": true,
+        "description": "Product identifier"
+      }
+    }
+  },
+  
+  "findProductsByCategory": {
+    "sql": "SELECT p.id, p.name, p.description, p.price, p.category_id, p.stock_quantity, p.status FROM products p WHERE p.category_id = :categoryId AND p.status = 'ACTIVE' ORDER BY p.name LIMIT ${maxResults}",
+    "description": "Find products by category with limit",
+    "category": "products",
+    "tags": ["read", "list", "filtered"],
+    "parameters": {
+      "categoryId": {
+        "type": "long",
+        "required": true,
+        "description": "Category identifier"
+      },
+      "maxResults": {
+        "type": "int",
+        "required": false,
+        "default": 100,
+        "description": "Maximum number of results"
+      }
+    }
+  },
+  
+  "searchProducts": {
+    "sql": "SELECT p.id, p.name, p.description, p.price, p.category_id, p.stock_quantity, p.status FROM products p WHERE (p.name LIKE :searchTerm OR p.description LIKE :searchTerm) AND p.status = 'ACTIVE' ORDER BY p.name LIMIT ${maxResults}",
+    "description": "Search products by name or description",
+    "category": "products",
+    "tags": ["read", "search", "list"],
+    "parameters": {
+      "searchTerm": {
+        "type": "string",
+        "required": true,
+        "description": "Search term (use % wildcards)"
+      },
+      "maxResults": {
+        "type": "int",
+        "required": false,
+        "default": 50,
+        "description": "Maximum number of results"
+      }
+    }
+  },
+  
+  "updateProductStock": {
+    "sql": "UPDATE products SET stock_quantity = :stockQuantity, modified_date = :modifiedDate WHERE id = :productId",
+    "description": "Update product stock quantity",
+    "category": "products",
+    "tags": ["update", "stock"],
+    "parameters": {
+      "productId": {
+        "type": "long",
+        "required": true,
+        "description": "Product identifier"
+      },
+      "stockQuantity": {
+        "type": "int",
+        "required": true,
+        "description": "New stock quantity"
+      },
+      "modifiedDate": {
+        "type": "timestamp",
+        "required": true,
+        "description": "Modification timestamp"
+      }
+    }
+  },
+  
+  "getProductStats": {
+    "sql": "SELECT COUNT(*) as total_products, SUM(stock_quantity) as total_stock, AVG(price) as avg_price, MIN(price) as min_price, MAX(price) as max_price FROM products WHERE status = 'ACTIVE'",
+    "description": "Get product statistics for active products",
+    "category": "products",
+    "tags": ["read", "statistics"],
+    "parameters": {}
+  },
+  
+  "getLowStockProducts": {
+    "sql": "SELECT p.id, p.name, p.stock_quantity, p.reorder_level FROM products p WHERE p.stock_quantity <= p.reorder_level AND p.status = 'ACTIVE' ORDER BY p.stock_quantity ASC",
+    "description": "Find products with low stock levels",
+    "category": "products",
+    "tags": ["read", "alert", "stock"],
+    "parameters": {}
+  }
+}

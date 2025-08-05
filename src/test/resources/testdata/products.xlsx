@@ -1,0 +1,9 @@
+# Excel file placeholder for products data
+# Sheet: ProductData
+# Columns: TestID, ProductName, Category, Price, Status, Environment
+# Sample data:
+# PROD-01, Laptop Pro 15, Electronics, 1299.99, Active, QA
+# PROD-02, Office Chair Deluxe, Furniture, 459.99, Active, QA
+# PROD-03, Wireless Mouse, Electronics, 29.99, Active, QA
+# PROD-04, Standing Desk, Furniture, 799.99, Inactive, QA
+# PROD-05, USB-C Hub, Electronics, 49.99, Active, QA

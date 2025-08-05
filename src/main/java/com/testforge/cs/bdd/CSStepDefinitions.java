@@ -1,0 +1,172 @@
+package com.testforge.cs.bdd;
+
+import com.testforge.cs.core.CSBaseTest;
+import com.testforge.cs.core.CSBasePage;
+import com.testforge.cs.driver.CSDriver;
+import com.testforge.cs.reporting.CSReportManager;
+import com.testforge.cs.config.CSConfigManager;
+import com.testforge.cs.screenshot.CSScreenshotUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.testng.Assert;
+import java.util.Map;
+
+/**
+ * Base class for BDD step definitions
+ * Provides common functionality and utilities for step definition classes
+ */
+public abstract class CSStepDefinitions {
+    
+    protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+    protected final CSReportManager reportManager = CSReportManager.getInstance();
+    protected final CSConfigManager config = CSConfigManager.getInstance();
+    
+    // Thread-local storage for test context
+    private static final ThreadLocal<CSDriver> driverThreadLocal = new ThreadLocal<>();
+    private static final ThreadLocal<CSTestContext> contextThreadLocal = new ThreadLocal<>();
+    
+    /**
+     * Get the current driver instance
+     */
+    protected CSDriver getDriver() {
+        CSDriver driver = driverThreadLocal.get();
+        if (driver == null) {
+            throw new RuntimeException("Driver not initialized. Make sure test extends CSBaseTest.");
+        }
+        return driver;
+    }
+    
+    /**
+     * Set the driver for current thread
+     */
+    public static void setDriver(CSDriver driver) {
+        driverThreadLocal.set(driver);
+    }
+    
+    /**
+     * Get page instance
+     */
+    protected <T extends CSBasePage> T getPage(Class<T> pageClass) {
+        try {
+            // Get the driver to ensure it's available
+            CSDriver driver = getDriver();
+            
+            T page = pageClass.getDeclaredConstructor().newInstance();
+            // Page initialization is handled in CSBasePage constructor
+            // which already has access to driver, config, and reportManager
+            return page;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create page instance: " + pageClass.getName(), e);
+        }
+    }
+    
+    /**
+     * Navigate to URL
+     */
+    protected void navigateTo(String url) {
+        getDriver().navigateTo(url);
+    }
+    
+    /**
+     * Capture screenshot
+     */
+    protected void captureScreenshot(String screenshotName) {
+        byte[] screenshot = CSScreenshotUtils.captureScreenshot(getDriver().getWebDriver());
+        reportManager.attachScreenshot(screenshot, screenshotName);
+    }
+    
+    /**
+     * Find element using locator string and description
+     */
+    protected com.testforge.cs.elements.CSElement findElement(String locatorString, String description) {
+        return getDriver().findElement(locatorString, description);
+    }
+    
+    /**
+     * Assert methods for BDD steps
+     */
+    protected void assertTrue(boolean condition, String message) {
+        Assert.assertTrue(condition, message);
+    }
+    
+    protected void assertFalse(boolean condition, String message) {
+        Assert.assertFalse(condition, message);
+    }
+    
+    protected void assertEquals(Object actual, Object expected, String message) {
+        Assert.assertEquals(actual, expected, message);
+    }
+    
+    protected void assertNotNull(Object object, String message) {
+        Assert.assertNotNull(object, message);
+    }
+    
+    /**
+     * Test context for sharing data between steps
+     */
+    public static class CSTestContext {
+        private final java.util.Map<String, Object> data = new java.util.concurrent.ConcurrentHashMap<>();
+        
+        public void put(String key, Object value) {
+            data.put(key, value);
+        }
+        
+        @SuppressWarnings("unchecked")
+        public <T> T get(String key) {
+            return (T) data.get(key);
+        }
+        
+        public boolean containsKey(String key) {
+            return data.containsKey(key);
+        }
+        
+        public void clear() {
+            data.clear();
+        }
+    }
+    
+    /**
+     * Get test context
+     */
+    protected CSTestContext getContext() {
+        CSTestContext context = contextThreadLocal.get();
+        if (context == null) {
+            context = new CSTestContext();
+            contextThreadLocal.set(context);
+        }
+        return context;
+    }
+    
+    /**
+     * Get data row from scenario context (for data-driven tests)
+     */
+    protected Map<String, String> getDataRow() {
+        CSScenarioRunner runner = CSScenarioRunner.getInstance();
+        if (runner != null) {
+            Map<String, Object> scenarioContext = runner.getScenarioContext();
+            if (scenarioContext != null && scenarioContext.containsKey("dataRow")) {
+                return (Map<String, String>) scenarioContext.get("dataRow");
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Get value from data row
+     */
+    protected String getDataValue(String key) {
+        Map<String, String> dataRow = getDataRow();
+        if (dataRow != null) {
+            return dataRow.get(key);
+        }
+        return null;
+    }
+    
+    /**
+     * Clean up thread-local resources
+     */
+    public static void cleanup() {
+        driverThreadLocal.remove();
+        contextThreadLocal.remove();
+    }
+}

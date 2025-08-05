@@ -1,0 +1,9 @@
+username,password,expectedResult,expectedTitle
+Admin,admin123,success,Dashboard
+admin,admin123,success,Dashboard
+invalid,wrongpass,failure,Login
+"",admin123,failure,Login
+Admin,"",failure,Login
+Admin with spaces,admin123,failure,Login
+Admin!@#$%,admin123,failure,Login
+verylongusernamethatexceedslimit,admin123,failure,Login

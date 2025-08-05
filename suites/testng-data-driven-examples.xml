@@ -1,0 +1,15 @@
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Data Driven Tests with Examples" parallel="none" thread-count="1">
+    
+    <test name="Login Tests with Scenario Outline">
+        <parameter name="featuresPath" value="features/login-data-driven-examples.feature"/>
+        <parameter name="tags" value="@data-driven"/>
+        <parameter name="excludeTags" value=""/>
+        <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

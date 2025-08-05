@@ -1,0 +1,10 @@
+# Note: This is a placeholder for Excel file
+# In actual implementation, this would be a binary Excel file with the following structure:
+# 
+# Sheet: ValidUsers
+# Columns: Username, Password, ExpectedPage, DisplayName, Environment, Status
+# 
+# Sample data:
+# admin, admin123, Dashboard, Admin User, QA, Active
+# hrmanager, hr123, Dashboard, HR Manager, QA, Active
+# employee1, emp123, Dashboard, John Doe, QA, Active

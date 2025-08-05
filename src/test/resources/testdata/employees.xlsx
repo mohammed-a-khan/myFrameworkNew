@@ -1,0 +1,8 @@
+# Note: This is a placeholder for Excel file structure
+# In actual implementation, this would be a binary Excel file
+# Sheet: NewEmployees
+# Columns: TestCaseID, FirstName, MiddleName, LastName, EmployeeID, SSN, SIN, DOB, Gender, MaritalStatus, Nationality, Department, Status
+# Sample data rows:
+# TC001, John, Michael, Doe, EMP-2024-101, 123-45-6789, 123456789, 1990-01-15, Male, Single, American, IT, Active
+# TC002, Sarah, Ann, Wilson, EMP-2024-102, 234-56-7890, 234567890, 1988-05-20, Female, Married, Canadian, IT, Active
+# TC003, Robert, James, Chen, EMP-2024-103, 345-67-8901, 345678901, 1992-11-30, Male, Single, American, IT, Active

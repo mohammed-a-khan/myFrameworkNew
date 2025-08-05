@@ -1,0 +1,3 @@
+username,password,errorMessage
+invalid_user,wrong_pass,Invalid credentials
+test123,test123,Invalid credentials

@@ -1,0 +1,32 @@
+{
+  "testCases": [
+    {
+      "TestType": "LoginValidation",
+      "username": "Admin",
+      "password": "admin123",
+      "expectedResult": "success",
+      "expectedTitle": "Dashboard"
+    },
+    {
+      "TestType": "LoginValidation",
+      "username": "invalid",
+      "password": "wrongpass",
+      "expectedResult": "failure",
+      "expectedTitle": "Login"
+    },
+    {
+      "TestType": "LoginValidation",
+      "username": "",
+      "password": "admin123",
+      "expectedResult": "failure",
+      "expectedTitle": "Login"
+    },
+    {
+      "TestType": "PerformanceTest",
+      "username": "Admin",
+      "password": "admin123",
+      "expectedResult": "success",
+      "expectedTitle": "Dashboard"
+    }
+  ]
+}

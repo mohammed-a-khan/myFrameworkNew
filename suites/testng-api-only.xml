@@ -1,0 +1,16 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="CS Framework API Tests" parallel="false" verbose="2">
+    
+    <!-- API tests only - no UI tests -->
+    <test name="API Test Suite">
+        <parameter name="featuresPath" value="features"/>
+        <parameter name="tags" value="@api"/>
+        <parameter name="excludeTags" value="@ui,@manual"/>
+        <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

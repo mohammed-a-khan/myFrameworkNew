@@ -1,0 +1,8 @@
+SKU,ProductName,Quantity,ReorderLevel,AlertStatus,UpdateRequired
+INV-001,Laptop Pro 15,25,10,Normal,Yes
+INV-002,Office Chair Deluxe,5,15,Low Stock,Yes
+INV-003,Wireless Mouse,150,50,Normal,Yes
+INV-004,Standing Desk,3,5,Critical,Yes
+INV-005,USB-C Hub,0,20,Out of Stock,Yes
+INV-006,Monitor 27inch,45,30,Normal,No
+INV-007,Keyboard Wireless,80,25,Normal,No

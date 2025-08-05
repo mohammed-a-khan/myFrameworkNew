@@ -1,0 +1,12 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Debug Suite">
+    <test name="Debug Test">
+        <parameter name="featuresPath" value="features/test-debug.feature"/>
+        <parameter name="tagsToRun" value="@csv-test"/>
+        <parameter name="tagsToExclude" value=""/>
+        <parameter name="stepDefinitionPackages" value="com.orangehrm.stepdefs"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>

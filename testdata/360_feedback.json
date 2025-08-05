@@ -1,0 +1,79 @@
+{
+  "feedbackSessions": [
+    {
+      "FeedbackID": "FB001",
+      "EmployeeName": "Sarah Chen",
+      "EmployeeID": "EMP-2024-050",
+      "ReviewPeriod": "2024 Annual",
+      "Status": "Pending",
+      "Reviewers": [
+        {
+          "ReviewerType": "Manager",
+          "ReviewerName": "Michael Brown",
+          "Status": "Completed"
+        },
+        {
+          "ReviewerType": "Peer",
+          "ReviewerName": "John Smith",
+          "Status": "Pending"
+        },
+        {
+          "ReviewerType": "Peer",
+          "ReviewerName": "Jane Doe",
+          "Status": "Pending"
+        },
+        {
+          "ReviewerType": "Direct Report",
+          "ReviewerName": "Robert Wilson",
+          "Status": "In Progress"
+        },
+        {
+          "ReviewerType": "Self",
+          "ReviewerName": "Sarah Chen",
+          "Status": "Completed"
+        }
+      ]
+    },
+    {
+      "FeedbackID": "FB002",
+      "EmployeeName": "David Kumar",
+      "EmployeeID": "EMP-2024-051",
+      "ReviewPeriod": "2024 Annual",
+      "Status": "Pending",
+      "Reviewers": [
+        {
+          "ReviewerType": "Manager",
+          "ReviewerName": "Lisa Anderson",
+          "Status": "Pending"
+        },
+        {
+          "ReviewerType": "Peer",
+          "ReviewerName": "Emma Thompson",
+          "Status": "Pending"
+        },
+        {
+          "ReviewerType": "Self",
+          "ReviewerName": "David Kumar",
+          "Status": "In Progress"
+        }
+      ]
+    }
+  ],
+  "competencies": [
+    "Communication",
+    "Collaboration",
+    "Problem Solving",
+    "Technical Skills",
+    "Leadership Potential",
+    "Innovation",
+    "Customer Focus",
+    "Adaptability"
+  ],
+  "ratingScale": {
+    "1": "Needs Significant Improvement",
+    "2": "Needs Improvement",
+    "3": "Meets Expectations",
+    "4": "Exceeds Expectations",
+    "5": "Exceptional"
+  }
+}
