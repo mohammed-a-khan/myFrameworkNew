@@ -1,6 +1,0 @@
-TestID,EmployeeUsername,LeaveType,LeaveBalance,FromDate,ToDate,PartialDays,Comments,Attachment,ExpectedMessage,ExpectedStatus
-LV001,john.smith,Annual Leave,15,2024-12-20,2024-12-22,None,Year-end vacation,,Successfully Submitted,Pending Approval
-LV002,jane.doe,Sick Leave,10,2024-11-15,2024-11-15,All Day,Doctor appointment,medical_cert.pdf,Successfully Submitted,Pending Approval
-LV003,robert.chen,Personal Leave,5,2024-11-25,2024-11-26,None,Family commitment,,Successfully Submitted,Pending Approval
-LV004,sarah.wilson,Annual Leave,3,2024-12-01,2024-12-05,None,Extended vacation,,Leave balance insufficient,Error
-LV005,mike.jones,Sick Leave,8,2024-11-18,2024-11-18,Half Day,Medical checkup,,Successfully Submitted,Pending Approval

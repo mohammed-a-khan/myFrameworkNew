@@ -1,0 +1,37 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Tag-Based Parallel Suite" parallel="tests" thread-count="3">
+    
+    <!-- Global configuration -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    
+    <!-- Smoke Tests - High Priority -->
+    <test name="Smoke Tests" parallel="methods" thread-count="2">
+        <parameter name="cs.feature.path" value="features/orangehrm-simple-tests.feature,features/orangehrm-comprehensive-tests.feature"/>
+        <parameter name="cucumber.filter.tags" value="@smoke"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Data-Driven Tests -->
+    <test name="Data-Driven Tests" parallel="methods" thread-count="3">
+        <parameter name="cs.feature.path" value="features/orangehrm-comprehensive-tests.feature"/>
+        <parameter name="cucumber.filter.tags" value="@data-driven"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Complex Scenarios -->
+    <test name="Complex Tests" parallel="methods" thread-count="2">
+        <parameter name="cs.feature.path" value="features/orangehrm-comprehensive-tests.feature"/>
+        <parameter name="cucumber.filter.tags" value="@complex or @e2e"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

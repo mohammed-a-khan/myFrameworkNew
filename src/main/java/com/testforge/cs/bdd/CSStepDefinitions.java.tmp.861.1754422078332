@@ -33,15 +33,7 @@ public abstract class CSStepDefinitions {
     protected CSDriver getDriver() {
         CSDriver driver = driverThreadLocal.get();
         if (driver == null) {
-            // Try to get from WebDriverManager as fallback
-            WebDriver webDriver = CSWebDriverManager.getDriver();
-            if (webDriver != null) {
-                logger.warn("Driver not in ThreadLocal, using WebDriverManager driver for thread: {}", Thread.currentThread().getName());
-                driver = new CSDriver(webDriver);
-                driverThreadLocal.set(driver);
-            } else {
-                throw new RuntimeException("Driver not initialized. Make sure test extends CSBaseTest.");
-            }
+            throw new RuntimeException("Driver not initialized. Make sure test extends CSBaseTest.");
         }
         return driver;
     }
@@ -148,32 +140,28 @@ public abstract class CSStepDefinitions {
     }
     
     /**
-     * Get the current data row from scenario context
+     * Get data row from scenario context (for data-driven tests)
      */
-    @SuppressWarnings("unchecked")
     protected Map<String, String> getDataRow() {
-        CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+        CSScenarioRunner runner = CSScenarioRunner.getInstance();
         if (runner != null) {
-            Object dataRow = runner.getFromContext("dataRow");
-            if (dataRow instanceof Map) {
-                return (Map<String, String>) dataRow;
+            Map<String, Object> scenarioContext = runner.getScenarioContext();
+            if (scenarioContext != null && scenarioContext.containsKey("dataRow")) {
+                return (Map<String, String>) scenarioContext.get("dataRow");
             }
         }
-        return new java.util.HashMap<>();
+        return null;
     }
     
     /**
-     * Get a specific value from the current data row
+     * Get value from data row
      */
     protected String getDataValue(String key) {
-        return getDataRow().getOrDefault(key, "");
-    }
-    
-    /**
-     * Check if a data key exists in the current data row
-     */
-    protected boolean hasDataKey(String key) {
-        return getDataRow().containsKey(key);
+        Map<String, String> dataRow = getDataRow();
+        if (dataRow != null) {
+            return dataRow.get(key);
+        }
+        return null;
     }
     
     /**

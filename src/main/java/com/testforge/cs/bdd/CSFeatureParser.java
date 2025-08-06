@@ -308,6 +308,14 @@ public class CSFeatureParser {
             throw new CSBddException("Failed to parse feature content", e);
         }
         
+        logger.info("Parsed feature '{}' with {} scenarios", feature.getName(), feature.getScenarios().size());
+        
+        // Log details of each scenario for debugging
+        for (int i = 0; i < feature.getScenarios().size(); i++) {
+            CSFeatureFile.Scenario scenario = feature.getScenarios().get(i);
+            logger.info("  Scenario #{}: {} - Data: {}", i + 1, scenario.getName(), scenario.getDataRow());
+        }
+        
         return feature;
     }
     
@@ -323,9 +331,12 @@ public class CSFeatureParser {
                 logger.info("Processing external data source for scenario: {}", scenario.getName());
                 // Process external data source from Examples configuration
                 List<Map<String, String>> externalData = dataSourceProcessor.processExamplesConfig(scenario.getExamplesConfig());
-                logger.info("Found {} data rows from external source", externalData.size());
+                logger.info("Found {} data rows from external source for scenario: {}", externalData.size(), scenario.getName());
                 for (Map<String, String> dataRow : externalData) {
+                    logger.info("Expanding scenario '{}' with data row: {}", scenario.getName(), dataRow);
                     CSFeatureFile.Scenario expandedScenario = expandScenarioOutline(scenario, dataRow);
+                    expandedScenario.setExamplesConfig(scenario.getExamplesConfig());
+                    logger.info("Adding expanded scenario '{}' to feature", expandedScenario.getName());
                     feature.addScenario(expandedScenario);
                 }
             } else if (!examples.isEmpty()) {
@@ -419,24 +430,12 @@ public class CSFeatureParser {
                                                          Map<String, String> dataRow) {
         CSFeatureFile.Scenario expanded = new CSFeatureFile.Scenario();
         
-        // Create name with data values
-        StringBuilder nameBuilder = new StringBuilder(original.getName());
-        if (!dataRow.isEmpty()) {
-            nameBuilder.append(" [");
-            boolean first = true;
-            for (Map.Entry<String, String> entry : dataRow.entrySet()) {
-                if (!first) nameBuilder.append(", ");
-                nameBuilder.append(entry.getKey()).append("=").append(entry.getValue());
-                first = false;
-            }
-            nameBuilder.append("]");
-        }
-        
-        expanded.setName(nameBuilder.toString());
+        // Keep original name without data values
+        expanded.setName(original.getName());
         expanded.setDescription(original.getDescription());
         expanded.setTags(new ArrayList<>(original.getTags()));
         expanded.setOutline(false);
-        expanded.setDataRow(dataRow);
+        expanded.setDataRow(new HashMap<>(dataRow));
         
         // Expand steps with data
         for (CSFeatureFile.Step originalStep : original.getSteps()) {
@@ -476,28 +475,12 @@ public class CSFeatureParser {
                                                         Map<String, String> example) {
         CSFeatureFile.Scenario expanded = new CSFeatureFile.Scenario();
         
-        // Create name with example values
-        StringBuilder nameBuilder = new StringBuilder(outline.getName());
-        
-        // Add data values to scenario name for identification
-        nameBuilder.append(" [");
-        boolean first = true;
-        for (Map.Entry<String, String> entry : example.entrySet()) {
-            if (!first) nameBuilder.append(", ");
-            nameBuilder.append(entry.getKey()).append("=").append(entry.getValue());
-            first = false;
-            if (nameBuilder.length() > 200) {
-                nameBuilder.append("...");
-                break;
-            }
-        }
-        nameBuilder.append("]");
-        
-        expanded.setName(nameBuilder.toString());
+        // Keep original name without data values
+        expanded.setName(outline.getName());
         expanded.setDescription(outline.getDescription());
         expanded.setTags(new ArrayList<>(outline.getTags()));
         expanded.setOutline(false);
-        expanded.setDataRow(example);  // Set the data row
+        expanded.setDataRow(new HashMap<>(example));  // Set a copy of the data row
         
         // Expand steps
         for (CSFeatureFile.Step step : outline.getSteps()) {

@@ -22,9 +22,11 @@ public @interface CSStep {
     String description() default "";
     
     /**
-     * Step type
+     * Step type - defaults to ANY, allowing the step to match any Gherkin keyword
+     * @deprecated Use of step type is optional. Steps now match any Gherkin keyword by default.
      */
-    StepType type() default StepType.GIVEN;
+    @Deprecated
+    StepType type() default StepType.ANY;
     
     /**
      * Step timeout in seconds
@@ -44,7 +46,8 @@ public @interface CSStep {
         WHEN,
         THEN,
         AND,
-        BUT
+        BUT,
+        ANY  // Matches any step type
     }
 }
 

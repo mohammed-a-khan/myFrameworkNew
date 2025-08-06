@@ -1,0 +1,27 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Advanced Parallel Suite" parallel="tests" thread-count="2">
+    
+    <!-- Global configuration -->
+    <parameter name="environment.name" value="qa"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    
+    <!-- Test Group 1: Simple Tests in Chrome -->
+    <test name="Simple Tests - Chrome" parallel="methods" thread-count="2">
+        <parameter name="browser.name" value="chrome"/>
+        <parameter name="cs.feature.path" value="features/orangehrm-simple-tests.feature"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Test Group 2: Comprehensive Tests in Firefox -->
+    <test name="Comprehensive Tests - Firefox" parallel="methods" thread-count="2">
+        <parameter name="browser.name" value="firefox"/>
+        <parameter name="cs.feature.path" value="features/orangehrm-comprehensive-tests.feature"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

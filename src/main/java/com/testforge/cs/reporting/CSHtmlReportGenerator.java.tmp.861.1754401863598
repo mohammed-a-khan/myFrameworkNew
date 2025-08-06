@@ -2418,7 +2418,7 @@ public class CSHtmlReportGenerator {
         section.append("                </div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Browser</span>\n");
-        section.append("                    <span class=\"env-value\">").append(System.getProperty("browser.name", config.getProperty("browser.name", "chrome"))).append("</span>\n");
+        section.append("                    <span class=\"env-value\">").append(System.getProperty("browser", "chrome")).append("</span>\n");
         section.append("                </div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Headless Mode</span>\n");
@@ -2498,10 +2498,10 @@ public class CSHtmlReportGenerator {
         }
         
         // Add browser
-        command.append(" -Dbrowser.name=").append(System.getProperty("browser.name", config.getProperty("browser.name", "chrome")));
+        command.append(" -Dbrowser=").append(System.getProperty("browser", "chrome"));
         
         // Add environment
-        command.append(" -Denvironment.name=").append(System.getProperty("environment.name", config.getProperty("environment.name", "qa")));
+        command.append(" -Denv=").append(System.getProperty("env", "qa"));
         
         // Add thread count if parallel
         if (!"none".equals(config.getProperty("parallel.mode", "none"))) {
@@ -3260,8 +3260,8 @@ public class CSHtmlReportGenerator {
         // Extract test configuration from report data
         Map<String, Object> metadata = reportData.getMetadata();
         String[][] testConfig = {
-            {"Browser", System.getProperty("browser.name", config.getProperty("browser.name", "chrome"))},
-            {"Environment", System.getProperty("environment.name", config.getProperty("environment.name", "qa"))},
+            {"Browser", System.getProperty("browser", "chrome")},
+            {"Environment", System.getProperty("env", "qa")},
             {"Execution Mode", metadata.get("executionMode") != null ? metadata.get("executionMode").toString() : "sequential"},
             {"Suite Name", getActualSuiteName(reportData, metadata)},
             {"Start Time", reportData.getStartTime() != null ? reportData.getStartTime().format(TIMESTAMP_FORMAT) : "Unknown"},
@@ -3505,8 +3505,8 @@ public class CSHtmlReportGenerator {
                 }
             }
             // Always include browser and environment
-            js.append("            browser: '").append(escapeJs(test.getBrowser() != null ? test.getBrowser() : "chrome")).append("',\n");
-            js.append("            environment: '").append(escapeJs(test.getEnvironment() != null ? test.getEnvironment() : "qa")).append("'\n");
+            js.append("            browser: '").append(escapeJs(test.getBrowser() != null ? test.getBrowser() : "chrome"))).append("',\n");
+            js.append("            environment: '").append(escapeJs(test.getEnvironment() != null ? test.getEnvironment() : "qa"))).append("'\n");
             js.append("        },\n");
             js.append("        className: '").append(escapeJs(test.getClassName())).append("'\n");
             js.append("    },\n");
@@ -3587,35 +3587,16 @@ public class CSHtmlReportGenerator {
         js.append("    detailsHtml += '<div class=\"metadata-section\">';\n");
         js.append("    detailsHtml += '<h4 class=\"metadata-section-title\"><i class=\"fas fa-database\"></i> Test Data & Parameters</h4>';\n");
         js.append("    detailsHtml += '<div class=\"test-info-grid\">';\n");
-        js.append("    if (test.testData && Object.keys(test.testData).length > 0) {\n");
-        js.append("        // Display data source info if available\n");
-        js.append("        if (test.testData.dataSourceType) {\n");
-        js.append("            detailsHtml += '<span class=\"test-info-label\">Data Source Type:</span>';\n");
-        js.append("            detailsHtml += '<span><i class=\"fas fa-database\"></i> ' + test.testData.dataSourceType + '</span>';\n");
-        js.append("        }\n");
-        js.append("        if (test.testData.dataSourceFile) {\n");
-        js.append("            detailsHtml += '<span class=\"test-info-label\">Source File:</span>';\n");
-        js.append("            detailsHtml += '<span><i class=\"fas fa-file\"></i> ' + test.testData.dataSourceFile + '</span>';\n");
-        js.append("        }\n");
-        js.append("        \n");
-        js.append("        // Display test data in the required format\n");
-        js.append("        let testDataArray = [];\n");
-        js.append("        Object.keys(test.testData).forEach(key => {\n");
-        js.append("            if (key !== 'dataSourceType' && key !== 'dataSourceFile' && key !== 'browser' && key !== 'environment') {\n");
-        js.append("                testDataArray.push(key + '=' + test.testData[key]);\n");
-        js.append("            }\n");
-        js.append("        });\n");
-        js.append("        \n");
-        js.append("        if (testDataArray.length > 0) {\n");
-        js.append("            detailsHtml += '<span class=\"test-info-label\">Test Data:</span>';\n");
-        js.append("            detailsHtml += '<span style=\"font-family: monospace; background: #f3f4f6; padding: 0.25rem 0.5rem; border-radius: 0.25rem;\">[' + testDataArray.join(', ') + ']</span>';\n");
-        js.append("        }\n");
-        js.append("        \n");
-        js.append("        // Always show environment and browser\n");
+        js.append("    if (test.testData) {\n");
+        js.append("        detailsHtml += '<span class=\"test-info-label\">Username:</span><span><i class=\"fas fa-user\"></i> ' + test.testData.username + '</span>';\n");
+        js.append("        detailsHtml += '<span class=\"test-info-label\">Password:</span><span><i class=\"fas fa-key\"></i> ' + (test.testData.password ? '******' : 'N/A') + '</span>';\n");
+        js.append("        detailsHtml += '<span class=\"test-info-label\">Data Source:</span><span><i class=\"fas fa-file-code\"></i> ' + test.testData.dataSource + '</span>';\n");
+        js.append("        detailsHtml += '<span class=\"test-info-label\">Base URL:</span><span><i class=\"fas fa-globe\"></i> ' + test.testData.baseUrl + '</span>';\n");
         js.append("        detailsHtml += '<span class=\"test-info-label\">Environment:</span><span><i class=\"fas fa-server\"></i> ' + test.testData.environment.toUpperCase() + '</span>';\n");
         js.append("        detailsHtml += '<span class=\"test-info-label\">Browser:</span><span><i class=\"fab fa-' + test.testData.browser + '\"></i> ' + test.testData.browser.charAt(0).toUpperCase() + test.testData.browser.slice(1) + '</span>';\n");
         js.append("    } else {\n");
-        js.append("        detailsHtml += '<span class=\"test-info-label\">Test Data:</span><span>None</span>';\n");
+        js.append("        detailsHtml += '<span class=\"test-info-label\">Data Provider:</span><span>None</span>';\n");
+        js.append("        detailsHtml += '<span class=\"test-info-label\">Test Parameters:</span><span>N/A</span>';\n");
         js.append("    }\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">OS Platform:</span><span><i class=\"fas fa-desktop\"></i> ' + navigator.platform + '</span>';\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">User Agent:</span><span style=\"font-size: 0.75rem;\">' + navigator.userAgent.split(' ').slice(-2).join(' ') + '</span>';\n");

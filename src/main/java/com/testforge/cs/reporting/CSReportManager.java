@@ -65,8 +65,8 @@ public class CSReportManager {
         // Initialize metadata
         reportMetadata.put("suiteName", suiteName);
         reportMetadata.put("startTime", startTime.toString());
-        reportMetadata.put("environment", config.getProperty("env.current", "qa"));
-        reportMetadata.put("browser", config.getProperty("browser.default", "chrome"));
+        reportMetadata.put("environment", config.getProperty("environment.name", "qa"));
+        reportMetadata.put("browser", config.getProperty("browser.name", "chrome"));
         reportMetadata.put("executionMode", config.getProperty("execution.mode", "sequential"));
         reportMetadata.put("operatingSystem", System.getProperty("os.name"));
         reportMetadata.put("javaVersion", System.getProperty("java.version"));

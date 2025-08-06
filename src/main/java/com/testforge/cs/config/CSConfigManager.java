@@ -58,7 +58,7 @@ public class CSConfigManager {
             loadDefaultConfigurations();
             
             // Determine current environment
-            currentEnvironment = System.getProperty("env", getProperty("env.current", "qa"));
+            currentEnvironment = System.getProperty("environment.name", getProperty("environment.name", "qa"));
             logger.info("Initialized CSConfigManager with environment: {}", currentEnvironment);
             
             // Load environment-specific configurations
@@ -304,7 +304,7 @@ public class CSConfigManager {
      */
     public BrowserConfig getBrowserConfig() {
         return new BrowserConfig(
-            getProperty("browser.default", "chrome"),
+            getProperty("browser.name", "chrome"),
             getBooleanProperty("browser.headless", false),
             getBooleanProperty("browser.maximize", true),
             getIntProperty("browser.implicit.wait", 10),

@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Registry for step definitions
@@ -19,10 +20,16 @@ public class CSStepRegistry {
     
     private final Map<CSStepDefinition.StepType, List<CSStepDefinition>> stepDefinitions;
     private final Map<Class<?>, Object> stepClassInstances;
+    private final Map<String, List<CSStepDefinition>> stepsByPattern;
+    private final Map<String, List<Method>> methodsByName;
+    private final Set<String> validationErrors;
     
     private CSStepRegistry() {
         this.stepDefinitions = new ConcurrentHashMap<>();
         this.stepClassInstances = new ConcurrentHashMap<>();
+        this.stepsByPattern = new ConcurrentHashMap<>();
+        this.methodsByName = new ConcurrentHashMap<>();
+        this.validationErrors = new HashSet<>();
         
         // Initialize step type lists
         for (CSStepDefinition.StepType type : CSStepDefinition.StepType.values()) {
@@ -50,13 +57,40 @@ public class CSStepRegistry {
                 }
             });
             
-            // Scan methods for step annotations
+            // First pass: collect all methods for validation
+            Map<String, Method> methodsInClass = new HashMap<>();
+            for (Method method : stepClass.getDeclaredMethods()) {
+                if (method.isAnnotationPresent(CSStep.class)) {
+                    // Check for duplicate method names across packages
+                    String methodName = method.getName();
+                    methodsByName.computeIfAbsent(methodName, k -> new ArrayList<>()).add(method);
+                    methodsInClass.put(methodName, method);
+                }
+            }
+            
+            // Second pass: register steps and validate
             for (Method method : stepClass.getDeclaredMethods()) {
                 CSStep stepAnnotation = method.getAnnotation(CSStep.class);
                 if (stepAnnotation != null) {
-                    registerStep(stepAnnotation.value(), method, instance, stepAnnotation.type().name());
+                    // Use description if provided, otherwise fall back to value
+                    String pattern = !stepAnnotation.description().isEmpty() 
+                        ? stepAnnotation.description() 
+                        : stepAnnotation.value();
+                    
+                    if (!pattern.isEmpty()) {
+                        // Check for duplicate step patterns
+                        stepsByPattern.computeIfAbsent(pattern, k -> new ArrayList<>()).add(
+                            new CSStepDefinition(pattern, method, instance, CSStepDefinition.StepType.ANY)
+                        );
+                        
+                        // Always register as ANY type since we're removing type specification
+                        registerStep(pattern, method, instance, "ANY");
+                    }
                 }
             }
+            
+            // Validate after registration
+            validateStepDefinitions();
             
         } catch (Exception e) {
             throw new CSBddException("Failed to register step class: " + stepClass.getName(), e);
@@ -75,20 +109,72 @@ public class CSStepRegistry {
     }
     
     /**
-     * Find matching step definition
+     * Validate step definitions for duplicates
      */
-    public CSStepDefinition findStep(String stepText, CSStepDefinition.StepType preferredType) {
-        // First try with preferred type
-        if (preferredType != null) {
-            List<CSStepDefinition> definitions = stepDefinitions.get(preferredType);
-            for (CSStepDefinition def : definitions) {
-                if (def.matches(stepText)) {
-                    return def;
+    private void validateStepDefinitions() {
+        validationErrors.clear();
+        
+        // Check for duplicate step patterns
+        for (Map.Entry<String, List<CSStepDefinition>> entry : stepsByPattern.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                String pattern = entry.getKey();
+                List<String> locations = entry.getValue().stream()
+                    .map(def -> String.format("%s.%s", 
+                        def.getInstance().getClass().getName(), 
+                        def.getMethod().getName()))
+                    .collect(Collectors.toList());
+                
+                String error = String.format(
+                    "ERROR: Duplicate step definition found for pattern '%s':\n" +
+                    "  Found in multiple locations:\n%s\n" +
+                    "  Please ensure each step pattern is unique across all step definition classes.",
+                    pattern,
+                    locations.stream().map(loc -> "    - " + loc).collect(Collectors.joining("\n"))
+                );
+                
+                validationErrors.add(error);
+                logger.error(error);
+            }
+        }
+        
+        // Check for duplicate method names
+        for (Map.Entry<String, List<Method>> entry : methodsByName.entrySet()) {
+            if (entry.getValue().size() > 1) {
+                String methodName = entry.getKey();
+                List<String> locations = entry.getValue().stream()
+                    .map(method -> method.getDeclaringClass().getName())
+                    .distinct()
+                    .collect(Collectors.toList());
+                
+                if (locations.size() > 1) {
+                    String error = String.format(
+                        "WARNING: Method name '%s' found in multiple classes:\n%s\n" +
+                        "  Consider using unique method names to avoid confusion.",
+                        methodName,
+                        locations.stream().map(loc -> "    - " + loc).collect(Collectors.joining("\n"))
+                    );
+                    
+                    validationErrors.add(error);
+                    logger.warn(error);
                 }
             }
         }
         
-        // If not found, try all types
+        // Throw exception if there are errors
+        if (!validationErrors.isEmpty()) {
+            throw new CSBddException(
+                "Step definition validation failed:\n\n" + 
+                String.join("\n\n", validationErrors) +
+                "\n\nPlease fix these issues before running tests."
+            );
+        }
+    }
+    
+    /**
+     * Find matching step definition
+     */
+    public CSStepDefinition findStep(String stepText, CSStepDefinition.StepType preferredType) {
+        // Since all steps are now ANY type, we just need to find a matching pattern
         for (List<CSStepDefinition> definitions : stepDefinitions.values()) {
             for (CSStepDefinition def : definitions) {
                 if (def.matches(stepText)) {
@@ -107,7 +193,19 @@ public class CSStepRegistry {
         CSStepDefinition stepDef = findStep(stepText, stepType);
         
         if (stepDef == null) {
-            throw new CSBddException("No matching step definition found for: " + stepText);
+            String suggestions = getSuggestions(stepText);
+            throw new CSBddException(
+                String.format(
+                    "No matching step definition found for: '%s'\n\n" +
+                    "Please ensure:\n" +
+                    "1. The step definition exists in your step classes\n" +
+                    "2. The step pattern matches exactly (including parameters)\n" +
+                    "3. The step class is properly registered\n" +
+                    "%s",
+                    stepText,
+                    suggestions
+                )
+            );
         }
         
         try {
@@ -117,6 +215,79 @@ public class CSStepRegistry {
         } catch (Exception e) {
             throw new CSBddException("Failed to execute step: " + stepText, e);
         }
+    }
+    
+    /**
+     * Execute a step with context (for data row injection)
+     */
+    public void executeStep(String stepText, CSStepDefinition.StepType stepType, Map<String, Object> context) {
+        CSStepDefinition stepDef = findStep(stepText, stepType);
+        
+        if (stepDef == null) {
+            String suggestions = getSuggestions(stepText);
+            throw new CSBddException(
+                String.format(
+                    "No matching step definition found for: '%s'\n\n" +
+                    "Please ensure:\n" +
+                    "1. The step definition exists in your step classes\n" +
+                    "2. The step pattern matches exactly (including parameters)\n" +
+                    "3. The step class is properly registered\n" +
+                    "%s",
+                    stepText,
+                    suggestions
+                )
+            );
+        }
+        
+        try {
+            Object[] parameters = stepDef.extractParametersWithContext(stepText, context);
+            logger.debug("Executing step: {} with {} parameters (context-aware)", stepText, parameters.length);
+            stepDef.execute(parameters);
+        } catch (Exception e) {
+            throw new CSBddException("Failed to execute step: " + stepText, e);
+        }
+    }
+    
+    /**
+     * Get suggestions for similar step definitions
+     */
+    private String getSuggestions(String stepText) {
+        List<String> availableSteps = new ArrayList<>();
+        for (List<CSStepDefinition> definitions : stepDefinitions.values()) {
+            for (CSStepDefinition def : definitions) {
+                availableSteps.add(def.getOriginalPattern());
+            }
+        }
+        
+        if (availableSteps.isEmpty()) {
+            return "\nNo step definitions registered. Please check your step class configuration.";
+        }
+        
+        // Find similar steps (simple string contains check)
+        List<String> similar = availableSteps.stream()
+            .filter(pattern -> {
+                String[] words = stepText.toLowerCase().split("\\s+");
+                String lowerPattern = pattern.toLowerCase();
+                return Arrays.stream(words)
+                    .filter(word -> word.length() > 3)
+                    .anyMatch(lowerPattern::contains);
+            })
+            .limit(5)
+            .collect(Collectors.toList());
+        
+        if (!similar.isEmpty()) {
+            return "\nDid you mean one of these?\n" +
+                similar.stream()
+                    .map(s -> "  - " + s)
+                    .collect(Collectors.joining("\n"));
+        }
+        
+        return "\nAvailable step patterns:\n" +
+            availableSteps.stream()
+                .limit(10)
+                .map(s -> "  - " + s)
+                .collect(Collectors.joining("\n")) +
+            (availableSteps.size() > 10 ? "\n  ... and " + (availableSteps.size() - 10) + " more" : "");
     }
     
     /**
@@ -153,6 +324,8 @@ public class CSStepRegistry {
             return CSStepDefinition.StepType.AND;
         } else if (normalized.equals("BUT")) {
             return CSStepDefinition.StepType.BUT;
+        } else if (normalized.equals("ANY")) {
+            return CSStepDefinition.StepType.ANY;
         }
         
         // Default to GIVEN

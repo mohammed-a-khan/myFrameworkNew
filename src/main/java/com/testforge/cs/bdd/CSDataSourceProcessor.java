@@ -42,9 +42,13 @@ public class CSDataSourceProcessor {
      */
     public List<Map<String, String>> processExamplesConfig(String examplesConfig) {
         try {
+            logger.debug("Processing Examples configuration: {}", examplesConfig);
             // Parse JSON configuration
             Map<String, String> params = parseJsonConfig(examplesConfig);
-            return loadDataFromSource(params);
+            logger.debug("Parsed params: {}", params);
+            List<Map<String, String>> data = loadDataFromSource(params);
+            logger.info("Loaded {} data rows from Examples configuration", data.size());
+            return data;
         } catch (Exception e) {
             logger.error("Failed to process Examples configuration: {}", examplesConfig, e);
             throw new CSBddException("Invalid Examples configuration: " + examplesConfig, e);
@@ -131,9 +135,8 @@ public class CSDataSourceProcessor {
         if (params.containsKey("location") && !params.containsKey("source")) {
             params.put("source", params.get("location"));
         }
-        if (params.containsKey("source") && !params.containsKey("path")) {
-            params.put("path", params.get("source"));
-        }
+        // Don't overwrite path if it already exists (it might be a JSON path expression)
+        // The 'path' parameter in JSON Examples config is used for JSON path expressions like $.testData[*]
         
         return params;
     }
@@ -293,6 +296,7 @@ public class CSDataSourceProcessor {
         // Don't prefix path - let it be relative to project root
         
         List<Map<String, String>> data = CSCsvUtils.readCsv(path, hasHeader);
+        logger.info("CSV file {} loaded {} data rows", path, data.size());
         
         // Apply key filter if specified
         if (key != null && params.containsKey("keyValues")) {
@@ -315,26 +319,60 @@ public class CSDataSourceProcessor {
      * Load data from JSON file
      */
     private List<Map<String, String>> loadJsonData(Map<String, String> params) {
-        String path = params.getOrDefault("source", params.get("path"));
+        String sourcePath = params.getOrDefault("source", params.get("path"));
+        String jsonPath = params.get("path"); // JSON path expression like $.testData[*]
         String key = params.getOrDefault("key", params.get("keyField"));
         String filter = params.get("filter");
         
-        if (path == null) {
-            throw new CSBddException("JSON data source requires 'source' or 'path' parameter");
+        if (sourcePath == null) {
+            throw new CSBddException("JSON data source requires 'source' parameter");
         }
         
         // Don't prefix path - let it be relative to project root
         
-        String jsonContent = CSFileUtils.readTextFile(path);
+        String jsonContent = CSFileUtils.readTextFile(sourcePath);
         List<Map<String, Object>> jsonData;
         
-        try {
-            // Try to parse as array first
-            jsonData = CSJsonUtils.jsonToListOfMaps(jsonContent);
-        } catch (Exception e) {
-            // If not array, try as single object
-            Map<String, Object> singleObject = CSJsonUtils.jsonToMap(jsonContent);
-            jsonData = Collections.singletonList(singleObject);
+        // Check if we have a JSON path expression
+        if (jsonPath != null && jsonPath.startsWith("$")) {
+            logger.debug("Processing JSON with path expression: {}", jsonPath);
+            // Extract data using JSON path
+            try {
+                // Parse the entire JSON
+                Map<String, Object> rootObject = CSJsonUtils.jsonToMap(jsonContent);
+                logger.debug("Root JSON object keys: {}", rootObject.keySet());
+                
+                // Extract the array from the path (simplified for $.testData[*])
+                if (jsonPath.equals("$.testData[*]") && rootObject.containsKey("testData")) {
+                    Object testDataObj = rootObject.get("testData");
+                    if (testDataObj instanceof List) {
+                        jsonData = new ArrayList<>();
+                        for (Object item : (List<?>) testDataObj) {
+                            if (item instanceof Map) {
+                                jsonData.add((Map<String, Object>) item);
+                            }
+                        }
+                        logger.debug("Extracted {} records from JSON path {}", jsonData.size(), jsonPath);
+                    } else {
+                        throw new CSBddException("JSON path " + jsonPath + " does not point to an array");
+                    }
+                } else {
+                    // For other paths, fall back to trying to parse as array
+                    throw new CSBddException("Unsupported JSON path: " + jsonPath);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to extract data using JSON path: {}", jsonPath, e);
+                throw new CSBddException("Failed to process JSON with path: " + jsonPath, e);
+            }
+        } else {
+            // No JSON path, try to parse as array at root level
+            try {
+                jsonData = CSJsonUtils.jsonToListOfMaps(jsonContent);
+            } catch (Exception e) {
+                // If not array, try as single object
+                Map<String, Object> singleObject = CSJsonUtils.jsonToMap(jsonContent);
+                jsonData = Collections.singletonList(singleObject);
+            }
         }
         
         // Convert to Map<String, String>
@@ -361,6 +399,7 @@ public class CSDataSourceProcessor {
             data = applyFilters(data, filter);
         }
         
+        logger.debug("Returning {} data rows from JSON source", data.size());
         return data;
     }
     

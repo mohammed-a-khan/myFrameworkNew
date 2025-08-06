@@ -1,0 +1,24 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Parallel Test Suite" parallel="methods" thread-count="3">
+    
+    <!-- Browser and environment configuration -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <!-- Configure feature files and step definitions -->
+    <parameter name="cs.feature.path" value="features/orangehrm-simple-tests.feature,features/orangehrm-comprehensive-tests.feature"/>
+    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    
+    <!-- Parallel execution settings -->
+    <parameter name="test.parallel.enabled" value="true"/>
+    <parameter name="test.thread.count" value="3"/>
+    
+    <!-- Test configuration for parallel execution -->
+    <test name="OrangeHRM Parallel BDD Tests">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

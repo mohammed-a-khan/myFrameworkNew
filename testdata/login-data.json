@@ -1,0 +1,19 @@
+{
+  "invalidLogins": [
+    {
+      "username": "testuser",
+      "password": "wrongpass",
+      "expectedError": "Invalid credentials"
+    },
+    {
+      "username": "admin",
+      "password": "badpass",
+      "expectedError": "Invalid credentials"
+    },
+    {
+      "username": "",
+      "password": "",
+      "expectedError": "Required"
+    }
+  ]
+}

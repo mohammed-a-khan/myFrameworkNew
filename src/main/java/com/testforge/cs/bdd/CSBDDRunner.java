@@ -10,6 +10,7 @@ import com.testforge.cs.screenshot.CSScreenshotUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.ITestContext;
+import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
@@ -41,6 +42,14 @@ public class CSBDDRunner extends CSBaseTest {
     private CSFeatureParser featureParser;
     private CSScenarioRunner scenarioRunner;
     
+    // Track test executions across threads
+    private static final java.util.concurrent.atomic.AtomicInteger testCounter = new java.util.concurrent.atomic.AtomicInteger(0);
+    private static final Map<String, Integer> threadTestCount = new java.util.concurrent.ConcurrentHashMap<>();
+    
+    // Track which threads have finished their tests
+    private static final java.util.concurrent.atomic.AtomicInteger completedTests = new java.util.concurrent.atomic.AtomicInteger(0);
+    private static final int TOTAL_TESTS = 12; // Expected number of tests
+    
     @BeforeClass
     @Parameters({"featuresPath", "tags", "excludeTags", "stepDefPackages"})
     public void setupBDDRunner(
@@ -56,8 +65,10 @@ public class CSBDDRunner extends CSBaseTest {
         this.featureParser = new CSFeatureParser();
         this.scenarioRunner = new CSScenarioRunner();
         
-        // Driver will be initialized later in @BeforeMethod
-        // Skip driver setup in @BeforeClass
+        // Reset counters
+        testCounter.set(0);
+        completedTests.set(0);
+        threadTestCount.clear();
         
         // Register step definition classes
         registerStepDefinitions();
@@ -67,6 +78,18 @@ public class CSBDDRunner extends CSBaseTest {
         
         // Discover feature files
         discoverFeatureFiles();
+    }
+    
+    @AfterClass(alwaysRun = true)
+    public void teardownBDDRunner() {
+        logger.info("BDD Runner teardown - cleaning up thread-local browsers");
+        
+        // Clean up any browsers created by this test class
+        CSWebDriverManager.quitAllDrivers();
+        
+        logger.info("Final test execution summary:");
+        logger.info("  Total tests executed: {}", testCounter.get());
+        logger.info("  Thread distribution: {}", threadTestCount);
     }
     
     /**
@@ -161,9 +184,12 @@ public class CSBDDRunner extends CSBaseTest {
     /**
      * Data provider for feature files
      */
-    @DataProvider(name = "featureFiles", parallel = false)
+    @DataProvider(name = "featureFiles", parallel = true)
     public Object[][] getFeatureFiles() {
+        System.out.println("\n>>> DataProvider getFeatureFiles() called <<<");
         List<Object[]> testData = new ArrayList<>();
+        
+        logger.info("DataProvider method called on thread: {}", Thread.currentThread().getName());
         
         for (String featureFile : featureFiles) {
             try {
@@ -205,20 +231,60 @@ public class CSBDDRunner extends CSBaseTest {
             }
         }
         
+        logger.info("DataProvider created {} total test scenarios", testData.size());
+        
+        // Log scenario details for debugging
+        Map<String, Integer> scenarioCount = new HashMap<>();
+        for (int i = 0; i < testData.size(); i++) {
+            Object[] test = testData.get(i);
+            CSFeatureFile.Scenario scenario = (CSFeatureFile.Scenario) test[2];
+            String scenarioName = scenario.getName();
+            scenarioCount.merge(scenarioName, 1, Integer::sum);
+            logger.info("Test #{}: {} - Data: {}", i + 1, scenario.getName(), scenario.getDataRow());
+        }
+        
+        // Log summary
+        logger.info("=== SCENARIO SUMMARY ===");
+        scenarioCount.forEach((name, count) -> 
+            logger.info("  {}: {} instances", name, count));
+        
+        // Log thread pool information
+        logger.info("DataProvider returning {} test cases, parallel={}", testData.size(), true);
+        logger.info("Expected to run on {} threads based on data-provider-thread-count", 3);
+        
+        if (testData.size() != 12) {
+            logger.warn("WARNING: Expected 12 test scenarios but got {}", testData.size());
+        }
+        
+        // Print to console for debugging
+        System.out.println("\n========== DATAPROVIDER SUMMARY ==========");
+        System.out.println("Total test scenarios created: " + testData.size());
+        scenarioCount.forEach((name, count) -> 
+            System.out.println("  " + name + ": " + count + " instances"));
+        System.out.println("==========================================\n");
+        
         return testData.toArray(new Object[0][]);
     }
     
     @Override
     @BeforeMethod(alwaysRun = true)
     public void setupTest(Method method, Object[] params, ITestContext context) {
+        String threadName = Thread.currentThread().getName();
+        logger.info("[{}] CSBDDRunner.setupTest starting for method: {}", threadName, method.getName());
+        
         // Call parent setup first
         super.setupTest(method, params, context);
+        
+        logger.info("[{}] After parent setup, driver = {}", threadName, driver);
         
         // Now set up the driver for step definitions
         if (driver != null) {
             CSDriver csDriver = new CSDriver(driver);
             CSStepDefinitions.setDriver(csDriver);
             CSWebDriverManager.setDriver(driver);
+            logger.info("[{}] Driver set in CSWebDriverManager: {}", threadName, CSWebDriverManager.getDriver());
+        } else {
+            logger.warn("[{}] Driver is null after parent setup!", threadName);
         }
     }
     
@@ -227,6 +293,44 @@ public class CSBDDRunner extends CSBaseTest {
      */
     @Test(dataProvider = "featureFiles", description = "Execute BDD Scenario")
     public void executeBDDScenario(String featureFile, CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
+        // Log thread information
+        String threadName = Thread.currentThread().getName();
+        long threadId = Thread.currentThread().getId();
+        logger.info("[{}] Thread ID {} Starting test execution for scenario: {} with data: {}", 
+            threadName, threadId, scenario.getName(), scenario.getDataRow());
+        
+        // Track thread distribution
+        int testNumber = testCounter.incrementAndGet();
+        threadTestCount.merge(threadName, 1, Integer::sum);
+        
+        logger.info("Test execution #{} - Thread: {} (total tests on this thread: {}), Scenario: {}, Data Source: {}", 
+            testNumber, threadName, threadTestCount.get(threadName), scenario.getName(), 
+            scenario.getExamplesConfig() != null ? scenario.getExamplesConfig() : "Unknown");
+        
+        // Log thread pool status
+        if (testNumber == 1 || testNumber == 4 || testNumber == 7 || testNumber == 10 || testNumber == 12) {
+            logger.info("Thread distribution after {} tests: {}", testNumber, threadTestCount);
+        }
+        
+        // Log driver status BEFORE waiting
+        logger.info("[{}] Test #{} - Driver status before wait: {}", threadName, testNumber, 
+            driver != null ? "INITIALIZED" : "NULL");
+        
+        // Wait a bit to ensure driver is fully initialized in BeforeMethod
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Verify driver is available
+        if (driver == null) {
+            logger.error("[{}] Driver is null at start of test execution!", threadName);
+            throw new RuntimeException("Driver not initialized for thread: " + threadName);
+        }
+        
+        // Create a new scenario runner for each test to ensure thread safety
+        CSScenarioRunner threadSafeScenarioRunner = new CSScenarioRunner();
         String scenarioName = feature.getName() + " - " + scenario.getName();
         logger.info("Executing scenario: {} (Tags: {}) - First step: {} {}", 
             scenarioName, scenario.getTags(), 
@@ -242,19 +346,82 @@ public class CSBDDRunner extends CSBaseTest {
         testResult.setClassName(this.getClass().getName());
         testResult.setMethodName("executeBDDScenario");
         testResult.setStartTime(LocalDateTime.now());
-        testResult.setEnvironment(config.getProperty("env.current", "qa"));
-        testResult.setBrowser(config.getProperty("browser.default", "chrome"));
+        testResult.setEnvironment(config.getProperty("environment.name", "qa"));
+        testResult.setBrowser(config.getProperty("browser.name", "chrome"));
+        
+        // Set test data information if available
+        if (scenario.getDataRow() != null && !scenario.getDataRow().isEmpty()) {
+            logger.info("[{}] Scenario has data row: {}", threadName, scenario.getDataRow());
+            Map<String, Object> testData = new HashMap<>();
+            testData.putAll(scenario.getDataRow());
+            
+            // Determine data source type
+            String dataSource = "Unknown";
+            String sourceFile = "";
+            
+            // Check if it's from JSON configuration in Examples
+            if (scenario.getExamplesConfig() != null) {
+                try {
+                    // Parse JSON configuration to extract source information
+                    String config = scenario.getExamplesConfig();
+                    if (config.contains("type")) {
+                        if (config.contains("csv")) {
+                            dataSource = "CSV";
+                            // Extract source file path
+                            int sourceStart = config.indexOf("source") + 9;
+                            int sourceEnd = config.indexOf("\"", sourceStart);
+                            if (sourceStart > 8 && sourceEnd > sourceStart) {
+                                sourceFile = config.substring(sourceStart, sourceEnd);
+                            }
+                        } else if (config.contains("excel")) {
+                            dataSource = "Excel";
+                        } else if (config.contains("json")) {
+                            dataSource = "JSON";
+                        } else if (config.contains("database")) {
+                            dataSource = "Database";
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to parse data source config: {}", e.getMessage());
+                }
+            } else {
+                // Check tags for @CSDataSource
+                for (String tag : scenario.getTags()) {
+                    if (tag.contains("csv")) {
+                        dataSource = "CSV";
+                    } else if (tag.contains("excel")) {
+                        dataSource = "Excel";
+                    } else if (tag.contains("json")) {
+                        dataSource = "JSON";
+                    } else if (tag.contains("database")) {
+                        dataSource = "Database";
+                    }
+                }
+            }
+            
+            testData.put("dataSourceType", dataSource);
+            testData.put("dataSourceFile", sourceFile);
+            testResult.setTestData(testData);
+        }
         
         // Set proper suite name and feature file
         testResult.setSuiteName("Simple Sequential Test Suite");
         testResult.setFeatureFile(new File(featureFile).getName());
         
         try {
-            // Execute scenario
-            scenarioRunner.runScenarioFromFile(feature, scenario);
+            // Create a deep copy of the scenario to avoid thread interference
+            CSFeatureFile.Scenario scenarioCopy = createScenarioCopy(scenario);
+            
+            // Log driver instance and scenario data
+            logger.info("[{}] Driver instance: {}", threadName, driver);
+            logger.info("[{}] CSWebDriverManager driver: {}", threadName, CSWebDriverManager.getDriver());
+            logger.info("[{}] Scenario copy data row: {}", threadName, scenarioCopy.getDataRow());
+            
+            // Execute scenario with the copy
+            threadSafeScenarioRunner.runScenarioFromFile(feature, scenarioCopy);
             
             // Get executed steps from scenario context
-            Map<String, Object> scenarioContext = scenarioRunner.getScenarioContext();
+            Map<String, Object> scenarioContext = threadSafeScenarioRunner.getScenarioContext();
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> executedSteps = (List<Map<String, Object>>) scenarioContext.get("executed_steps");
             logger.info("Retrieved executed steps from context: {} steps", executedSteps != null ? executedSteps.size() : "null");
@@ -276,7 +443,7 @@ public class CSBDDRunner extends CSBaseTest {
             testResult.setDuration(testResult.calculateDuration());
             
             // Get executed steps even on failure
-            Map<String, Object> scenarioContext = scenarioRunner.getScenarioContext();
+            Map<String, Object> scenarioContext = threadSafeScenarioRunner.getScenarioContext();
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> executedSteps = (List<Map<String, Object>>) scenarioContext.get("executed_steps");
             logger.info("Retrieved executed steps from context on failure: {} steps", executedSteps != null ? executedSteps.size() : "null");
@@ -418,6 +585,53 @@ public class CSBDDRunner extends CSBaseTest {
         
         logger.info("Running specific feature: {}", featureFile);
         scenarioRunner.runFeatureFile(featureFile);
+    }
+    
+    /**
+     * Create a deep copy of a scenario to ensure thread safety
+     */
+    private CSFeatureFile.Scenario createScenarioCopy(CSFeatureFile.Scenario original) {
+        CSFeatureFile.Scenario copy = new CSFeatureFile.Scenario();
+        copy.setName(original.getName());
+        copy.setDescription(original.getDescription());
+        copy.setTags(new ArrayList<>(original.getTags()));
+        copy.setOutline(original.isOutline());
+        copy.setExamplesConfig(original.getExamplesConfig());
+        
+        // Deep copy the data row
+        if (original.getDataRow() != null) {
+            Map<String, String> dataRowCopy = new HashMap<>();
+            dataRowCopy.putAll(original.getDataRow());
+            copy.setDataRow(dataRowCopy);
+        }
+        
+        // Deep copy steps
+        List<CSFeatureFile.Step> stepsCopy = new ArrayList<>();
+        for (CSFeatureFile.Step step : original.getSteps()) {
+            CSFeatureFile.Step stepCopy = new CSFeatureFile.Step();
+            stepCopy.setKeyword(step.getKeyword());
+            stepCopy.setText(step.getText());
+            stepCopy.setLineNumber(step.getLineNumber());
+            
+            // Copy data table if present
+            if (step.getDataTable() != null) {
+                List<List<String>> tableCopy = new ArrayList<>();
+                for (List<String> row : step.getDataTable()) {
+                    tableCopy.add(new ArrayList<>(row));
+                }
+                stepCopy.setDataTable(tableCopy);
+            }
+            
+            // Copy doc string if present
+            if (step.getDocString() != null) {
+                stepCopy.setDocString(step.getDocString());
+            }
+            
+            stepsCopy.add(stepCopy);
+        }
+        copy.setSteps(stepsCopy);
+        
+        return copy;
     }
     
     /**

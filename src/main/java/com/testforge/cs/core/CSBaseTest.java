@@ -126,7 +126,7 @@ public abstract class CSBaseTest {
                 }
                 
                 // Check environment
-                String currentEnv = config.getProperty("env.current", "qa");
+                String currentEnv = config.getProperty("environment.name", "qa");
                 if (csTest.environments().length > 0 && 
                     !Arrays.asList(csTest.environments()).contains(currentEnv)) {
                     throw new CSTestExecutionException("Test not enabled for environment: " + currentEnv);
@@ -148,12 +148,29 @@ public abstract class CSBaseTest {
             
             // Setup browser if needed
             if (shouldInitializeBrowser(method)) {
-                String browserType = getBrowserType(method);
-                boolean headless = config.getBooleanProperty("browser.headless", false);
-                driver = CSWebDriverManager.createDriver(browserType, headless, null);
+                // Check if driver already exists for this thread
+                driver = CSWebDriverManager.getDriver();
+                if (driver == null) {
+                    String browserType = getBrowserType(method);
+                    boolean headless = config.getBooleanProperty("browser.headless", false);
+                    logger.info("[{}] Creating NEW {} driver (headless: {})", Thread.currentThread().getName(), browserType, headless);
+                    driver = CSWebDriverManager.createDriver(browserType, headless, null);
+                    logger.info("[{}] Driver created: {}", Thread.currentThread().getName(), driver);
+                } else {
+                    logger.info("[{}] Reusing existing driver for thread", Thread.currentThread().getName());
+                    // Clear any existing state
+                    try {
+                        driver.manage().deleteAllCookies();
+                        driver.get("about:blank");
+                    } catch (Exception e) {
+                        logger.warn("Failed to clear browser state: {}", e.getMessage());
+                    }
+                }
                 
                 // Initialize utilities
                 waitUtils = new CSWaitUtils(driver);
+            } else {
+                logger.info("[{}] Browser initialization skipped for method: {}", Thread.currentThread().getName(), method.getName());
             }
             
             // Initialize report manager
@@ -212,11 +229,9 @@ public abstract class CSBaseTest {
             // Execute custom teardown
             onTestEnd(method, result);
             
-            // Cleanup browser
-            if (driver != null) {
-                CSWebDriverManager.quitDriver();
-                driver = null;
-            }
+            // Don't quit browser - it will be reused by the thread
+            // Browser cleanup will happen in @AfterClass or @AfterSuite
+            logger.info("[{}] Keeping browser open for thread reuse", Thread.currentThread().getName());
             
             // Clear thread local data
             threadLocalData.remove();
@@ -422,7 +437,7 @@ public abstract class CSBaseTest {
             // Return first browser for now (can be enhanced for multi-browser testing)
             return csTest.browsers()[0];
         }
-        return config.getProperty("browser.default", "chrome");
+        return config.getProperty("browser.name", "chrome");
     }
     
     /**

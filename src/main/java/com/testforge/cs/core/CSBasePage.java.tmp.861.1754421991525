@@ -37,13 +37,20 @@ public abstract class CSBasePage {
     
     public CSBasePage() {
         this.driver = CSWebDriverManager.getDriver();
-        this.config = CSConfigManager.getInstance();
-        
         if (this.driver == null) {
-            logger.error("Driver is null in CSBasePage constructor for thread: {}. This will cause NullPointerException!", Thread.currentThread().getName());
-            throw new RuntimeException("WebDriver is not initialized. Ensure test setup is complete before creating page objects.");
+            logger.warn("Driver is null in CSBasePage constructor for thread: {}", Thread.currentThread().getName());
+            // Try to get driver again with a small delay
+            try {
+                Thread.sleep(100);
+                this.driver = CSWebDriverManager.getDriver();
+                if (this.driver == null) {
+                    logger.error("Driver is still null after retry for thread: {}", Thread.currentThread().getName());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
-        
+        this.config = CSConfigManager.getInstance();
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(config.getIntProperty("browser.explicit.wait", 30)));
         this.jsExecutor = (JavascriptExecutor) driver;
         this.actions = new Actions(driver);

@@ -37,6 +37,13 @@ public class CSScenarioRunner {
     }
     
     /**
+     * Get the current instance for this thread
+     */
+    public static CSScenarioRunner getCurrentInstance() {
+        return instance.get();
+    }
+    
+    /**
      * Get the current instance of CSScenarioRunner
      */
     public static CSScenarioRunner getInstance() {
@@ -170,7 +177,12 @@ public class CSScenarioRunner {
         }
         
         try {
-            stepRegistry.executeStep(stepText, stepType);
+            // Use context-aware execution if we have scenario context
+            if (!scenarioContext.isEmpty() && scenarioContext.containsKey("dataRow")) {
+                stepRegistry.executeStep(stepText, stepType, scenarioContext);
+            } else {
+                stepRegistry.executeStep(stepText, stepType);
+            }
         } catch (Exception e) {
             logger.error("Step failed: {} {}", stepType, stepText, e);
             throw new CSBddException("Step execution failed: " + stepText, e);
@@ -248,14 +260,23 @@ public class CSScenarioRunner {
     private Map<String, Object> executeFileStepWithResult(CSFeatureFile.Step step) {
         Map<String, Object> stepResult = new HashMap<>();
         stepResult.put("keyword", step.getKeyword());
-        stepResult.put("text", step.getText());
-        // Line number not available in current Step model
+        
+        // Get the step text and replace placeholders if data row exists
+        String stepText = step.getText();
+        Map<String, String> dataRow = (Map<String, String>) scenarioContext.get("dataRow");
+        if (dataRow != null && !dataRow.isEmpty()) {
+            // Replace placeholders like <username> with actual values
+            for (Map.Entry<String, String> entry : dataRow.entrySet()) {
+                stepText = stepText.replace("<" + entry.getKey() + ">", entry.getValue());
+            }
+        }
+        stepResult.put("text", stepText);
         
         long startTime = System.currentTimeMillis();
         
         try {
             CSStepDefinition.StepType stepType = CSStepDefinition.StepType.valueOf(step.getKeyword().toUpperCase());
-            runStep(step.getText(), stepType);
+            runStep(stepText, stepType);
             
             // Handle data table if present
             if (step.getDataTable() != null && !step.getDataTable().isEmpty()) {
@@ -306,8 +327,18 @@ public class CSScenarioRunner {
      * Execute a step from feature file
      */
     private void executeFileStep(CSFeatureFile.Step step) {
+        // Get the step text and replace placeholders if data row exists
+        String stepText = step.getText();
+        Map<String, String> dataRow = (Map<String, String>) scenarioContext.get("dataRow");
+        if (dataRow != null && !dataRow.isEmpty()) {
+            // Replace placeholders like <username> with actual values
+            for (Map.Entry<String, String> entry : dataRow.entrySet()) {
+                stepText = stepText.replace("<" + entry.getKey() + ">", entry.getValue());
+            }
+        }
+        
         CSStepDefinition.StepType stepType = CSStepDefinition.StepType.valueOf(step.getKeyword().toUpperCase());
-        runStep(step.getText(), stepType);
+        runStep(stepText, stepType);
         
         // Handle data table if present
         if (step.getDataTable() != null && !step.getDataTable().isEmpty()) {
