@@ -1,0 +1,18 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Test Valid Login Suite" verbose="1">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <!-- Only test valid login -->
+    <parameter name="cs.feature.path" value="features/test-valid-login.feature"/>
+    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    
+    <test name="Valid Login Test">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

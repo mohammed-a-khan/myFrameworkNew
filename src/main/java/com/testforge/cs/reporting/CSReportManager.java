@@ -5,6 +5,7 @@ import com.testforge.cs.environment.CSEnvironmentCollector;
 import com.testforge.cs.exceptions.CSReportingException;
 import com.testforge.cs.utils.CSFileUtils;
 import com.testforge.cs.utils.CSJsonUtils;
+import com.testforge.cs.driver.CSWebDriverManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,7 +34,12 @@ public class CSReportManager {
     private final AtomicInteger failedTests = new AtomicInteger(0);
     private final AtomicInteger skippedTests = new AtomicInteger(0);
     
-    private String reportName;
+    // Thread-local storage for current step context
+    private static final ThreadLocal<CSStepReport> currentStep = new ThreadLocal<>();
+    private static final ThreadLocal<CSStepReport> lastCompletedStep = new ThreadLocal<>();
+    private static final ThreadLocal<String> currentTestId = new ThreadLocal<>();
+    
+    // private String reportName; // Not currently used
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private String reportDirectory;
@@ -52,7 +58,7 @@ public class CSReportManager {
     public void initializeReport(String suiteName) {
         logger.info("Initializing report for suite: {}", suiteName);
         
-        this.reportName = suiteName;
+        // this.reportName = suiteName; // Store for later use if needed
         this.startTime = LocalDateTime.now();
         this.reportDirectory = config.getProperty("report.directory", "target/test-reports");
         
@@ -70,6 +76,12 @@ public class CSReportManager {
         reportMetadata.put("executionMode", config.getProperty("execution.mode", "sequential"));
         reportMetadata.put("operatingSystem", System.getProperty("os.name"));
         reportMetadata.put("javaVersion", System.getProperty("java.version"));
+        
+        // Add step packages information from suite parameters
+        String stepPackages = System.getProperty("suite.cs.step.packages");
+        if (stepPackages != null && !stepPackages.isEmpty()) {
+            reportMetadata.put("cs.step.packages", stepPackages);
+        }
     }
     
     /**
@@ -94,6 +106,12 @@ public class CSReportManager {
                 break;
             case SKIPPED:
                 skippedTests.incrementAndGet();
+                break;
+            case PENDING:
+            case RETRIED:
+            case BROKEN:
+            case RUNNING:
+                // Handle other statuses as needed
                 break;
         }
     }
@@ -335,6 +353,69 @@ public class CSReportManager {
         logger.error("Error: {}", message);
     }
     
+    // ===== Simple Static Logging Methods for Users =====
+    
+    /**
+     * Log a PASS message - static method for easy access
+     */
+    public static void pass(String message) {
+        getInstance().logStep("[PASS] " + message, true);
+        logger.info("[PASS] {}", message);
+        
+        // Take screenshot if configured
+        if (config.getBooleanProperty("screenshot.on.pass", false) || 
+            config.getBooleanProperty("screenshot.on.all", false)) {
+            captureScreenshot("pass_" + System.currentTimeMillis());
+        }
+    }
+    
+    /**
+     * Log a FAIL message - static method for easy access
+     */
+    public static void fail(String message) {
+        getInstance().logStep("[FAIL] " + message, false);
+        logger.error("[FAIL] {}", message);
+        
+        // Take screenshot if configured (default true for failures)
+        if (config.getBooleanProperty("screenshot.on.fail", true) || 
+            config.getBooleanProperty("screenshot.on.all", false)) {
+            captureScreenshot("fail_" + System.currentTimeMillis());
+        }
+    }
+    
+    /**
+     * Log a WARNING message - static method for easy access
+     */
+    public static void warn(String message) {
+        getInstance().logWarning("[WARN] " + message);
+        logger.warn("[WARN] {}", message);
+    }
+    
+    /**
+     * Log an INFO message - static method for easy access
+     */
+    public static void info(String message) {
+        getInstance().logInfo("[INFO] " + message);
+        logger.info("[INFO] {}", message);
+    }
+    
+    /**
+     * Capture screenshot with automatic naming and reporting
+     */
+    private static void captureScreenshot(String name) {
+        try {
+            File screenshotFile = CSWebDriverManager.takeScreenshot(
+                config.getProperty("report.directory", "target/test-reports") + "/screenshots/" + name + ".png"
+            );
+            if (screenshotFile != null && screenshotFile.exists()) {
+                logger.info("Screenshot captured: {}", screenshotFile.getAbsolutePath());
+                getInstance().logInfo("Screenshot: " + name);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to capture screenshot: {}", e.getMessage());
+        }
+    }
+    
     /**
      * Start test suite
      */
@@ -502,5 +583,128 @@ public class CSReportManager {
         csReportData.buildFrom(new ArrayList<>(testResults.values()));
         csReportData.setEnvironment(CSEnvironmentCollector.getInstance().collectEnvironmentInfo().toMap());
         return csReportData;
+    }
+    
+    // ===== Step-Level Reporting Methods =====
+    
+    /**
+     * Start a new step
+     */
+    public static void startStep(String stepType, String stepText) {
+        CSStepReport step = new CSStepReport(stepType, stepText);
+        currentStep.set(step);
+        logger.info("Step started: {} {}", stepType, stepText);
+    }
+    
+    /**
+     * End the current step
+     */
+    public static void endStep() {
+        CSStepReport step = currentStep.get();
+        if (step != null) {
+            step.complete();
+            
+            // Store the step temporarily before clearing
+            lastCompletedStep.set(step);
+            
+            // Add step to current test result
+            String testId = currentTestId.get();
+            if (testId != null) {
+                CSTestResult testResult = getInstance().testResults.get(testId);
+                if (testResult != null) {
+                    // Get the last executed step from CSScenarioRunner and enhance it with actions
+                    if (!testResult.getExecutedSteps().isEmpty()) {
+                        Map<String, Object> lastStep = testResult.getExecutedSteps().get(
+                            testResult.getExecutedSteps().size() - 1);
+                        
+                        // Add the actions to the step
+                        lastStep.put("actions", step.getActions().stream()
+                            .map(CSStepAction::toMap)
+                            .collect(Collectors.toList()));
+                    }
+                }
+            }
+            
+            logger.info("Step completed: {} - {} ({}ms)", 
+                step.getStepText(), step.getStatus(), step.getDuration());
+            currentStep.remove();
+        }
+    }
+    
+    /**
+     * Add an action to the current step
+     */
+    public static void addAction(String actionType, String description) {
+        CSStepReport step = currentStep.get();
+        if (step != null) {
+            CSStepAction action = new CSStepAction(actionType, description);
+            step.addAction(action);
+            logger.debug("Action: {} - {}", actionType, description);
+        }
+    }
+    
+    /**
+     * Add an action with target to the current step
+     */
+    public static void addAction(String actionType, String description, String target) {
+        CSStepReport step = currentStep.get();
+        if (step != null) {
+            CSStepAction action = new CSStepAction(actionType, description, target);
+            step.addAction(action);
+            logger.debug("Action: {} - {} on {}", actionType, description, target);
+        }
+    }
+    
+    /**
+     * Add an action with target and value to the current step
+     */
+    public static void addAction(String actionType, String description, String target, String value) {
+        CSStepReport step = currentStep.get();
+        if (step != null) {
+            CSStepAction action = new CSStepAction(actionType, description, target, value);
+            step.addAction(action);
+            logger.debug("Action: {} - {} on {} with value '{}'", actionType, description, target, value);
+        }
+    }
+    
+    /**
+     * Mark current action as failed
+     */
+    public static void failAction(String error) {
+        CSStepReport step = currentStep.get();
+        if (step != null && !step.getActions().isEmpty()) {
+            CSStepAction lastAction = step.getActions().get(step.getActions().size() - 1);
+            lastAction.setError(error);
+            logger.error("Action failed: {}", error);
+        }
+    }
+    
+    /**
+     * Set current test context for step reporting
+     */
+    public static void setCurrentTestContext(String testId) {
+        currentTestId.set(testId);
+    }
+    
+    /**
+     * Clear current test context
+     */
+    public static void clearCurrentTestContext() {
+        currentTestId.remove();
+        currentStep.remove();
+        lastCompletedStep.remove();
+    }
+    
+    /**
+     * Get actions from the last completed step
+     */
+    public static List<Map<String, Object>> getLastStepActions() {
+        CSStepReport step = lastCompletedStep.get();
+        if (step != null && step.getActions() != null && !step.getActions().isEmpty()) {
+            return step.getActions().stream()
+                .map(CSStepAction::toMap)
+                .collect(Collectors.toList());
+        }
+        return null;
     }
 }

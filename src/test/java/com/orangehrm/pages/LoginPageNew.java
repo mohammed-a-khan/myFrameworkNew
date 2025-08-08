@@ -52,6 +52,7 @@ public class LoginPageNew extends CSBasePage {
     }
     
     public void login(String username, String password) {
+        System.out.println("DEBUG: LoginPageNew.login called with username=" + username + ", password=" + password);
         enterUsername(username);
         enterPassword(password);
         clickLogin();

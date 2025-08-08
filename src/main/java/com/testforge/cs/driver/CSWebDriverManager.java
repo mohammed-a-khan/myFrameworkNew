@@ -2,6 +2,8 @@ package com.testforge.cs.driver;
 
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.exceptions.CSFrameworkException;
+import com.testforge.cs.screenshot.CSScreenshotUtils;
+import io.github.bonigarcia.wdm.WebDriverManager;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -90,6 +92,9 @@ public class CSWebDriverManager {
      * Create Chrome driver
      */
     private static WebDriver createChromeDriver(boolean headless, Map<String, Object> capabilities) {
+        // Setup ChromeDriver using WebDriverManager
+        WebDriverManager.chromedriver().setup();
+        
         ChromeOptions options = new ChromeOptions();
         
         if (headless) {
@@ -131,6 +136,9 @@ public class CSWebDriverManager {
      * Create Firefox driver
      */
     private static WebDriver createFirefoxDriver(boolean headless, Map<String, Object> capabilities) {
+        // Setup FirefoxDriver using WebDriverManager
+        WebDriverManager.firefoxdriver().setup();
+        
         FirefoxOptions options = new FirefoxOptions();
         
         if (headless) {
@@ -157,6 +165,9 @@ public class CSWebDriverManager {
      * Create Edge driver
      */
     private static WebDriver createEdgeDriver(boolean headless, Map<String, Object> capabilities) {
+        // Setup EdgeDriver using WebDriverManager
+        WebDriverManager.edgedriver().setup();
+        
         EdgeOptions options = new EdgeOptions();
         
         if (headless) {
@@ -310,28 +321,27 @@ public class CSWebDriverManager {
      * Take screenshot
      */
     public static File takeScreenshot(String filePath) {
-        WebDriver driver = getDriver();
-        if (driver == null) {
-            logger.warn("No driver available for screenshot");
-            return null;
-        }
-        
         try {
-            TakesScreenshot screenshotDriver = (TakesScreenshot) driver;
-            File screenshot = screenshotDriver.getScreenshotAs(OutputType.FILE);
+            WebDriver driver = getDriver();
+            byte[] screenshotData = CSScreenshotUtils.captureScreenshot(driver);
+            
+            if (screenshotData == null || screenshotData.length == 0) {
+                logger.warn("Screenshot data is empty");
+                return null;
+            }
             
             // Create directory if needed
             Path path = Paths.get(filePath);
             Files.createDirectories(path.getParent());
             
-            // Copy file
-            Files.copy(screenshot.toPath(), path);
+            // Write screenshot data to file
+            Files.write(path, screenshotData);
             
             logger.info("Screenshot saved to: {}", filePath);
             return path.toFile();
             
         } catch (IOException e) {
-            logger.error("Failed to take screenshot", e);
+            logger.error("Failed to save screenshot", e);
             return null;
         }
     }
@@ -341,18 +351,7 @@ public class CSWebDriverManager {
      */
     public static byte[] takeScreenshot() {
         WebDriver driver = getDriver();
-        if (driver == null) {
-            logger.warn("No driver available for screenshot");
-            return null;
-        }
-        
-        try {
-            TakesScreenshot screenshotDriver = (TakesScreenshot) driver;
-            return screenshotDriver.getScreenshotAs(OutputType.BYTES);
-        } catch (Exception e) {
-            logger.error("Failed to take screenshot", e);
-            return null;
-        }
+        return CSScreenshotUtils.captureScreenshot(driver);
     }
     
     /**

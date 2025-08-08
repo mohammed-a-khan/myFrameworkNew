@@ -25,7 +25,7 @@ Feature: OrangeHRM Simple Tests
       | username  | password    | errorMessage         |
       | testuser  | wrongpass   | Invalid credentials  |
       | admin     | badpass     | Invalid credentials  |
-      | ""        | ""          | Required            |
+      | ""        | ""          | Invalid credentials  |
 
   @utility-demo
   Scenario: Demonstrating utility steps
@@ -46,3 +46,16 @@ Feature: OrangeHRM Simple Tests
     Then I log "Test completed"
     And I take a screenshot "test_screenshot"
     But I wait for 1 seconds
+
+  @deliberate-failure @screenshot-demo
+  Scenario: Deliberately failing test to demonstrate failure reporting
+    Given I am on the login page
+    And I take a screenshot "login_page_initial"
+    When I enter username "Admin" and password "admin123"
+    And I take a screenshot "valid_credentials_entered"
+    And I click the login button
+    Then I should see the dashboard
+    And I take a screenshot "dashboard_displayed"
+    # Now let's try to find a non-existent element which will fail
+    And I should see "NonExistentMenuOption" element
+    And I take a screenshot "after_failed_element_check"

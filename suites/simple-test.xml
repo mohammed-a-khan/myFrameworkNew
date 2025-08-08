@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Simple Test Suite" verbose="1">
+    
+    <test name="Simple Reporting Test">
+        <classes>
+            <class name="com.testforge.examples.SimpleReportingExample">
+                <methods>
+                    <include name="testSimpleReporting"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+</suite>

@@ -5,9 +5,9 @@
     <parameter name="browser.headless" value="false"/>
     <parameter name="environment.name" value="qa"/>
     
-    <!-- Configure feature files and step definitions -->
-    <parameter name="cs.feature.path" value="features/orangehrm-simple-tests.feature,features/orangehrm-comprehensive-tests.feature"/>
-    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    <!-- Configure feature files and step definitions - Only OrangeHRM files -->
+    <parameter name="featuresPath" value="features/orangehrm-simple-tests.feature"/>
+    <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
     
     <test name="OrangeHRM BDD Tests">
         <classes>

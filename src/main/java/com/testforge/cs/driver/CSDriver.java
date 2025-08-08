@@ -26,6 +26,14 @@ public class CSDriver {
     private final CSReportManager reportManager;
     private final WebDriverWait wait;
     
+    /**
+     * Get the underlying WebDriver instance
+     * @return the WebDriver instance
+     */
+    public WebDriver getWebDriver() {
+        return driver;
+    }
+    
     // Configuration
     private final int defaultTimeout;
     private final boolean captureNetworkTraffic;
@@ -50,11 +58,12 @@ public class CSDriver {
      */
     public void get(String url) {
         logger.info("Navigating to URL: {}", url);
+        CSReportManager.info("Navigating to URL: " + url);
         try {
             driver.get(url);
-            reportManager.logStep("Navigated to: " + url, true);
+            CSReportManager.pass("Successfully navigated to: " + url);
         } catch (Exception e) {
-            reportManager.logStep("Failed to navigate to: " + url, false);
+            CSReportManager.fail("Failed to navigate to: " + url);
             throw new CSDriverException("Failed to navigate to URL: " + url, e);
         }
     }
@@ -124,8 +133,9 @@ public class CSDriver {
      */
     public void refresh() {
         logger.info("Refreshing page");
+        CSReportManager.info("Refreshing page");
         driver.navigate().refresh();
-        reportManager.logStep("Page refreshed", true);
+        CSReportManager.pass("Page refreshed successfully");
     }
     
     /**
@@ -133,8 +143,9 @@ public class CSDriver {
      */
     public void back() {
         logger.info("Navigating back");
+        CSReportManager.info("Navigating back");
         driver.navigate().back();
-        reportManager.logStep("Navigated back", true);
+        CSReportManager.pass("Successfully navigated back");
     }
     
     /**
@@ -142,8 +153,9 @@ public class CSDriver {
      */
     public void forward() {
         logger.info("Navigating forward");
+        CSReportManager.info("Navigating forward");
         driver.navigate().forward();
-        reportManager.logStep("Navigated forward", true);
+        CSReportManager.pass("Successfully navigated forward");
     }
     
     /**
@@ -151,8 +163,9 @@ public class CSDriver {
      */
     public void close() {
         logger.info("Closing current window");
+        CSReportManager.info("Closing current window");
         driver.close();
-        reportManager.logStep("Window closed", true);
+        CSReportManager.pass("Window closed successfully");
     }
     
     /**
@@ -160,11 +173,13 @@ public class CSDriver {
      */
     public void quit() {
         logger.info("Quitting driver");
+        CSReportManager.info("Quitting driver");
         try {
             driver.quit();
-            reportManager.logStep("Driver quit successfully", true);
+            CSReportManager.pass("Driver quit successfully");
         } catch (Exception e) {
             logger.error("Error quitting driver", e);
+            CSReportManager.warn("Error while quitting driver: " + e.getMessage());
         }
     }
     
@@ -173,17 +188,19 @@ public class CSDriver {
      */
     public void switchToWindow(String windowTitle) {
         logger.info("Switching to window: {}", windowTitle);
+        CSReportManager.info("Switching to window with title: " + windowTitle);
         String currentWindow = driver.getWindowHandle();
         
         for (String windowHandle : driver.getWindowHandles()) {
             driver.switchTo().window(windowHandle);
             if (driver.getTitle().equals(windowTitle)) {
-                reportManager.logStep("Switched to window: " + windowTitle, true);
+                CSReportManager.pass("Successfully switched to window: " + windowTitle);
                 return;
             }
         }
         
         driver.switchTo().window(currentWindow);
+        CSReportManager.fail("Window not found with title: " + windowTitle);
         throw new CSDriverException("Window not found with title: " + windowTitle);
     }
     
@@ -199,7 +216,7 @@ public class CSDriver {
         }
         
         driver.switchTo().window(windows.get(index));
-        reportManager.logStep("Switched to window index: " + index, true);
+        CSReportManager.pass("Successfully switched to window index: " + index);
     }
     
     /**
@@ -221,8 +238,9 @@ public class CSDriver {
      */
     public void switchToFrame(int index) {
         logger.info("Switching to frame index: {}", index);
+        CSReportManager.info("Switching to frame index: " + index);
         driver.switchTo().frame(index);
-        reportManager.logStep("Switched to frame index: " + index, true);
+        CSReportManager.pass("Successfully switched to frame index: " + index);
     }
     
     /**
@@ -230,8 +248,9 @@ public class CSDriver {
      */
     public void switchToFrame(String nameOrId) {
         logger.info("Switching to frame: {}", nameOrId);
+        CSReportManager.info("Switching to frame: " + nameOrId);
         driver.switchTo().frame(nameOrId);
-        reportManager.logStep("Switched to frame: " + nameOrId, true);
+        CSReportManager.pass("Successfully switched to frame: " + nameOrId);
     }
     
     /**
@@ -239,8 +258,9 @@ public class CSDriver {
      */
     public void switchToFrame(CSElement frameElement) {
         logger.info("Switching to frame element");
+        CSReportManager.info("Switching to frame element");
         driver.switchTo().frame(frameElement.getElement());
-        reportManager.logStep("Switched to frame element", true);
+        CSReportManager.pass("Successfully switched to frame element");
     }
     
     /**
@@ -248,8 +268,9 @@ public class CSDriver {
      */
     public void switchToDefaultContent() {
         logger.info("Switching to default content");
+        CSReportManager.info("Switching to default content");
         driver.switchTo().defaultContent();
-        reportManager.logStep("Switched to default content", true);
+        CSReportManager.pass("Successfully switched to default content");
     }
     
     /**
@@ -261,7 +282,7 @@ public class CSDriver {
             Alert alert = driver.switchTo().alert();
             String alertText = alert.getText();
             alert.accept();
-            reportManager.logStep("Accepted alert: " + alertText, true);
+            CSReportManager.pass("Accepted alert with text: " + alertText);
         } catch (NoAlertPresentException e) {
             throw new CSDriverException("No alert present to accept", e);
         }
@@ -276,7 +297,7 @@ public class CSDriver {
             Alert alert = driver.switchTo().alert();
             String alertText = alert.getText();
             alert.dismiss();
-            reportManager.logStep("Dismissed alert: " + alertText, true);
+            CSReportManager.pass("Dismissed alert with text: " + alertText);
         } catch (NoAlertPresentException e) {
             throw new CSDriverException("No alert present to dismiss", e);
         }
@@ -303,7 +324,7 @@ public class CSDriver {
         try {
             Alert alert = driver.switchTo().alert();
             alert.sendKeys(text);
-            reportManager.logStep("Sent text to alert: " + text, true);
+            CSReportManager.pass("Sent text to alert: " + text);
         } catch (NoAlertPresentException e) {
             throw new CSDriverException("No alert present", e);
         }
@@ -317,10 +338,10 @@ public class CSDriver {
         try {
             JavascriptExecutor js = (JavascriptExecutor) driver;
             Object result = js.executeScript(script, args);
-            reportManager.logStep("Executed JavaScript", true);
+            CSReportManager.info("Executed JavaScript successfully");
             return result;
         } catch (Exception e) {
-            reportManager.logStep("Failed to execute JavaScript", false);
+            CSReportManager.fail("Failed to execute JavaScript");
             throw new CSDriverException("Failed to execute JavaScript", e);
         }
     }
@@ -333,10 +354,10 @@ public class CSDriver {
         try {
             JavascriptExecutor js = (JavascriptExecutor) driver;
             Object result = js.executeAsyncScript(script, args);
-            reportManager.logStep("Executed async JavaScript", true);
+            CSReportManager.info("Executed async JavaScript successfully");
             return result;
         } catch (Exception e) {
-            reportManager.logStep("Failed to execute async JavaScript", false);
+            CSReportManager.fail("Failed to execute async JavaScript");
             throw new CSDriverException("Failed to execute async JavaScript", e);
         }
     }
@@ -349,7 +370,7 @@ public class CSDriver {
         try {
             TakesScreenshot screenshot = (TakesScreenshot) driver;
             byte[] screenshotBytes = screenshot.getScreenshotAs(OutputType.BYTES);
-            reportManager.logStep("Screenshot captured", true);
+            CSReportManager.info("Screenshot captured successfully");
             return screenshotBytes;
         } catch (Exception e) {
             logger.error("Failed to take screenshot", e);
@@ -362,8 +383,9 @@ public class CSDriver {
      */
     public void maximize() {
         logger.info("Maximizing window");
+        CSReportManager.info("Maximizing window");
         driver.manage().window().maximize();
-        reportManager.logStep("Window maximized", true);
+        CSReportManager.pass("Window maximized successfully");
     }
     
     /**
@@ -372,7 +394,7 @@ public class CSDriver {
     public void setWindowSize(int width, int height) {
         logger.info("Setting window size: {}x{}", width, height);
         driver.manage().window().setSize(new Dimension(width, height));
-        reportManager.logStep("Window size set to: " + width + "x" + height, true);
+        CSReportManager.pass("Window size set to: " + width + "x" + height);
     }
     
     /**
@@ -388,7 +410,7 @@ public class CSDriver {
     public void setWindowPosition(int x, int y) {
         logger.info("Setting window position: {},{}", x, y);
         driver.manage().window().setPosition(new Point(x, y));
-        reportManager.logStep("Window position set to: " + x + "," + y, true);
+        CSReportManager.pass("Window position set to: " + x + "," + y);
     }
     
     /**
@@ -403,8 +425,9 @@ public class CSDriver {
      */
     public void deleteAllCookies() {
         logger.info("Deleting all cookies");
+        CSReportManager.info("Deleting all cookies");
         driver.manage().deleteAllCookies();
-        reportManager.logStep("All cookies deleted", true);
+        CSReportManager.pass("All cookies deleted successfully");
     }
     
     /**
@@ -413,7 +436,7 @@ public class CSDriver {
     public void deleteCookie(String name) {
         logger.info("Deleting cookie: {}", name);
         driver.manage().deleteCookieNamed(name);
-        reportManager.logStep("Cookie deleted: " + name, true);
+        CSReportManager.pass("Cookie deleted: " + name);
     }
     
     /**
@@ -423,7 +446,7 @@ public class CSDriver {
         logger.info("Adding cookie: {}={}", name, value);
         Cookie cookie = new Cookie(name, value);
         driver.manage().addCookie(cookie);
-        reportManager.logStep("Cookie added: " + name, true);
+        CSReportManager.pass("Cookie added: " + name);
     }
     
     /**
@@ -479,12 +502,6 @@ public class CSDriver {
         logger.debug("Angular complete");
     }
     
-    /**
-     * Get underlying WebDriver (should be used sparingly)
-     */
-    public WebDriver getWebDriver() {
-        return driver;
-    }
     
     /**
      * Check if driver is active

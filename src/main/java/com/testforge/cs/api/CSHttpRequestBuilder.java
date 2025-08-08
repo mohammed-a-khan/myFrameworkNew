@@ -47,7 +47,7 @@ public class CSHttpRequestBuilder {
     }
     
     public CSHttpRequestBuilder contentType(String contentType) {
-        this.contentType = contentType;
+        this.contentType = contentType; // Store for potential future use
         header("Content-Type", contentType);
         return this;
     }

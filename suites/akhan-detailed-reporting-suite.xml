@@ -1,0 +1,35 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Akhan Detailed Reporting Suite" verbose="2" parallel="none">
+    <!-- Enable detailed reporting -->
+    <parameter name="cs.element.highlight" value="true"/>
+    <parameter name="cs.element.screenshot" value="true"/>
+    <parameter name="cs.element.timeout" value="10"/>
+    
+    <!-- Browser Configuration -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="false"/>
+    <parameter name="browser.window.maximize" value="true"/>
+    <parameter name="environment.name" value="sit"/>
+    
+    <!-- Application Configuration -->
+    <parameter name="app.base.url" value="https://akhan-ui-sit.myshare.net/"/>
+    <parameter name="implicit.wait" value="10"/>
+    <parameter name="explicit.wait" value="30"/>
+    <parameter name="page.load.timeout" value="30"/>
+    
+    <!-- Enhanced Reporting Configuration -->
+    <parameter name="report.detailed" value="true"/>
+    <parameter name="report.performance" value="true"/>
+    <parameter name="report.screenshots" value="true"/>
+    <parameter name="report.name" value="Akhan Detailed Action Report"/>
+    <parameter name="report.title" value="Comprehensive Action Logging Demonstration"/>
+    
+    <!-- Detailed Reporting Test -->
+    <test name="Akhan Tests with Detailed Action Reporting">
+        <parameter name="cs.feature.path" value="features/akhan-detailed-reporting.feature"/>
+        <parameter name="cs.step.packages" value="com.akhan.stepdefs,com.orangehrm.stepdefs"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>

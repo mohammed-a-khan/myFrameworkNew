@@ -29,6 +29,8 @@ public class CSScenarioRunner {
     private final CSStepRegistry stepRegistry;
     private final Map<String, Object> scenarioContext;
     private CSTestResult currentTestResult;
+    private String currentFeatureFile;
+    private CSFeatureFile currentFeature;
     
     public CSScenarioRunner() {
         this.stepRegistry = CSStepRegistry.getInstance();
@@ -199,26 +201,36 @@ public class CSScenarioRunner {
         CSFeatureParser parser = new CSFeatureParser();
         CSFeatureFile feature = parser.parseFeatureFile(featureFile);
         
-        // Run each scenario
+        // Run each scenario with feature file context
         for (CSFeatureFile.Scenario scenario : feature.getScenarios()) {
-            runScenarioFromFile(feature, scenario);
+            runScenarioFromFile(featureFile, feature, scenario);
         }
     }
     
     /**
-     * Run scenario from feature file
+     * Run scenario from feature file with feature context
      */
-    public void runScenarioFromFile(CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
-        logger.info("Running scenario: {}", scenario.getName());
+    public void runScenarioFromFile(String featureFile, CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
+        logger.info("Running scenario: {} from feature: {}", scenario.getName(), feature.getName());
+        
+        // Store current feature context
+        this.currentFeatureFile = featureFile;
+        this.currentFeature = feature;
         
         try {
-            // Clear scenario context
+            // Clear scenario context for complete isolation
             scenarioContext.clear();
             
-            // Store data row in context if present
+            // Add feature file context to prevent cross-contamination
+            scenarioContext.put("feature_file", featureFile);
+            scenarioContext.put("feature_name", feature.getName());
+            
+            // Store data row in context if present - with feature isolation
             if (scenario.getDataRow() != null && !scenario.getDataRow().isEmpty()) {
-                scenarioContext.put("dataRow", scenario.getDataRow());
-                logger.info("Using data row: {}", scenario.getDataRow());
+                // Create a defensive copy to prevent data contamination
+                Map<String, String> isolatedDataRow = new HashMap<>(scenario.getDataRow());
+                scenarioContext.put("dataRow", isolatedDataRow);
+                logger.info("Using data row for feature '{}': {}", feature.getName(), isolatedDataRow);
             }
             
             // Store scenario details in context for step reporting
@@ -233,16 +245,45 @@ public class CSScenarioRunner {
                 for (CSFeatureFile.Step step : feature.getBackground().getSteps()) {
                     Map<String, Object> stepResult = executeFileStepWithResult(step);
                     executedSteps.add(stepResult);
+                    
+                    // If background step failed, stop execution
+                    if ("failed".equals(stepResult.get("status"))) {
+                        String errorMsg = (String) stepResult.get("error");
+                        Exception failure = new CSBddException("Background step failed: " + step.getKeyword() + " " + step.getText() + 
+                                               (errorMsg != null ? " - " + errorMsg : ""));
+                        scenarioContext.put("scenario_failure", failure);
+                        break; // Stop executing more background steps
+                    }
                 }
             }
             
-            // Run scenario steps
-            logger.info("Scenario {} has {} steps", scenario.getName(), scenario.getSteps().size());
-            for (CSFeatureFile.Step step : scenario.getSteps()) {
-                logger.info("About to execute step: {} {}", step.getKeyword(), step.getText());
-                Map<String, Object> stepResult = executeFileStepWithResult(step);
-                executedSteps.add(stepResult);
-                logger.info("Added step result to executedSteps. Total steps: {}", executedSteps.size());
+            // Check if background steps failed
+            Exception scenarioFailure = (Exception) scenarioContext.get("scenario_failure");
+            
+            // Run scenario steps only if background didn't fail
+            if (scenarioFailure == null) {
+                logger.info("Scenario {} has {} steps", scenario.getName(), scenario.getSteps().size());
+                
+                for (CSFeatureFile.Step step : scenario.getSteps()) {
+                    logger.info("About to execute step: {} {}", step.getKeyword(), step.getText());
+                    Map<String, Object> stepResult = executeFileStepWithResult(step);
+                    executedSteps.add(stepResult);
+                    logger.info("Added step result to executedSteps. Total steps: {}", executedSteps.size());
+                    
+                    // If step failed, stop executing remaining steps but keep the failure recorded
+                    if ("failed".equals(stepResult.get("status"))) {
+                        String errorMsg = (String) stepResult.get("error");
+                        scenarioFailure = new CSBddException("Step failed: " + step.getKeyword() + " " + step.getText() + 
+                                                            (errorMsg != null ? " - " + errorMsg : ""));
+                        logger.error("Step failed, stopping scenario execution");
+                        break;
+                    }
+                }
+            }
+            
+            // If scenario failed, throw the exception now
+            if (scenarioFailure != null) {
+                throw scenarioFailure;
             }
             
             // If we get here, scenario passed
@@ -250,7 +291,12 @@ public class CSScenarioRunner {
             
         } catch (Exception e) {
             logger.error("Scenario failed: {}", scenario.getName(), e);
-            throw e; // Let CSBDDRunner handle the failure and test result creation
+            // Wrap in RuntimeException if not already
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            } else {
+                throw new CSBddException("Scenario execution failed", e);
+            }
         }
     }
     
@@ -274,6 +320,9 @@ public class CSScenarioRunner {
         
         long startTime = System.currentTimeMillis();
         
+        // Start step-level reporting
+        CSReportManager.startStep(step.getKeyword(), stepText);
+        
         try {
             CSStepDefinition.StepType stepType = CSStepDefinition.StepType.valueOf(step.getKeyword().toUpperCase());
             runStep(stepText, stepType);
@@ -293,11 +342,23 @@ public class CSScenarioRunner {
             stepResult.put("status", "passed");
             stepResult.put("duration", System.currentTimeMillis() - startTime);
             
+            // End step reporting and get actions
+            CSReportManager.endStep();
+            
+            // Get the actions from the completed step
+            List<Map<String, Object>> actions = CSReportManager.getLastStepActions();
+            if (actions != null && !actions.isEmpty()) {
+                stepResult.put("actions", actions);
+            }
+            
         } catch (Exception e) {
             stepResult.put("status", "failed");
             stepResult.put("error", e.getMessage());
             stepResult.put("stackTrace", getStackTrace(e));
             stepResult.put("duration", System.currentTimeMillis() - startTime);
+            
+            // End step reporting with failure
+            CSReportManager.endStep();
             
             // Try to capture screenshot on failure
             try {
@@ -317,7 +378,7 @@ public class CSScenarioRunner {
                 logger.warn("Failed to capture screenshot: {}", screenshotError.getMessage());
             }
             
-            throw e;
+            // Don't throw immediately - let the step be recorded first
         }
         
         return stepResult;
@@ -371,6 +432,16 @@ public class CSScenarioRunner {
     @SuppressWarnings("unchecked")
     public <T> T getFromContext(String key) {
         return (T) scenarioContext.get(key);
+    }
+    
+    /**
+     * Run scenario from feature file (deprecated - use version with feature file parameter)
+     * @deprecated Use {@link #runScenarioFromFile(String, CSFeatureFile, CSFeatureFile.Scenario)} instead
+     */
+    @Deprecated
+    public void runScenarioFromFile(CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
+        // Delegate to new method with empty feature file path for backward compatibility
+        runScenarioFromFile("", feature, scenario);
     }
     
     /**

@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Simple Login Test Suite" verbose="2">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <test name="Simple Login Test">
+        <classes>
+            <class name="com.testforge.cs.tests.SimpleLoginTest"/>
+        </classes>
+    </test>
+    
+</suite>

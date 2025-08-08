@@ -1,0 +1,5 @@
+searchType,attribute,searchValue,expectedResult
+ESSS,Key,MESA 2001-5,MESA 2001-5
+ESSS,Name,Test ESSS,Test ESSS
+Series,Key,SER-001,SER-001
+Series,Name,Test Series,Test Series

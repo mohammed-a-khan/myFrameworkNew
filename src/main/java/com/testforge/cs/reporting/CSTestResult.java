@@ -36,6 +36,8 @@ public class CSTestResult {
     private List<Map<String, Object>> executedSteps;
     private String screenshotPath;
     private List<Screenshot> screenshots;
+    private String threadName;
+    private String scenarioName;
     
     public CSTestResult() {
         this.steps = new ArrayList<>();
@@ -47,6 +49,7 @@ public class CSTestResult {
         this.retryCount = 0;
         this.executedSteps = new ArrayList<>();
         this.screenshots = new ArrayList<>();
+        this.threadName = Thread.currentThread().getName();
     }
     
     // Getters and Setters
@@ -290,6 +293,22 @@ public class CSTestResult {
     
     public void addScreenshot(String path, String name) {
         this.screenshots.add(new Screenshot(path, name, System.currentTimeMillis()));
+    }
+    
+    public String getThreadName() {
+        return threadName;
+    }
+    
+    public void setThreadName(String threadName) {
+        this.threadName = threadName;
+    }
+    
+    public String getScenarioName() {
+        return scenarioName;
+    }
+    
+    public void setScenarioName(String scenarioName) {
+        this.scenarioName = scenarioName;
     }
     
     @Override

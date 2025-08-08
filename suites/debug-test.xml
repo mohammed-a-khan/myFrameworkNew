@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Debug Test Suite" verbose="2">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <test name="Debug Test">
+        <classes>
+            <class name="com.testforge.cs.tests.DebugTest"/>
+        </classes>
+    </test>
+    
+</suite>

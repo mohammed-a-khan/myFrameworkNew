@@ -1,0 +1,16 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Debug Test Suite" verbose="2">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="environment.name" value="qa"/>
+    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    <parameter name="cs.feature.path" value="features/orangehrm-debug.feature"/>
+    <parameter name="browser.headless" value="true"/>
+    
+    <test name="OrangeHRM Debug Test">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

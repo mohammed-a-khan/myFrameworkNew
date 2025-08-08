@@ -44,11 +44,15 @@ public class CSScreenshotUtils {
      */
     public static byte[] captureScreenshot(WebDriver driver) {
         try {
+            if (driver == null) {
+                logger.warn("WebDriver is null, creating placeholder screenshot");
+                return createPlaceholderScreenshot("WebDriver not initialized");
+            }
             TakesScreenshot screenshot = (TakesScreenshot) driver;
             return screenshot.getScreenshotAs(OutputType.BYTES);
         } catch (Exception e) {
             logger.error("Failed to capture screenshot", e);
-            return new byte[0];
+            return createPlaceholderScreenshot("Screenshot capture failed: " + e.getMessage());
         }
     }
     
@@ -312,6 +316,100 @@ public class CSScreenshotUtils {
         } catch (Exception e) {
             logger.error("Failed to add watermark", e);
             return screenshotData;
+        }
+    }
+    
+    /**
+     * Create a placeholder screenshot with error message
+     */
+    private static byte[] createPlaceholderScreenshot(String message) {
+        try {
+            // Create a placeholder image
+            int width = 800;
+            int height = 600;
+            BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = image.createGraphics();
+            
+            // Set rendering hints for better quality
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            
+            // Fill background
+            g2d.setColor(new Color(245, 245, 245));
+            g2d.fillRect(0, 0, width, height);
+            
+            // Draw border
+            g2d.setColor(new Color(220, 53, 69));
+            g2d.setStroke(new BasicStroke(5));
+            g2d.drawRect(2, 2, width - 4, height - 4);
+            
+            // Draw error icon
+            g2d.setColor(new Color(220, 53, 69));
+            g2d.setFont(new Font("Arial", Font.BOLD, 72));
+            String icon = "⚠";
+            FontMetrics fm = g2d.getFontMetrics();
+            int iconX = (width - fm.stringWidth(icon)) / 2;
+            g2d.drawString(icon, iconX, 200);
+            
+            // Draw title
+            g2d.setFont(new Font("Arial", Font.BOLD, 36));
+            String title = "Screenshot Not Available";
+            fm = g2d.getFontMetrics();
+            int titleX = (width - fm.stringWidth(title)) / 2;
+            g2d.drawString(title, titleX, 300);
+            
+            // Draw message
+            g2d.setFont(new Font("Arial", Font.PLAIN, 18));
+            g2d.setColor(new Color(108, 117, 125));
+            fm = g2d.getFontMetrics();
+            
+            // Word wrap the message
+            String[] words = message.split(" ");
+            StringBuilder line = new StringBuilder();
+            int y = 380;
+            int lineHeight = 25;
+            int maxWidth = width - 100;
+            
+            for (String word : words) {
+                String testLine = line + word + " ";
+                int lineWidth = fm.stringWidth(testLine);
+                if (lineWidth > maxWidth) {
+                    if (line.length() > 0) {
+                        String currentLine = line.toString().trim();
+                        int x = (width - fm.stringWidth(currentLine)) / 2;
+                        g2d.drawString(currentLine, x, y);
+                        y += lineHeight;
+                        line = new StringBuilder(word + " ");
+                    }
+                } else {
+                    line.append(word).append(" ");
+                }
+            }
+            if (line.length() > 0) {
+                String currentLine = line.toString().trim();
+                int x = (width - fm.stringWidth(currentLine)) / 2;
+                g2d.drawString(currentLine, x, y);
+            }
+            
+            // Add timestamp
+            g2d.setFont(new Font("Arial", Font.ITALIC, 14));
+            g2d.setColor(new Color(173, 181, 189));
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            fm = g2d.getFontMetrics();
+            int timestampX = (width - fm.stringWidth(timestamp)) / 2;
+            g2d.drawString(timestamp, timestampX, height - 30);
+            
+            g2d.dispose();
+            
+            // Convert to byte array
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, SCREENSHOT_FORMAT, baos);
+            return baos.toByteArray();
+            
+        } catch (Exception e) {
+            logger.error("Failed to create placeholder screenshot", e);
+            // Return a minimal valid PNG if all else fails
+            return new byte[0];
         }
     }
 }

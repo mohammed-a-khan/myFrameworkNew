@@ -1,0 +1,9 @@
+{
+  "login": {
+    "username": "testuser",
+    "password": "testpass"
+  },
+  "esssSearch": {
+    "esssKey": "MESA 2001-5"
+  }
+}

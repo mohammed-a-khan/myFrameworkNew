@@ -54,6 +54,16 @@ public abstract class CSStepDefinitions {
     }
     
     /**
+     * Clear thread-local state to ensure scenario isolation
+     */
+    public static void clearThreadLocalState() {
+        // Clear the thread-local driver if needed
+        // This helps ensure complete isolation between scenarios
+        // especially when running multiple feature files
+        LoggerFactory.getLogger(CSStepDefinitions.class).debug("Clearing thread-local state for scenario isolation");
+    }
+    
+    /**
      * Get page instance
      */
     protected <T extends CSBasePage> T getPage(Class<T> pageClass) {

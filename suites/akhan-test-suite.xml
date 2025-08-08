@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Akhan Application Test Suite" verbose="2">
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="false"/>
+    <parameter name="environment.name" value="sit"/>
+    
+    <test name="Akhan Application Tests">
+        <parameter name="cs.feature.path" value="features/akhan-application.feature"/>
+        <parameter name="cs.step.packages" value="com.akhan.stepdefs"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>

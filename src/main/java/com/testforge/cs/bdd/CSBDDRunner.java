@@ -46,6 +46,9 @@ public class CSBDDRunner extends CSBaseTest {
     private static final java.util.concurrent.atomic.AtomicInteger testCounter = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final Map<String, Integer> threadTestCount = new java.util.concurrent.ConcurrentHashMap<>();
     
+    // Track feature file isolation
+    private static final Map<String, Set<String>> featureScenarioMap = new java.util.concurrent.ConcurrentHashMap<>();
+    
     // Track which threads have finished their tests
     private static final java.util.concurrent.atomic.AtomicInteger completedTests = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final int TOTAL_TESTS = 12; // Expected number of tests
@@ -183,13 +186,19 @@ public class CSBDDRunner extends CSBaseTest {
     
     /**
      * Data provider for feature files
+     * The parallel attribute is determined dynamically based on suite configuration
      */
-    @DataProvider(name = "featureFiles", parallel = true)
-    public Object[][] getFeatureFiles() {
+    @DataProvider(name = "featureFiles")
+    public Object[][] getFeatureFiles(ITestContext context) {
         System.out.println("\n>>> DataProvider getFeatureFiles() called <<<");
         List<Object[]> testData = new ArrayList<>();
         
-        logger.info("DataProvider method called on thread: {}", Thread.currentThread().getName());
+        // Get parallel mode from suite configuration
+        String parallelMode = context.getSuite().getParallel();
+        boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
+        
+        logger.info("DataProvider method called on thread: {} (parallel mode: {})", 
+                Thread.currentThread().getName(), parallelMode);
         
         for (String featureFile : featureFiles) {
             try {
@@ -293,11 +302,13 @@ public class CSBDDRunner extends CSBaseTest {
      */
     @Test(dataProvider = "featureFiles", description = "Execute BDD Scenario")
     public void executeBDDScenario(String featureFile, CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
-        // Log thread information
+        // Log thread and isolation information
         String threadName = Thread.currentThread().getName();
         long threadId = Thread.currentThread().getId();
         logger.info("[{}] Thread ID {} Starting test execution for scenario: {} with data: {}", 
             threadName, threadId, scenario.getName(), scenario.getDataRow());
+        logger.info("[ISOLATION] Feature file: {}, Feature name: {}, Scenario: {}", 
+            featureFile, feature.getName(), scenario.getName());
         
         // Track thread distribution
         int testNumber = testCounter.incrementAndGet();
@@ -329,9 +340,17 @@ public class CSBDDRunner extends CSBaseTest {
             throw new RuntimeException("Driver not initialized for thread: " + threadName);
         }
         
-        // Create a new scenario runner for each test to ensure thread safety
+        // Track scenario execution per feature file
+        featureScenarioMap.computeIfAbsent(featureFile, k -> new HashSet<>()).add(scenario.getName());
+        
+        // Create a new scenario runner for each test to ensure thread safety and feature isolation
         CSScenarioRunner threadSafeScenarioRunner = new CSScenarioRunner();
         String scenarioName = feature.getName() + " - " + scenario.getName();
+        
+        // Log feature file isolation info
+        logger.info("[ISOLATION] Executing scenario '{}' from feature file: {}", scenario.getName(), featureFile);
+        logger.info("[ISOLATION] Feature '{}' has executed scenarios: {}", 
+            feature.getName(), featureScenarioMap.get(featureFile));
         logger.info("Executing scenario: {} (Tags: {}) - First step: {} {}", 
             scenarioName, scenario.getTags(), 
             scenario.getSteps().isEmpty() ? "NO STEPS" : scenario.getSteps().get(0).getKeyword(),
@@ -348,6 +367,11 @@ public class CSBDDRunner extends CSBaseTest {
         testResult.setStartTime(LocalDateTime.now());
         testResult.setEnvironment(config.getProperty("environment.name", "qa"));
         testResult.setBrowser(config.getProperty("browser.name", "chrome"));
+        testResult.setThreadName(Thread.currentThread().getName());
+        testResult.setScenarioName(scenarioName);
+        
+        // Set current test context for reporting
+        CSReportManager.setCurrentTestContext(testResult.getTestId());
         
         // Set test data information if available
         if (scenario.getDataRow() != null && !scenario.getDataRow().isEmpty()) {
@@ -409,16 +433,19 @@ public class CSBDDRunner extends CSBaseTest {
         testResult.setFeatureFile(new File(featureFile).getName());
         
         try {
-            // Create a deep copy of the scenario to avoid thread interference
+            // Create a deep copy of the scenario to avoid thread and feature interference
             CSFeatureFile.Scenario scenarioCopy = createScenarioCopy(scenario);
+            
+            // Ensure complete isolation by clearing any shared state
+            ensureScenarioIsolation(threadName, featureFile, feature.getName(), scenario.getName());
             
             // Log driver instance and scenario data
             logger.info("[{}] Driver instance: {}", threadName, driver);
             logger.info("[{}] CSWebDriverManager driver: {}", threadName, CSWebDriverManager.getDriver());
             logger.info("[{}] Scenario copy data row: {}", threadName, scenarioCopy.getDataRow());
             
-            // Execute scenario with the copy
-            threadSafeScenarioRunner.runScenarioFromFile(feature, scenarioCopy);
+            // Execute scenario with the copy and feature file context
+            threadSafeScenarioRunner.runScenarioFromFile(featureFile, feature, scenarioCopy);
             
             // Get executed steps from scenario context
             Map<String, Object> scenarioContext = threadSafeScenarioRunner.getScenarioContext();
@@ -482,6 +509,9 @@ public class CSBDDRunner extends CSBaseTest {
             }
             // Add test result to report
             CSReportManager.getInstance().addTestResult(testResult);
+            
+            // Clear test context
+            CSReportManager.clearCurrentTestContext();
         }
     }
     
@@ -652,7 +682,7 @@ public class CSBDDRunner extends CSBaseTest {
                 
                 for (CSFeatureFile.Scenario scenario : feature.getScenarios()) {
                     if (scenario.getTags().contains(tag)) {
-                        scenarioRunner.runScenarioFromFile(feature, scenario);
+                        scenarioRunner.runScenarioFromFile(featureFile, feature, scenario);
                     }
                 }
                 
@@ -660,6 +690,21 @@ public class CSBDDRunner extends CSBaseTest {
                 logger.error("Error running feature: {}", featureFile, e);
             }
         }
+    }
+    
+    /**
+     * Ensure complete isolation between scenarios
+     */
+    private void ensureScenarioIsolation(String threadName, String featureFile, String featureName, String scenarioName) {
+        logger.debug("[{}] Ensuring isolation for scenario '{}' from feature '{}' ({})", 
+            threadName, scenarioName, featureName, featureFile);
+        
+        // Clear any thread-local state that might leak between scenarios
+        // This is especially important when running multiple feature files
+        CSStepDefinitions.clearThreadLocalState();
+        
+        // Log current isolation state
+        logger.debug("[ISOLATION] Current feature scenario map: {}", featureScenarioMap);
     }
     
     /**

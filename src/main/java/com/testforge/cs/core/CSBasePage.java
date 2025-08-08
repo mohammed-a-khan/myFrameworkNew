@@ -7,6 +7,7 @@ import com.testforge.cs.driver.CSWebDriverManager;
 import com.testforge.cs.exceptions.CSElementNotFoundException;
 import com.testforge.cs.exceptions.CSFrameworkException;
 import com.testforge.cs.factory.CSPageFactory;
+import com.testforge.cs.reporting.CSReportManager;
 import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.*;
@@ -160,7 +161,10 @@ public abstract class CSBasePage {
     
     public void navigateTo(String url) {
         logger.info("Navigating to: {}", url);
+        CSReportManager.info("[INFO] Navigating to URL: " + url);
+        CSReportManager.addAction("navigate", "Navigate to URL", url);
         driver.get(url);
+        CSReportManager.pass("[PASS] Successfully navigated to: " + url);
     }
     
     public void navigateTo() {
@@ -235,7 +239,10 @@ public abstract class CSBasePage {
     // ===== Wait Methods =====
     
     public void waitForPageLoad() {
+        CSReportManager.info("[INFO] Waiting for page to load");
+        CSReportManager.addAction("wait", "Wait for page load");
         waitForPageLoad(config.getIntProperty("browser.page.load.timeout", 60));
+        CSReportManager.pass("[PASS] Page loaded successfully");
     }
     
     public void waitForPageLoad(int timeoutSeconds) {
@@ -257,18 +264,22 @@ public abstract class CSBasePage {
     }
     
     public void waitForTitle(String title) {
+        CSReportManager.addAction("wait", "Wait for title", title);
         wait.until(ExpectedConditions.titleIs(title));
     }
     
     public void waitForTitleContains(String titlePart) {
+        CSReportManager.addAction("wait", "Wait for title to contain", titlePart);
         wait.until(ExpectedConditions.titleContains(titlePart));
     }
     
     public void waitForUrl(String url) {
+        CSReportManager.addAction("wait", "Wait for URL", url);
         wait.until(ExpectedConditions.urlToBe(url));
     }
     
     public void waitForUrlContains(String urlPart) {
+        CSReportManager.addAction("wait", "Wait for URL to contain", urlPart);
         wait.until(ExpectedConditions.urlContains(urlPart));
     }
     
@@ -305,10 +316,12 @@ public abstract class CSBasePage {
     // ===== Action Methods =====
     
     public void click(By by) {
+        CSReportManager.info("Clicking element: " + by);
         WebElement element = findClickableElement(by);
         highlightElement(element);
         element.click();
         logger.info("Clicked element: {}", by);
+        CSReportManager.pass("Successfully clicked element: " + by);
     }
     
     public void doubleClick(By by) {
@@ -326,11 +339,13 @@ public abstract class CSBasePage {
     }
     
     public void type(By by, String text) {
+        CSReportManager.info("Typing '" + text + "' into element: " + by);
         WebElement element = findVisibleElement(by);
         highlightElement(element);
         element.clear();
         element.sendKeys(text);
         logger.info("Typed '{}' into element: {}", text, by);
+        CSReportManager.pass("Successfully typed '" + text + "' into element: " + by);
     }
     
     public void typeWithoutClear(By by, String text) {
@@ -347,9 +362,11 @@ public abstract class CSBasePage {
     }
     
     public void selectByText(By by, String text) {
+        CSReportManager.info("Selecting '" + text + "' from dropdown: " + by);
         Select select = new Select(findElement(by));
         select.selectByVisibleText(text);
         logger.info("Selected '{}' from dropdown: {}", text, by);
+        CSReportManager.pass("Successfully selected '" + text + "' from dropdown: " + by);
     }
     
     public void selectByValue(By by, String value) {
@@ -431,16 +448,21 @@ public abstract class CSBasePage {
     public boolean isElementPresent(By by) {
         try {
             driver.findElement(by);
+            CSReportManager.info("Element is present: " + by);
             return true;
         } catch (org.openqa.selenium.NoSuchElementException e) {
+            CSReportManager.info("Element is not present: " + by);
             return false;
         }
     }
     
     public boolean isElementVisible(By by) {
         try {
-            return findElement(by).isDisplayed();
+            boolean visible = findElement(by).isDisplayed();
+            CSReportManager.info("Element visibility check for " + by + ": " + visible);
+            return visible;
         } catch (Exception e) {
+            CSReportManager.info("Element not found or not visible: " + by);
             return false;
         }
     }
@@ -476,9 +498,12 @@ public abstract class CSBasePage {
     // ===== Alert Methods =====
     
     public void acceptAlert() {
+        CSReportManager.info("Accepting alert");
         Alert alert = wait.until(ExpectedConditions.alertIsPresent());
+        String alertText = alert.getText();
         alert.accept();
         logger.info("Accepted alert");
+        CSReportManager.pass("Accepted alert with text: " + alertText);
     }
     
     public void dismissAlert() {
@@ -501,8 +526,10 @@ public abstract class CSBasePage {
     // ===== Frame Methods =====
     
     public void switchToFrame(String frameNameOrId) {
+        CSReportManager.info("Switching to frame: " + frameNameOrId);
         driver.switchTo().frame(frameNameOrId);
         logger.info("Switched to frame: {}", frameNameOrId);
+        CSReportManager.pass("Successfully switched to frame: " + frameNameOrId);
     }
     
     public void switchToFrame(int frameIndex) {
@@ -516,8 +543,10 @@ public abstract class CSBasePage {
     }
     
     public void switchToDefaultContent() {
+        CSReportManager.info("Switching to default content");
         driver.switchTo().defaultContent();
         logger.info("Switched to default content");
+        CSReportManager.pass("Successfully switched to default content");
     }
     
     // ===== Window Methods =====
@@ -554,5 +583,20 @@ public abstract class CSBasePage {
     
     public byte[] takeScreenshotAsBytes() {
         return CSWebDriverManager.takeScreenshot();
+    }
+    
+    /**
+     * Capture screenshot with custom name
+     */
+    public void captureScreenshot(String name) {
+        CSReportManager.info("Capturing screenshot: " + name);
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        String filePath = config.getProperty("report.directory", "target/screenshots") + "/" + name + "_" + timestamp + ".png";
+        File screenshot = CSWebDriverManager.takeScreenshot(filePath);
+        if (screenshot != null && screenshot.exists()) {
+            CSReportManager.pass("Screenshot captured: " + name);
+        } else {
+            CSReportManager.warn("Failed to capture screenshot: " + name);
+        }
     }
 }

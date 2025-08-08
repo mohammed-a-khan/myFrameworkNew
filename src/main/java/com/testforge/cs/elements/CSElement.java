@@ -64,12 +64,13 @@ public class CSElement {
      */
     public CSElement clearAndType(String text) {
         logger.debug("Clear and type '{}' into element: {}", text, description);
+        CSReportManager.info("[INFO] Clearing and typing '" + text + "' into " + description);
         
-        return performAction("clearAndType", () -> {
+        return performActionWithValue("clearAndType", text, () -> {
             WebElement el = getElement();
             el.clear();
             el.sendKeys(text);
-            reportManager.logStep("Entered text '" + text + "' into " + description, true);
+            CSReportManager.pass("[PASS] Entered text '" + text + "' into " + description);
         });
     }
     
@@ -78,10 +79,11 @@ public class CSElement {
      */
     public CSElement type(String text) {
         logger.debug("Type '{}' into element: {}", text, description);
+        CSReportManager.info("Typing '" + text + "' into " + description);
         
-        return performAction("type", () -> {
+        return performActionWithValue("type", text, () -> {
             getElement().sendKeys(text);
-            reportManager.logStep("Typed text '" + text + "' into " + description, true);
+            CSReportManager.pass("Typed text '" + text + "' into " + description);
         });
     }
     
@@ -90,10 +92,11 @@ public class CSElement {
      */
     public CSElement click() {
         logger.debug("Click element: {}", description);
+        CSReportManager.info("[INFO] Clicking on " + description);
         
         return performAction("click", () -> {
             getElement().click();
-            reportManager.logStep("Clicked on " + description, true);
+            CSReportManager.pass("[PASS] Clicked on " + description);
         });
     }
     
@@ -102,11 +105,12 @@ public class CSElement {
      */
     public CSElement doubleClick() {
         logger.debug("Double click element: {}", description);
+        CSReportManager.info("Double clicking on " + description);
         
         return performAction("doubleClick", () -> {
             Actions actions = new Actions(driver);
             actions.doubleClick(getElement()).perform();
-            reportManager.logStep("Double clicked on " + description, true);
+            CSReportManager.pass("Double clicked on " + description);
         });
     }
     
@@ -115,11 +119,12 @@ public class CSElement {
      */
     public CSElement rightClick() {
         logger.debug("Right click element: {}", description);
+        CSReportManager.info("Right clicking on " + description);
         
         return performAction("rightClick", () -> {
             Actions actions = new Actions(driver);
             actions.contextClick(getElement()).perform();
-            reportManager.logStep("Right clicked on " + description, true);
+            CSReportManager.pass("Right clicked on " + description);
         });
     }
     
@@ -128,10 +133,11 @@ public class CSElement {
      */
     public CSElement clear() {
         logger.debug("Clear element: {}", description);
+        CSReportManager.info("Clearing " + description);
         
         return performAction("clear", () -> {
             getElement().clear();
-            reportManager.logStep("Cleared " + description, true);
+            CSReportManager.pass("Cleared " + description);
         });
     }
     
@@ -140,10 +146,11 @@ public class CSElement {
      */
     public CSElement submit() {
         logger.debug("Submit element: {}", description);
+        CSReportManager.info("Submitting form via " + description);
         
         return performAction("submit", () -> {
             getElement().submit();
-            reportManager.logStep("Submitted " + description, true);
+            CSReportManager.pass("Submitted " + description);
         });
     }
     
@@ -152,10 +159,11 @@ public class CSElement {
      */
     public String getText() {
         logger.debug("Get text from element: {}", description);
+        CSReportManager.info("Getting text from " + description);
         
         return performFunction("getText", () -> {
             String text = getElement().getText();
-            reportManager.logStep("Got text '" + text + "' from " + description, true);
+            CSReportManager.pass("Got text '" + text + "' from " + description);
             return text;
         });
     }
@@ -165,10 +173,11 @@ public class CSElement {
      */
     public String getAttribute(String attributeName) {
         logger.debug("Get attribute '{}' from element: {}", attributeName, description);
+        CSReportManager.info("Getting attribute '" + attributeName + "' from " + description);
         
         return performFunction("getAttribute", () -> {
             String value = getElement().getAttribute(attributeName);
-            reportManager.logStep("Got attribute '" + attributeName + "' = '" + value + "' from " + description, true);
+            CSReportManager.pass("Got attribute '" + attributeName + "' = '" + value + "' from " + description);
             return value;
         });
     }
@@ -178,12 +187,36 @@ public class CSElement {
      */
     public String getCssValue(String propertyName) {
         logger.debug("Get CSS value '{}' from element: {}", propertyName, description);
+        CSReportManager.info("Getting CSS value '" + propertyName + "' from " + description);
         
         return performFunction("getCssValue", () -> {
             String value = getElement().getCssValue(propertyName);
-            reportManager.logStep("Got CSS value '" + propertyName + "' = '" + value + "' from " + description, true);
+            CSReportManager.pass("Got CSS value '" + propertyName + "' = '" + value + "' from " + description);
             return value;
         });
+    }
+    
+    /**
+     * Check if element is displayed with custom timeout
+     */
+    public boolean isDisplayed(int timeoutSeconds) {
+        logger.debug("Check if element is displayed: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("[INFO] Checking if " + description + " is displayed");
+        
+        try {
+            WebElement element = CSWaitUtils.waitForElementPresent(driver, locator, timeoutSeconds);
+            boolean displayed = element != null && element.isDisplayed();
+            if (displayed) {
+                CSReportManager.pass("[PASS] " + description + " is displayed");
+            } else {
+                CSReportManager.fail("[FAIL] " + description + " is not displayed");
+            }
+            return displayed;
+        } catch (Exception e) {
+            logger.debug("Element not displayed: {}", e.getMessage());
+            CSReportManager.fail("[FAIL] " + description + " is not displayed: " + e.getMessage());
+            return false;
+        }
     }
     
     /**
@@ -191,10 +224,11 @@ public class CSElement {
      */
     public boolean isDisplayed() {
         logger.debug("Check if element is displayed: {}", description);
+        CSReportManager.info("Checking if " + description + " is displayed");
         
         return performFunction("isDisplayed", () -> {
             boolean displayed = getElement().isDisplayed();
-            reportManager.logStep("Element " + description + " is " + (displayed ? "displayed" : "not displayed"), true);
+            CSReportManager.info("Element " + description + " is " + (displayed ? "displayed" : "not displayed"));
             return displayed;
         });
     }
@@ -204,10 +238,11 @@ public class CSElement {
      */
     public boolean isEnabled() {
         logger.debug("Check if element is enabled: {}", description);
+        CSReportManager.info("Checking if " + description + " is enabled");
         
         return performFunction("isEnabled", () -> {
             boolean enabled = getElement().isEnabled();
-            reportManager.logStep("Element " + description + " is " + (enabled ? "enabled" : "disabled"), true);
+            CSReportManager.info("Element " + description + " is " + (enabled ? "enabled" : "disabled"));
             return enabled;
         });
     }
@@ -217,10 +252,11 @@ public class CSElement {
      */
     public boolean isSelected() {
         logger.debug("Check if element is selected: {}", description);
+        CSReportManager.info("Checking if " + description + " is selected");
         
         return performFunction("isSelected", () -> {
             boolean selected = getElement().isSelected();
-            reportManager.logStep("Element " + description + " is " + (selected ? "selected" : "not selected"), true);
+            CSReportManager.info("Element " + description + " is " + (selected ? "selected" : "not selected"));
             return selected;
         });
     }
@@ -256,8 +292,9 @@ public class CSElement {
      */
     public CSElement waitForVisible(int timeoutSeconds) {
         logger.debug("Wait for element to be visible: {}", description);
+        CSReportManager.info("Waiting for " + description + " to be visible (timeout: " + timeoutSeconds + "s)");
         CSWaitUtils.waitForElementVisible(driver, locator, timeoutSeconds);
-        reportManager.logStep("Element " + description + " is visible", true);
+        CSReportManager.pass("Element " + description + " is visible");
         return this;
     }
     
@@ -273,8 +310,9 @@ public class CSElement {
      */
     public CSElement waitForClickable(int timeoutSeconds) {
         logger.debug("Wait for element to be clickable: {}", description);
+        CSReportManager.info("Waiting for " + description + " to be clickable (timeout: " + timeoutSeconds + "s)");
         CSWaitUtils.waitForElementClickable(driver, locator, timeoutSeconds);
-        reportManager.logStep("Element " + description + " is clickable", true);
+        CSReportManager.pass("Element " + description + " is clickable");
         return this;
     }
     
@@ -283,11 +321,12 @@ public class CSElement {
      */
     public CSElement selectByVisibleText(String text) {
         logger.debug("Select by visible text '{}' in element: {}", text, description);
+        CSReportManager.info("Selecting '" + text + "' from " + description);
         
         return performAction("selectByVisibleText", () -> {
             Select select = new Select(getElement());
             select.selectByVisibleText(text);
-            reportManager.logStep("Selected '" + text + "' from " + description, true);
+            CSReportManager.pass("Selected '" + text + "' from " + description);
         });
     }
     
@@ -296,11 +335,12 @@ public class CSElement {
      */
     public CSElement selectByValue(String value) {
         logger.debug("Select by value '{}' in element: {}", value, description);
+        CSReportManager.info("Selecting value '" + value + "' from " + description);
         
-        return performAction("selectByValue", () -> {
+        return performActionWithValue("selectByValue", value, () -> {
             Select select = new Select(getElement());
             select.selectByValue(value);
-            reportManager.logStep("Selected value '" + value + "' from " + description, true);
+            CSReportManager.pass("Selected value '" + value + "' from " + description);
         });
     }
     
@@ -309,11 +349,12 @@ public class CSElement {
      */
     public CSElement selectByIndex(int index) {
         logger.debug("Select by index '{}' in element: {}", index, description);
+        CSReportManager.info("Selecting index " + index + " from " + description);
         
-        return performAction("selectByIndex", () -> {
+        return performActionWithValue("selectByIndex", String.valueOf(index), () -> {
             Select select = new Select(getElement());
             select.selectByIndex(index);
-            reportManager.logStep("Selected index " + index + " from " + description, true);
+            CSReportManager.pass("Selected index " + index + " from " + description);
         });
     }
     
@@ -322,13 +363,14 @@ public class CSElement {
      */
     public List<String> getDropdownOptions() {
         logger.debug("Get dropdown options from element: {}", description);
+        CSReportManager.info("Getting dropdown options from " + description);
         
         return performFunction("getDropdownOptions", () -> {
             Select select = new Select(getElement());
             List<String> options = select.getOptions().stream()
                 .map(WebElement::getText)
                 .collect(Collectors.toList());
-            reportManager.logStep("Got " + options.size() + " options from " + description, true);
+            CSReportManager.info("Got " + options.size() + " options from " + description);
             return options;
         });
     }
@@ -338,11 +380,12 @@ public class CSElement {
      */
     public CSElement hover() {
         logger.debug("Hover over element: {}", description);
+        CSReportManager.info("Hovering over " + description);
         
         return performAction("hover", () -> {
             Actions actions = new Actions(driver);
             actions.moveToElement(getElement()).perform();
-            reportManager.logStep("Hovered over " + description, true);
+            CSReportManager.pass("Hovered over " + description);
         });
     }
     
@@ -351,11 +394,12 @@ public class CSElement {
      */
     public CSElement dragAndDropTo(CSElement target) {
         logger.debug("Drag element {} and drop to {}", description, target.description);
+        CSReportManager.info("Dragging " + description + " to " + target.description);
         
         return performAction("dragAndDrop", () -> {
             Actions actions = new Actions(driver);
             actions.dragAndDrop(getElement(), target.getElement()).perform();
-            reportManager.logStep("Dragged " + description + " and dropped to " + target.description, true);
+            CSReportManager.pass("Dragged " + description + " and dropped to " + target.description);
         });
     }
     
@@ -364,10 +408,11 @@ public class CSElement {
      */
     public CSElement scrollIntoView() {
         logger.debug("Scroll element into view: {}", description);
+        CSReportManager.info("Scrolling " + description + " into view");
         
         return performAction("scrollIntoView", () -> {
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", getElement());
-            reportManager.logStep("Scrolled " + description + " into view", true);
+            CSReportManager.pass("Scrolled " + description + " into view");
         });
     }
     
@@ -412,10 +457,11 @@ public class CSElement {
      */
     public CSElement uploadFile(String filePath) {
         logger.debug("Upload file '{}' to element: {}", filePath, description);
+        CSReportManager.info("Uploading file '" + filePath + "' to " + description);
         
-        return performAction("uploadFile", () -> {
+        return performActionWithValue("uploadFile", filePath, () -> {
             getElement().sendKeys(filePath);
-            reportManager.logStep("Uploaded file '" + filePath + "' to " + description, true);
+            CSReportManager.pass("Uploaded file '" + filePath + "' to " + description);
         });
     }
     
@@ -424,10 +470,11 @@ public class CSElement {
      */
     public CSElement pressEnter() {
         logger.debug("Press Enter key on element: {}", description);
+        CSReportManager.info("Pressing Enter key on " + description);
         
         return performAction("pressEnter", () -> {
             getElement().sendKeys(Keys.ENTER);
-            reportManager.logStep("Pressed Enter key on " + description, true);
+            CSReportManager.pass("Pressed Enter key on " + description);
         });
     }
     
@@ -441,9 +488,9 @@ public class CSElement {
             WebElement el = getElement();
             if (!el.isSelected()) {
                 el.click();
-                reportManager.logStep("Checked " + description, true);
+                CSReportManager.pass("Checked " + description);
             } else {
-                reportManager.logStep(description + " was already checked", true);
+                CSReportManager.info(description + " was already checked");
             }
         });
     }
@@ -563,7 +610,43 @@ public class CSElement {
      * Perform action with retry and error handling
      */
     private CSElement performAction(String actionName, Runnable action) {
+        return performActionWithValue(actionName, null, action);
+    }
+    
+    /**
+     * Get human-readable action description
+     */
+    private String getActionDescription(String actionName) {
+        switch (actionName) {
+            case "click": return "Click element";
+            case "clearAndType": return "Clear and type text";
+            case "type": return "Type text";
+            case "clear": return "Clear field";
+            case "submit": return "Submit form";
+            case "selectByText": return "Select by text";
+            case "selectByValue": return "Select by value";
+            case "selectByIndex": return "Select by index";
+            case "hover": return "Hover over element";
+            case "dragAndDrop": return "Drag and drop";
+            case "scrollIntoView": return "Scroll into view";
+            case "highlight": return "Highlight element";
+            case "uploadFile": return "Upload file";
+            case "pressEnter": return "Press Enter key";
+            case "check": return "Check checkbox";
+            case "uncheck": return "Uncheck checkbox";
+            default: return actionName;
+        }
+    }
+    
+    /**
+     * Perform action with value and retry handling
+     */
+    private CSElement performActionWithValue(String actionName, String value, Runnable action) {
         Exception lastException = null;
+        
+        // Add action to current step report with value
+        String actionDescription = getActionDescription(actionName);
+        CSReportManager.addAction(actionName, actionDescription, description, value);
         
         for (int attempt = 0; attempt < maxRetries; attempt++) {
             try {
@@ -589,6 +672,9 @@ public class CSElement {
                 }
             }
         }
+        
+        // Mark action as failed
+        CSReportManager.failAction("Failed to perform action '" + actionName + "': " + lastException.getMessage());
         
         throw new CSElementException(
             "Failed to perform action '" + actionName + "' on element: " + description, 

@@ -9,6 +9,8 @@ import com.orangehrm.pages.DashboardPageNew;
 import java.util.List;
 import java.util.Map;
 import com.testforge.cs.elements.CSElement;
+import com.testforge.cs.reporting.CSReportManager;
+import com.testforge.cs.bdd.CSScenarioRunner;
 
 /**
  * Comprehensive step definitions for OrangeHRM application
@@ -70,7 +72,8 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     
     @CSStep(description = "I login with username {username} and password {password}")
     public void loginWithCredentials(String username, String password) {
-        logger.info("Logging in with username: {}", username);
+        logger.info("Logging in with username: {} and password: {}", username, password);
+        System.out.println("DEBUG: loginWithCredentials called with username=" + username + ", password=" + password);
         loginPage = getPage(LoginPageNew.class);
         loginPage.login(username, password);
     }
@@ -81,6 +84,7 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         loginPage = getPage(LoginPageNew.class);
         loginPage.clickLogin();
     }
+    
     
     @CSStep(description = "I am logged in as {username}")
     public void loginAsUser(String username) {
@@ -101,6 +105,7 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I should see the dashboard")
     public void verifyDashboard() {
         logger.info("Verifying dashboard is displayed");
+        CSReportManager.addAction("verify", "Verify dashboard is displayed");
         dashboardPage = getPage(DashboardPageNew.class);
         assertTrue(dashboardPage.isDisplayed(), "Dashboard not displayed");
     }
@@ -108,6 +113,7 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I should see an error message {errorMessage}")
     public void verifyErrorMessage(String errorMessage) {
         logger.info("Verifying error message: {}", errorMessage);
+        CSReportManager.addAction("verify", "Verify error message", "error message", errorMessage);
         loginPage = getPage(LoginPageNew.class);
         String actualMessage = loginPage.getErrorMessage();
         assertEquals(actualMessage, errorMessage, "Error message mismatch");
@@ -241,12 +247,14 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I take a screenshot {screenshotName}")
     public void takeScreenshot(String screenshotName) {
         logger.info("Taking screenshot: {}", screenshotName);
+        CSReportManager.addAction("screenshot", "Capture screenshot", screenshotName);
         captureScreenshot(screenshotName);
     }
     
     @CSStep(description = "I wait for {seconds} seconds")
     public void waitForSeconds(int seconds) {
         logger.info("Waiting for {} seconds", seconds);
+        CSReportManager.addAction("wait", "Wait for " + seconds + " seconds");
         try {
             Thread.sleep(seconds * 1000);
         } catch (InterruptedException e) {
@@ -275,6 +283,79 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I log {message}")
     public void logMessage(String message) {
         logger.info("User message: {}", message);
+        CSReportManager.addAction("log", "Log message", null, message);
+        // Also log to report manager for visibility in HTML reports
+        CSReportManager.getInstance().logInfo(message);
+    }
+    
+    @CSStep(description = "I log pass {message}")
+    public void logPass(String message) {
+        logger.info("PASS: {}", message);
+        CSReportManager.getInstance().logInfo("✅ PASS: " + message);
+    }
+    
+    @CSStep(description = "I log fail {message}")
+    public void logFail(String message) {
+        logger.error("FAIL: {}", message);
+        CSReportManager.getInstance().logError("❌ FAIL: " + message);
+    }
+    
+    @CSStep(description = "I log warning {message}")
+    public void logWarning(String message) {
+        logger.warn("WARNING: {}", message);
+        CSReportManager.getInstance().logWarning("⚠️ WARNING: " + message);
+    }
+    
+    @CSStep(description = "I record the start time")
+    public void recordStartTime() {
+        long startTime = System.currentTimeMillis();
+        CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+        if (runner != null) {
+            runner.storeInContext("startTime", startTime);
+        }
+        CSReportManager.getInstance().logInfo("⏱️ Start time recorded: " + startTime);
+    }
+    
+    @CSStep(description = "I record the page load time")
+    public void recordPageLoadTime() {
+        CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+        if (runner != null) {
+            Long startTime = runner.getFromContext("startTime");
+            if (startTime != null) {
+                long loadTime = System.currentTimeMillis() - startTime;
+                runner.storeInContext("pageLoadTime", loadTime);
+                CSReportManager.getInstance().logInfo("⏱️ Page load time: " + loadTime + " ms");
+            }
+        }
+    }
+    
+    @CSStep(description = "I record the total execution time")
+    public void recordTotalTime() {
+        CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+        if (runner != null) {
+            Long startTime = runner.getFromContext("startTime");
+            if (startTime != null) {
+                long totalTime = System.currentTimeMillis() - startTime;
+                CSReportManager.getInstance().logInfo("⏱️ Total execution time: " + totalTime + " ms");
+            }
+        }
+    }
+    
+    @CSStep(description = "I wait for dashboard to load")
+    public void waitForDashboard() {
+        DashboardPageNew dashboard = getPage(DashboardPageNew.class);
+        assertTrue(dashboard.isDisplayed(), "Dashboard should be displayed");
+    }
+    
+    @CSStep(description = "I verify login result is {expected}")
+    public void verifyLoginResult(String expected) {
+        if ("success".equals(expected)) {
+            DashboardPageNew dashboard = getPage(DashboardPageNew.class);
+            assertTrue(dashboard.isDisplayed(), "Dashboard should be displayed for successful login");
+        } else if ("failure".equals(expected)) {
+            LoginPageNew loginPage = getPage(LoginPageNew.class);
+            assertTrue(loginPage.isErrorMessageDisplayed(), "Error message should be displayed for failed login");
+        }
     }
     
     // ================== ACTION STEPS ==================

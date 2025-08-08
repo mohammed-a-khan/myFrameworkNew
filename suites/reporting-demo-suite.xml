@@ -1,0 +1,26 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Reporting Demo Suite" verbose="2">
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <test name="Custom Reporting Examples">
+        <classes>
+            <class name="com.orangehrm.tests.ReportingExampleTest">
+                <methods>
+                    <include name="testWithCustomReporting"/>
+                    <include name="testWithWarningsAndInfo"/>
+                    <include name="testWithStructuredLogging"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <test name="BDD Reporting Examples">
+        <parameter name="cs.feature.path" value="features/reporting-demo.feature"/>
+        <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>

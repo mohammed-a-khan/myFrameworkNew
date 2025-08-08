@@ -127,4 +127,13 @@ public @interface CSTest {
         DATABASE,
         E2E
     }
+    
+    /**
+     * Priority levels
+     */
+    class Priority {
+        public static final int HIGH = 1;
+        public static final int MEDIUM = 3;
+        public static final int LOW = 5;
+    }
 }

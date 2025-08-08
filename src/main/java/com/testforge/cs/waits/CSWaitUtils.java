@@ -1,5 +1,6 @@
 package com.testforge.cs.waits;
 
+import com.testforge.cs.reporting.CSReportManager;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
@@ -40,6 +41,7 @@ public class CSWaitUtils {
      */
     public static WebElement waitForElementVisible(WebDriver driver, By locator, int timeoutSeconds) {
         logger.debug("Waiting for element to be visible: {}", locator);
+        CSReportManager.addAction("wait", "Wait for element to be visible", locator.toString());
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
         return wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
     }
@@ -266,5 +268,18 @@ public class CSWaitUtils {
      */
     public <T> T waitFor(ExpectedCondition<T> condition, int timeoutSeconds) {
         return waitForCondition(driver, condition, timeoutSeconds);
+    }
+    
+    /**
+     * Simple wait for specified seconds
+     */
+    public static void waitForSeconds(int seconds) {
+        try {
+            logger.debug("Waiting for {} seconds", seconds);
+            Thread.sleep(seconds * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("Wait interrupted after {} seconds", seconds);
+        }
     }
 }

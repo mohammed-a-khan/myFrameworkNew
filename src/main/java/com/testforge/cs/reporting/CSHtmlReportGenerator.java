@@ -903,6 +903,17 @@ public class CSHtmlReportGenerator {
             padding: 0.75rem;
             border-bottom: 1px solid var(--border-color);
         }
+        
+        .step-item .step-content > div:first-child {
+            padding: 0.25rem;
+            margin: -0.25rem;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .step-item .step-content > div:first-child:hover {
+            background-color: rgba(0, 0, 0, 0.03);
+        }
 
         .step-icon {
             width: 24px;
@@ -1272,7 +1283,23 @@ public class CSHtmlReportGenerator {
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 9999;
+            z-index: 1000;
+        }
+        
+        #categoryDetailsModal {
+            z-index: 1500;
+        }
+        
+        #featureDetailsModal {
+            z-index: 1500;
+        }
+        
+        #failureDetailsModal {
+            z-index: 1500;
+        }
+        
+        #screenshotModal {
+            z-index: 10000 !important;
         }
         
         .modal-overlay {
@@ -1298,6 +1325,7 @@ public class CSHtmlReportGenerator {
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            z-index: inherit;
         }
         
         .modal-header {
@@ -1525,12 +1553,25 @@ public class CSHtmlReportGenerator {
             cursor: pointer;
             transition: opacity 0.2s, transform 0.2s;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            padding: 0 0.5rem;
+            overflow: hidden;
         }
         
         .thread-test-bar:hover {
             opacity: 0.9;
             transform: translateY(-2px);
             z-index: 10;
+        }
+        
+        .thread-test-name {
+            color: white;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 500;
         }
         
         .thread-test-bar.passed {
@@ -2885,11 +2926,19 @@ public class CSHtmlReportGenerator {
                 String statusClass = test.getStatus() == CSTestResult.Status.PASSED ? "passed" : 
                                    test.getStatus() == CSTestResult.Status.FAILED ? "failed" : "skipped";
                 
+                String scenarioName = test.getScenarioName() != null ? test.getScenarioName() : extractScenarioName(test.getTestName());
                 section.append("                        <div class=\"thread-test-bar ").append(statusClass)
                     .append("\" style=\"left: ").append(String.format("%.2f", startPercent))
                     .append("%; width: ").append(String.format("%.2f", Math.max(widthPercent, 1)))
                     .append("%;\" onclick=\"showTestDetails('").append(test.getTestId()).append("')\" ")
-                    .append("title=\"").append(extractScenarioName(test.getTestName())).append(" - ").append(formatDuration(test.getDuration())).append("\">\n");
+                    .append("data-testid=\"").append(test.getTestId()).append("\" ")
+                    .append("data-scenario=\"").append(scenarioName).append("\" ")
+                    .append("title=\"").append(scenarioName).append(" - ").append(formatDuration(test.getDuration())).append(" - Click for details\">\n");
+                
+                // Show scenario name in the bar if there's enough space
+                if (widthPercent > 5) {
+                    section.append("                            <span class=\"thread-test-name\">").append(scenarioName).append("</span>\n");
+                }
                 section.append("                        </div>\n");
             }
             
@@ -3092,6 +3141,23 @@ public class CSHtmlReportGenerator {
                 .add(test);
         }
         
+        // Also add step definition packages information
+        Map<String, Object> metadata = reportData.getMetadata();
+        if (metadata != null) {
+            String stepPackages = (String) metadata.get("cs.step.packages");
+            if (stepPackages != null && !stepPackages.isEmpty()) {
+                // Add step definition packages with dummy entries to show them
+                String[] packages = stepPackages.split(",");
+                for (String pkg : packages) {
+                    String trimmedPkg = pkg.trim();
+                    if (!packageHierarchy.containsKey(trimmedPkg)) {
+                        packageHierarchy.put(trimmedPkg, new TreeMap<>());
+                        packageHierarchy.get(trimmedPkg).put("Step Definitions", new ArrayList<>());
+                    }
+                }
+            }
+        }
+        
         section.append("    <div class=\"card\">\n");
         section.append("        <div class=\"card-header\">\n");
         section.append("            <h3 class=\"card-title\">Package Structure</h3>\n");
@@ -3124,12 +3190,31 @@ public class CSHtmlReportGenerator {
             section.append("                <div class=\"tree-item expanded\">\n");
             section.append("                    <div class=\"tree-item-content\" onclick=\"toggleTreeItem(this)\">\n");
             section.append("                        <i class=\"fas fa-chevron-down tree-item-icon\"></i>\n");
-            section.append("                        <i class=\"fas fa-folder\" style=\"color: var(--primary-color); margin-right: 0.5rem;\"></i>\n");
-            section.append("                        <span class=\"tree-item-name font-mono\" title=\"").append(fullPackageName).append("\">").append(displayName).append("</span>\n");
+            // Determine package type and icon
+            String packageIcon = "fa-folder";
+            String packageColor = "var(--primary-color)";
+            String packageType = "";
+            
+            if (fullPackageName.contains("stepdefs") || fullPackageName.contains("steps")) {
+                packageIcon = "fa-puzzle-piece";
+                packageColor = "#8b5cf6";
+                packageType = " (Step Definitions)";
+            } else if (fullPackageName.contains("testforge.cs")) {
+                packageIcon = "fa-cogs";
+                packageColor = "#3b82f6";
+                packageType = " (Framework)";
+            }
+            
+            section.append("                        <i class=\"fas ").append(packageIcon).append("\" style=\"color: ").append(packageColor).append("; margin-right: 0.5rem;\"></i>\n");
+            section.append("                        <span class=\"tree-item-name font-mono\" title=\"").append(fullPackageName).append("\">").append(displayName).append(packageType).append("</span>\n");
             section.append("                        <div class=\"tree-item-status\">\n");
-            section.append("                            <span class=\"badge badge-info\">").append(allPackageTests.size()).append(" tests</span>\n");
-            section.append("                            <span class=\"text-success\">").append(passed).append(" ✓</span>\n");
-            section.append("                            <span class=\"text-danger\">").append(failed).append(" ✗</span>\n");
+            if (allPackageTests.size() > 0) {
+                section.append("                            <span class=\"badge badge-info\">").append(allPackageTests.size()).append(" tests</span>\n");
+                section.append("                            <span class=\"text-success\">").append(passed).append(" ✓</span>\n");
+                section.append("                            <span class=\"text-danger\">").append(failed).append(" ✗</span>\n");
+            } else {
+                section.append("                            <span class=\"badge badge-secondary\">No test executions</span>\n");
+            }
             if (skipped > 0) {
                 section.append("                            <span class=\"text-warning\">").append(skipped).append(" ⏭</span>\n");
             }
@@ -3173,6 +3258,46 @@ public class CSHtmlReportGenerator {
         section.append("            </div>\n");
         section.append("        </div>\n");
         section.append("    </div>\n");
+        
+        // Add Feature Files Card
+        Map<String, List<CSTestResult>> featureFiles = reportData.getTestResults().stream()
+            .filter(t -> t.getFeatureFile() != null && !t.getFeatureFile().isEmpty())
+            .collect(Collectors.groupingBy(CSTestResult::getFeatureFile));
+        
+        if (!featureFiles.isEmpty()) {
+            section.append("    <div class=\"card\" style=\"margin-top: 1.5rem;\">\n");
+            section.append("        <div class=\"card-header\">\n");
+            section.append("            <h3 class=\"card-title\"><i class=\"fas fa-cucumber\" style=\"color: #4ade80; margin-right: 0.5rem;\"></i>Feature Files</h3>\n");
+            section.append("        </div>\n");
+            section.append("        <div class=\"card-body\">\n");
+            section.append("            <div class=\"feature-files-grid\" style=\"display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;\">\n");
+            
+            for (Map.Entry<String, List<CSTestResult>> entry : featureFiles.entrySet()) {
+                String featureFile = entry.getKey();
+                List<CSTestResult> featureTests = entry.getValue();
+                String featureName = featureFile.substring(featureFile.lastIndexOf('/') + 1).replace(".feature", "");
+                
+                int passed = (int) featureTests.stream().filter(t -> t.getStatus() == CSTestResult.Status.PASSED).count();
+                int failed = (int) featureTests.stream().filter(t -> t.getStatus() == CSTestResult.Status.FAILED).count();
+                
+                section.append("                <div class=\"feature-file-card\" style=\"border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem;\">\n");
+                section.append("                    <div style=\"display: flex; align-items: center; margin-bottom: 0.5rem;\">\n");
+                section.append("                        <i class=\"fas fa-file-alt\" style=\"color: #4ade80; margin-right: 0.5rem;\"></i>\n");
+                section.append("                        <span style=\"font-weight: 600; color: var(--primary-color);\">").append(featureName).append("</span>\n");
+                section.append("                    </div>\n");
+                section.append("                    <div style=\"font-size: 0.75rem; color: #6b7280; margin-bottom: 0.75rem;\">").append(featureFile).append("</div>\n");
+                section.append("                    <div style=\"display: flex; gap: 1rem; font-size: 0.875rem;\">\n");
+                section.append("                        <span><i class=\"fas fa-check-circle\" style=\"color: #10b981;\"></i> ").append(passed).append(" passed</span>\n");
+                section.append("                        <span><i class=\"fas fa-times-circle\" style=\"color: #ef4444;\"></i> ").append(failed).append(" failed</span>\n");
+                section.append("                        <span><i class=\"fas fa-list\" style=\"color: #6b7280;\"></i> ").append(featureTests.size()).append(" scenarios</span>\n");
+                section.append("                    </div>\n");
+                section.append("                </div>\n");
+            }
+            
+            section.append("            </div>\n");
+            section.append("        </div>\n");
+            section.append("    </div>\n");
+        }
         
         section.append("</div>\n");
         
@@ -3259,9 +3384,10 @@ public class CSHtmlReportGenerator {
         
         // Extract test configuration from report data
         Map<String, Object> metadata = reportData.getMetadata();
+        CSConfigManager configManager = CSConfigManager.getInstance();
         String[][] testConfig = {
-            {"Browser", System.getProperty("browser.name", config.getProperty("browser.name", "chrome"))},
-            {"Environment", System.getProperty("environment.name", config.getProperty("environment.name", "qa"))},
+            {"Browser", System.getProperty("browser.name", configManager.getProperty("browser.name", "chrome"))},
+            {"Environment", System.getProperty("environment.name", configManager.getProperty("environment.name", "qa"))},
             {"Execution Mode", metadata.get("executionMode") != null ? metadata.get("executionMode").toString() : "sequential"},
             {"Suite Name", getActualSuiteName(reportData, metadata)},
             {"Start Time", reportData.getStartTime() != null ? reportData.getStartTime().format(TIMESTAMP_FORMAT) : "Unknown"},
@@ -3651,16 +3777,96 @@ public class CSHtmlReportGenerator {
         js.append("            detailsHtml += '<div style=\"margin-bottom: 1rem;\">';\n");
         js.append("            detailsHtml += '<h4 style=\"font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #ef4444;\"><i class=\"fas fa-exclamation-triangle\"></i> Failed Steps (' + failedSteps.length + '):</h4>';\n");
         js.append("            detailsHtml += '<div class=\"test-steps\">';\n");
-        js.append("            failedSteps.forEach(step => {\n");
+        js.append("            failedSteps.forEach((step, failedStepIndex) => {\n");
+        js.append("                const hasActions = step.actions && step.actions.length > 0;\n");
+        js.append("                const uniqueIndex = 'failed-' + failedStepIndex;\n");
         js.append("                detailsHtml += '<div class=\"step-item\" style=\"border-left: 3px solid #ef4444; background-color: #fef2f2; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 0.375rem;\">';\n");
         js.append("                detailsHtml += '<div class=\"step-icon failed\"><i class=\"fas fa-times\"></i></div>';\n");
-        js.append("                detailsHtml += '<div class=\"step-content\">';\n");
+        js.append("                detailsHtml += '<div class=\"step-content\" style=\"flex: 1;\">';\n");
+        js.append("                detailsHtml += '<div style=\"display: flex; align-items: center; justify-content: space-between; cursor: ' + (hasActions || step.errorMessage ? 'pointer' : 'default') + ';\" ' + (hasActions || step.errorMessage ? 'onclick=\"toggleStepDetails(\\'' + uniqueIndex + '\\')\"' : '') + '>';\n");
+        js.append("                detailsHtml += '<div style=\"flex: 1;\">';\n");
         js.append("                detailsHtml += '<span class=\"step-keyword\" style=\"color: #dc2626; font-weight: 600;\">' + step.keyword + '</span>';\n");
         js.append("                detailsHtml += '<span class=\"step-text\" style=\"color: #991b1b;\">' + step.text + '</span>';\n");
-        js.append("                if (step.errorMessage) {\n");
-        js.append("                    detailsHtml += '<div style=\"background: #fee2e2; border: 1px solid #fecaca; padding: 0.5rem; border-radius: 0.25rem; margin-top: 0.5rem; font-size: 0.875rem;\">' + step.errorMessage + '</div>';\n");
+        js.append("                detailsHtml += '</div>';\n");
+        js.append("                if (hasActions || step.errorMessage) {\n");
+        js.append("                    detailsHtml += '<i id=\"step-toggle-' + uniqueIndex + '\" class=\"fas fa-chevron-down\" style=\"margin-left: 10px; color: #dc2626;\"></i>';\n");
         js.append("                }\n");
+        js.append("                detailsHtml += '</div>';\n");
         js.append("                detailsHtml += '<div class=\"step-duration\" style=\"color: #dc2626;\">' + formatDuration(step.duration) + '</div>';\n");
+        js.append("                detailsHtml += '<div id=\"step-details-' + uniqueIndex + '\" style=\"margin-top: 0.5rem;\">';\n");
+        js.append("                if (step.errorMessage) {\n");
+        js.append("                    detailsHtml += '<div style=\"background: #fee2e2; border: 1px solid #fecaca; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.875rem;\">' + step.errorMessage + '</div>';\n");
+        js.append("                }\n");
+        js.append("                \n");
+        js.append("                // Display actions for failed steps too\n");
+        js.append("                if (step.actions && step.actions.length > 0) {\n");
+        js.append("                    detailsHtml += '<div style=\"margin-left: 1.5rem; font-size: 0.875rem;\">';\n");
+        js.append("                    detailsHtml += '<div style=\"font-weight: 600; color: #dc2626; margin-bottom: 0.25rem;\">Actions:</div>';\n");
+        js.append("                    detailsHtml += '<div style=\"background-color: #fef2f2; border-radius: 4px; padding: 0.5rem; margin-top: 0.25rem;\">';\n");
+        js.append("                    detailsHtml += '<table style=\"width: 100%; font-size: 0.813rem; border-collapse: collapse;\">';\n");
+        js.append("                    // Add table headers for failed steps\n");
+        js.append("                    detailsHtml += '<thead>';\n");
+        js.append("                    detailsHtml += '<tr style=\"background-color: #fecaca; border-bottom: 2px solid #f87171;\">';\n");
+        js.append("                    detailsHtml += '<th style=\"padding: 0.5rem; text-align: center; font-weight: 600; color: #374151; width: 30px;\">Status</th>';\n");
+        js.append("                    detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151; width: 120px;\">Action</th>';\n");
+        js.append("                    detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151;\">Description</th>';\n");
+        js.append("                    detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151; width: 30%;\">Target</th>';\n");
+        js.append("                    detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151; width: 25%;\">Value</th>';\n");
+        js.append("                    detailsHtml += '</tr>';\n");
+        js.append("                    detailsHtml += '</thead>';\n");
+        js.append("                    detailsHtml += '<tbody>';\n");
+        js.append("                    step.actions.forEach((action, index) => {\n");
+        js.append("                        const actionPassed = !action.error || action.passed !== false;\n");
+        js.append("                        const rowBg = index % 2 === 0 ? '#ffffff' : '#fef2f2';\n");
+        js.append("                        detailsHtml += '<tr style=\"background-color: ' + rowBg + '; border-bottom: 1px solid #fecaca;\">';\n");
+        js.append("                        \n");
+        js.append("                        // Status icon column\n");
+        js.append("                        detailsHtml += '<td style=\"padding: 0.5rem; width: 30px; text-align: center;\">';\n");
+        js.append("                        detailsHtml += '<i class=\"fas fa-' + (actionPassed ? 'check-circle' : 'times-circle') + '\" style=\"color: ' + (actionPassed ? '#10b981' : '#ef4444') + '; font-size: 0.875rem;\"></i>';\n");
+        js.append("                        detailsHtml += '</td>';\n");
+        js.append("                        \n");
+        js.append("                        // Action type column\n");
+        js.append("                        detailsHtml += '<td style=\"padding: 0.5rem; width: 120px;\">';\n");
+        js.append("                        detailsHtml += '<span style=\"font-family: monospace; font-weight: 600; color: #1f2937; background-color: #fecaca; padding: 0.125rem 0.375rem; border-radius: 3px; font-size: 0.75rem;\">' + action.actionType + '</span>';\n");
+        js.append("                        detailsHtml += '</td>';\n");
+        js.append("                        \n");
+        js.append("                        // Description column\n");
+        js.append("                        detailsHtml += '<td style=\"padding: 0.5rem; color: #374151;\">' + action.description + '</td>';\n");
+        js.append("                        \n");
+        js.append("                        // Target column\n");
+        js.append("                        detailsHtml += '<td style=\"padding: 0.5rem; width: 30%;\">';\n");
+        js.append("                        if (action.target && action.target !== 'null' && action.target !== 'undefined') {\n");
+        js.append("                            detailsHtml += '<span style=\"color: #2563eb; font-family: monospace; font-size: 0.75rem; word-break: break-all;\">' + action.target + '</span>';\n");
+        js.append("                        } else {\n");
+        js.append("                            detailsHtml += '<span style=\"color: #9ca3af; font-style: italic;\">-</span>';\n");
+        js.append("                        }\n");
+        js.append("                        detailsHtml += '</td>';\n");
+        js.append("                        \n");
+        js.append("                        // Value column\n");
+        js.append("                        detailsHtml += '<td style=\"padding: 0.5rem; width: 25%;\">';\n");
+        js.append("                        if (action.value && action.value !== 'null' && action.value !== 'undefined') {\n");
+        js.append("                            detailsHtml += '<span style=\"color: #7c3aed; font-weight: 500;\">' + action.value + '</span>';\n");
+        js.append("                        } else {\n");
+        js.append("                            detailsHtml += '<span style=\"color: #9ca3af; font-style: italic;\">-</span>';\n");
+        js.append("                        }\n");
+        js.append("                        detailsHtml += '</td>';\n");
+        js.append("                        \n");
+        js.append("                        // Error column (if any)\n");
+        js.append("                        if (action.error && action.error !== 'null' && action.error !== 'undefined') {\n");
+        js.append("                            detailsHtml += '</tr><tr style=\"background-color: ' + rowBg + ';\">';\n");
+        js.append("                            detailsHtml += '<td colspan=\"5\" style=\"padding: 0.25rem 0.5rem 0.5rem 3rem; color: #ef4444; font-style: italic; font-size: 0.75rem;\">';\n");
+        js.append("                            detailsHtml += '<i class=\"fas fa-exclamation-triangle\" style=\"margin-right: 0.25rem;\"></i>' + (action.error || 'Unknown error') + '';\n");
+        js.append("                            detailsHtml += '</td>';\n");
+        js.append("                        }\n");
+        js.append("                        \n");
+        js.append("                        detailsHtml += '</tr>';\n");
+        js.append("                    });\n");
+        js.append("                    detailsHtml += '</tbody></table>';\n");
+        js.append("                    detailsHtml += '</div>';\n");
+        js.append("                    detailsHtml += '</div>';\n");
+        js.append("                }\n");
+        js.append("                detailsHtml += '</div>';\n");
+        js.append("                \n");
         js.append("                detailsHtml += '</div></div>';\n");
         js.append("            });\n");
         js.append("            detailsHtml += '</div></div>';\n");
@@ -3670,14 +3876,91 @@ public class CSHtmlReportGenerator {
         js.append("        detailsHtml += '<div style=\"margin-bottom: 1rem;\">';\n");
         js.append("        detailsHtml += '<h4 style=\"font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;\">All Executed Steps (' + test.executedSteps.length + '):</h4>';\n");
         js.append("        detailsHtml += '<div class=\"test-steps\">';\n");
-        js.append("        test.executedSteps.forEach(step => {\n");
+        js.append("        test.executedSteps.forEach((step, stepIndex) => {\n");
         js.append("            const passed = step.status === 'passed';\n");
+        js.append("            const hasActions = step.actions && step.actions.length > 0;\n");
         js.append("            detailsHtml += '<div class=\"step-item\">';\n");
         js.append("            detailsHtml += '<div class=\"step-icon ' + (passed ? 'passed' : 'failed') + '\"><i class=\"fas fa-' + (passed ? 'check' : 'times') + '\"></i></div>';\n");
-        js.append("            detailsHtml += '<div class=\"step-content\">';\n");
+        js.append("            detailsHtml += '<div class=\"step-content\" style=\"flex: 1;\">';\n");
+        js.append("            detailsHtml += '<div style=\"display: flex; align-items: center; justify-content: space-between; cursor: ' + (hasActions ? 'pointer' : 'default') + ';\" ' + (hasActions ? 'onclick=\"toggleStepDetails(' + stepIndex + ')\"' : '') + '>';\n");
+        js.append("            detailsHtml += '<div style=\"flex: 1;\">';\n");
         js.append("            detailsHtml += '<span class=\"step-keyword\">' + step.keyword + '</span>';\n");
         js.append("            detailsHtml += '<span class=\"step-text\">' + step.text + '</span>';\n");
+        js.append("            detailsHtml += '</div>';\n");
+        js.append("            if (hasActions) {\n");
+        js.append("                detailsHtml += '<i id=\"step-toggle-' + stepIndex + '\" class=\"fas fa-chevron-right\" style=\"margin-left: 10px; color: #6b7280;\"></i>';\n");
+        js.append("            }\n");
+        js.append("            detailsHtml += '</div>';\n");
         js.append("            detailsHtml += '<div class=\"step-duration\">' + formatDuration(step.duration) + '</div>';\n");
+        js.append("            \n");
+        js.append("            // Display actions if available\n");
+        js.append("            if (step.actions && step.actions.length > 0) {\n");
+        js.append("                detailsHtml += '<div id=\"step-details-' + stepIndex + '\" style=\"display: none; margin-top: 0.5rem; margin-left: 1.5rem; font-size: 0.875rem;\">';\n");
+        js.append("                detailsHtml += '<div style=\"font-weight: 600; color: #6b7280; margin-bottom: 0.25rem;\">Actions:</div>';\n");
+        js.append("                detailsHtml += '<div style=\"background-color: #f9fafb; border-radius: 4px; padding: 0.5rem; margin-top: 0.25rem;\">';\n");
+        js.append("                detailsHtml += '<table style=\"width: 100%; font-size: 0.813rem; border-collapse: collapse;\">';\n");
+        js.append("                // Add table headers\n");
+        js.append("                detailsHtml += '<thead>';\n");
+        js.append("                detailsHtml += '<tr style=\"background-color: #e5e7eb; border-bottom: 2px solid #d1d5db;\">';\n");
+        js.append("                detailsHtml += '<th style=\"padding: 0.5rem; text-align: center; font-weight: 600; color: #374151; width: 30px;\">Status</th>';\n");
+        js.append("                detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151; width: 120px;\">Action</th>';\n");
+        js.append("                detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151;\">Description</th>';\n");
+        js.append("                detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151; width: 30%;\">Target</th>';\n");
+        js.append("                detailsHtml += '<th style=\"padding: 0.5rem; text-align: left; font-weight: 600; color: #374151; width: 25%;\">Value</th>';\n");
+        js.append("                detailsHtml += '</tr>';\n");
+        js.append("                detailsHtml += '</thead>';\n");
+        js.append("                detailsHtml += '<tbody>';\n");
+        js.append("                step.actions.forEach((action, index) => {\n");
+        js.append("                    const actionPassed = !action.error || action.passed !== false;\n");
+        js.append("                    const rowBg = index % 2 === 0 ? '#ffffff' : '#f9fafb';\n");
+        js.append("                    detailsHtml += '<tr style=\"background-color: ' + rowBg + '; border-bottom: 1px solid #e5e7eb;\">';\n");
+        js.append("                    \n");
+        js.append("                    // Status icon column\n");
+        js.append("                    detailsHtml += '<td style=\"padding: 0.5rem; width: 30px; text-align: center;\">';\n");
+        js.append("                    detailsHtml += '<i class=\"fas fa-' + (actionPassed ? 'check-circle' : 'times-circle') + '\" style=\"color: ' + (actionPassed ? '#10b981' : '#ef4444') + '; font-size: 0.875rem;\"></i>';\n");
+        js.append("                    detailsHtml += '</td>';\n");
+        js.append("                    \n");
+        js.append("                    // Action type column\n");
+        js.append("                    detailsHtml += '<td style=\"padding: 0.5rem; width: 120px;\">';\n");
+        js.append("                    detailsHtml += '<span style=\"font-family: monospace; font-weight: 600; color: #1f2937; background-color: #e5e7eb; padding: 0.125rem 0.375rem; border-radius: 3px; font-size: 0.75rem;\">' + action.actionType + '</span>';\n");
+        js.append("                    detailsHtml += '</td>';\n");
+        js.append("                    \n");
+        js.append("                    // Description column\n");
+        js.append("                    detailsHtml += '<td style=\"padding: 0.5rem; color: #374151;\">' + action.description + '</td>';\n");
+        js.append("                    \n");
+        js.append("                    // Target column\n");
+        js.append("                    detailsHtml += '<td style=\"padding: 0.5rem; width: 30%;\">';\n");
+        js.append("                    if (action.target && action.target !== 'null' && action.target !== 'undefined') {\n");
+        js.append("                        detailsHtml += '<span style=\"color: #2563eb; font-family: monospace; font-size: 0.75rem; word-break: break-all;\">' + action.target + '</span>';\n");
+        js.append("                    } else {\n");
+        js.append("                        detailsHtml += '<span style=\"color: #9ca3af; font-style: italic;\">-</span>';\n");
+        js.append("                    }\n");
+        js.append("                    detailsHtml += '</td>';\n");
+        js.append("                    \n");
+        js.append("                    // Value column\n");
+        js.append("                    detailsHtml += '<td style=\"padding: 0.5rem; width: 25%;\">';\n");
+        js.append("                    if (action.value && action.value !== 'null' && action.value !== 'undefined') {\n");
+        js.append("                        detailsHtml += '<span style=\"color: #7c3aed; font-weight: 500;\">' + action.value + '</span>';\n");
+        js.append("                    } else {\n");
+        js.append("                        detailsHtml += '<span style=\"color: #9ca3af; font-style: italic;\">-</span>';\n");
+        js.append("                    }\n");
+        js.append("                    detailsHtml += '</td>';\n");
+        js.append("                    \n");
+        js.append("                    // Error column (if any)\n");
+        js.append("                    if (action.error && action.error !== 'null' && action.error !== 'undefined') {\n");
+        js.append("                        detailsHtml += '</tr><tr style=\"background-color: ' + rowBg + ';\">';\n");
+        js.append("                        detailsHtml += '<td colspan=\"5\" style=\"padding: 0.25rem 0.5rem 0.5rem 3rem; color: #ef4444; font-style: italic; font-size: 0.75rem;\">';\n");
+        js.append("                        detailsHtml += '<i class=\"fas fa-exclamation-triangle\" style=\"margin-right: 0.25rem;\"></i>' + (action.error || 'Unknown error') + '';\n");
+        js.append("                        detailsHtml += '</td>';\n");
+        js.append("                    }\n");
+        js.append("                    \n");
+        js.append("                    detailsHtml += '</tr>';\n");
+        js.append("                });\n");
+        js.append("                detailsHtml += '</tbody></table>';\n");
+        js.append("                detailsHtml += '</div>';\n");
+        js.append("                detailsHtml += '</div>';\n");
+        js.append("            }\n");
+        js.append("            \n");
         js.append("            detailsHtml += '</div></div>';\n");
         js.append("        });\n");
         js.append("        detailsHtml += '</div></div>';\n");
@@ -3720,6 +4003,22 @@ public class CSHtmlReportGenerator {
         js.append("    }\n");
         js.append("}\n\n");
         
+        // Toggle step details function
+        js.append("function toggleStepDetails(stepIndex) {\n");
+        js.append("    const detailsDiv = document.getElementById('step-details-' + stepIndex);\n");
+        js.append("    const toggleIcon = document.getElementById('step-toggle-' + stepIndex);\n");
+        js.append("    \n");
+        js.append("    if (detailsDiv && toggleIcon) {\n");
+        js.append("        if (detailsDiv.style.display === 'none') {\n");
+        js.append("            detailsDiv.style.display = 'block';\n");
+        js.append("            toggleIcon.className = 'fas fa-chevron-down';\n");
+        js.append("        } else {\n");
+        js.append("            detailsDiv.style.display = 'none';\n");
+        js.append("            toggleIcon.className = 'fas fa-chevron-right';\n");
+        js.append("        }\n");
+        js.append("    }\n");
+        js.append("}\n\n");
+        
         js.append("let currentScreenshotSrc = '';\n\n");
         
         js.append("function openImageModal(src) {\n");
@@ -3727,14 +4026,24 @@ public class CSHtmlReportGenerator {
         js.append("    const modal = document.getElementById('screenshotModal');\n");
         js.append("    const img = document.getElementById('modalScreenshot');\n");
         js.append("    img.src = src;\n");
+        js.append("    \n");
+        js.append("    // Always ensure screenshot modal is on top of everything\n");
+        js.append("    modal.style.zIndex = '10000';\n");
         js.append("    modal.style.display = 'block';\n");
-        js.append("    document.body.style.overflow = 'hidden';\n");
+        js.append("    \n");
+        js.append("    // Save current overflow state\n");
+        js.append("    modal.setAttribute('data-previous-overflow', document.body.style.overflow || 'auto');\n");
         js.append("}\n\n");
         
         js.append("function closeScreenshotModal() {\n");
         js.append("    const modal = document.getElementById('screenshotModal');\n");
         js.append("    modal.style.display = 'none';\n");
-        js.append("    document.body.style.overflow = 'auto';\n");
+        js.append("    \n");
+        js.append("    // Restore previous overflow state\n");
+        js.append("    const previousOverflow = modal.getAttribute('data-previous-overflow');\n");
+        js.append("    if (previousOverflow && previousOverflow !== 'auto') {\n");
+        js.append("        document.body.style.overflow = previousOverflow;\n");
+        js.append("    }\n");
         js.append("}\n\n");
         
         js.append("function downloadScreenshot() {\n");
@@ -3825,7 +4134,7 @@ public class CSHtmlReportGenerator {
         js.append("        bodyHtml += '<td style=\"padding: 0.75rem;\"><span style=\"color: ' + statusColor + ';\"><i class=\"fas fa-' + statusIcon + '\"></i> ' + test.status + '</span></td>';\n");
         js.append("        bodyHtml += '<td style=\"padding: 0.75rem;\">' + test.duration + '</td>';\n");
         js.append("        bodyHtml += '<td style=\"padding: 0.75rem;\">';\n");
-        js.append("        bodyHtml += '<button class=\"btn btn-sm btn-primary\" onclick=\"closeCategoryModal(); showTestDetails(\\'' + Object.keys(testData).find(key => testData[key] === test) + '\\')\" style=\"margin-right: 0.25rem;\"><i class=\"fas fa-info-circle\"></i> Details</button>';\n");
+        js.append("        bodyHtml += '<button class=\"btn btn-sm btn-primary\" onclick=\"showTestDetailsInModal(\\'' + Object.keys(testData).find(key => testData[key] === test) + '\\')\" style=\"margin-right: 0.25rem;\"><i class=\"fas fa-info-circle\"></i> Details</button>';\n");
         js.append("        if (test.screenshotPath) {\n");
         js.append("            bodyHtml += '<button class=\"btn btn-sm btn-secondary\" onclick=\"openImageModal(\\'' + test.screenshotPath + '\\')\"><i class=\"fas fa-camera\"></i> Screenshot</button>';\n");
         js.append("        }\n");
@@ -3843,6 +4152,60 @@ public class CSHtmlReportGenerator {
         js.append("    const modal = document.getElementById('categoryDetailsModal');\n");
         js.append("    modal.style.display = 'none';\n");
         js.append("    document.body.style.overflow = 'auto';\n");
+        js.append("}\n\n");
+        
+        js.append("function showTestDetailsInModal(testId) {\n");
+        js.append("    const test = testData[testId];\n");
+        js.append("    if (!test) return;\n");
+        js.append("    \n");
+        js.append("    const modalBody = document.getElementById('categoryModalBody');\n");
+        js.append("    \n");
+        js.append("    let detailsHtml = '<div class=\"test-details-view\" style=\"padding: 1rem;\">';\n");
+        js.append("    detailsHtml += '<button class=\"btn btn-secondary btn-sm\" onclick=\"showCategoryDetails(\\'' + (test.tags ? test.tags[0] : '') + '\\')\" style=\"margin-bottom: 1rem;\"><i class=\"fas fa-arrow-left\"></i> Back to Category</button>';\n");
+        js.append("    \n");
+        js.append("    // Test Summary\n");
+        js.append("    detailsHtml += '<div class=\"test-summary\" style=\"background: #f9fafb; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;\">';\n");
+        js.append("    detailsHtml += '<h3 style=\"margin: 0 0 0.5rem 0; color: var(--primary-color);\"><i class=\"fas fa-vial\"></i> ' + test.name + '</h3>';\n");
+        js.append("    detailsHtml += '<div style=\"display: flex; gap: 2rem; flex-wrap: wrap;\">';\n");
+        js.append("    const statusColor = test.status === 'PASSED' ? '#10b981' : test.status === 'FAILED' ? '#ef4444' : '#f59e0b';\n");
+        js.append("    const statusIcon = test.status === 'PASSED' ? 'check-circle' : test.status === 'FAILED' ? 'times-circle' : 'forward';\n");
+        js.append("    detailsHtml += '<div><strong>Status:</strong> <span style=\"color: ' + statusColor + ';\"><i class=\"fas fa-' + statusIcon + '\"></i> ' + test.status + '</span></div>';\n");
+        js.append("    detailsHtml += '<div><strong>Duration:</strong> ' + test.duration + '</div>';\n");
+        js.append("    detailsHtml += '<div><strong>Thread:</strong> ' + (test.threadName || 'main') + '</div>';\n");
+        js.append("    detailsHtml += '</div></div>';\n");
+        js.append("    \n");
+        js.append("    // Test Steps\n");
+        js.append("    if (test.steps && test.steps.length > 0) {\n");
+        js.append("        detailsHtml += '<div style=\"margin-bottom: 1rem;\">';\n");
+        js.append("        detailsHtml += '<h4><i class=\"fas fa-list-ol\"></i> Test Steps</h4>';\n");
+        js.append("        detailsHtml += '<ol style=\"list-style: none; padding: 0;\">';\n");
+        js.append("        test.steps.forEach((step, index) => {\n");
+        js.append("            detailsHtml += '<li style=\"padding: 0.5rem; background: ' + (index % 2 === 0 ? '#f9fafb' : 'white') + '; border-radius: 0.25rem; margin-bottom: 0.25rem;\">';\n");
+        js.append("            detailsHtml += '<span style=\"font-weight: 500;\">Step ' + (index + 1) + ':</span> ' + step;\n");
+        js.append("            detailsHtml += '</li>';\n");
+        js.append("        });\n");
+        js.append("        detailsHtml += '</ol></div>';\n");
+        js.append("    }\n");
+        js.append("    \n");
+        js.append("    // Error Details (if failed)\n");
+        js.append("    if (test.status === 'FAILED' && test.errorMessage) {\n");
+        js.append("        detailsHtml += '<div style=\"background: #fef2f2; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;\">';\n");
+        js.append("        detailsHtml += '<h4 style=\"color: var(--danger-color);\"><i class=\"fas fa-exclamation-triangle\"></i> Error Details</h4>';\n");
+        js.append("        detailsHtml += '<pre style=\"white-space: pre-wrap; font-size: 0.875rem;\">' + escapeHtml(test.errorMessage) + '</pre>';\n");
+        js.append("        detailsHtml += '</div>';\n");
+        js.append("    }\n");
+        js.append("    \n");
+        js.append("    // Screenshot\n");
+        js.append("    if (test.screenshotPath) {\n");
+        js.append("        detailsHtml += '<div style=\"margin-bottom: 1rem;\">';\n");
+        js.append("        detailsHtml += '<h4><i class=\"fas fa-camera\"></i> Screenshot</h4>';\n");
+        js.append("        detailsHtml += '<img src=\"' + test.screenshotPath + '\" style=\"max-width: 100%; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer;\" onclick=\"openImageModal(\\'' + test.screenshotPath + '\\')\" alt=\"Test screenshot\" />';\n");
+        js.append("        detailsHtml += '</div>';\n");
+        js.append("    }\n");
+        js.append("    \n");
+        js.append("    detailsHtml += '</div>';\n");
+        js.append("    \n");
+        js.append("    modalBody.innerHTML = detailsHtml;\n");
         js.append("}\n\n");
         
         // Feature Details Modal Functions
@@ -4613,12 +4976,21 @@ public class CSHtmlReportGenerator {
     private Map<String, List<CSTestResult>> groupTestsByThread(List<CSTestResult> tests) {
         Map<String, List<CSTestResult>> testsByThread = new LinkedHashMap<>();
         
-        // For sequential execution, all tests run in main thread
-        // For parallel execution, we would need to extract thread info from test metadata
-        String threadName = "main";
-        testsByThread.put(threadName, new ArrayList<>(tests));
+        // Group tests by their thread name
+        for (CSTestResult test : tests) {
+            String threadName = test.getThreadName() != null ? test.getThreadName() : "main";
+            testsByThread.computeIfAbsent(threadName, k -> new ArrayList<>()).add(test);
+        }
         
-        return testsByThread;
+        // Sort by thread name for consistent display
+        return testsByThread.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                Map.Entry::getValue,
+                (e1, e2) -> e1,
+                LinkedHashMap::new
+            ));
     }
     
     private Map<String, Long> calculateResourceMetrics(List<CSTestResult> tests) {
@@ -4711,25 +5083,38 @@ public class CSHtmlReportGenerator {
             if (item instanceof String) {
                 json.append("'").append(escapeJs((String) item)).append("'");
             } else if (item instanceof Map) {
-                json.append("{");
-                Map<?, ?> map = (Map<?, ?>) item;
-                int j = 0;
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    if (j++ > 0) json.append(", ");
-                    json.append(entry.getKey()).append(": ");
-                    if (entry.getValue() instanceof String) {
-                        json.append("'").append(escapeJs((String) entry.getValue())).append("'");
-                    } else {
-                        json.append(entry.getValue());
-                    }
-                }
-                json.append("}");
+                json.append(mapToJson((Map<?, ?>) item));
+            } else if (item instanceof List) {
+                json.append(toJsonArray((List<?>) item));
             } else {
                 json.append(item);
             }
         }
         json.append("]");
         
+        return json.toString();
+    }
+    
+    private String mapToJson(Map<?, ?> map) {
+        StringBuilder json = new StringBuilder("{");
+        int j = 0;
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (j++ > 0) json.append(", ");
+            json.append(entry.getKey()).append(": ");
+            Object value = entry.getValue();
+            if (value instanceof String) {
+                json.append("'").append(escapeJs((String) value)).append("'");
+            } else if (value instanceof Map) {
+                json.append(mapToJson((Map<?, ?>) value));
+            } else if (value instanceof List) {
+                json.append(toJsonArray((List<?>) value));
+            } else if (value instanceof Number || value instanceof Boolean) {
+                json.append(value);
+            } else {
+                json.append("'").append(escapeJs(value != null ? value.toString() : "null")).append("'");
+            }
+        }
+        json.append("}");
         return json.toString();
     }
     
