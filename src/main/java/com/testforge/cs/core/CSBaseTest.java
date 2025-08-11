@@ -81,8 +81,23 @@ public abstract class CSBaseTest {
      * Class level setup
      */
     @BeforeClass(alwaysRun = true)
-    public void setupClass() {
+    public void setupClass(ITestContext context) {
         logger.info("Setting up test class: {}", this.getClass().getSimpleName());
+        
+        // Set maximum browsers based on suite configuration (do it here since BeforeSuite can't have parameters)
+        String parallelMode = context.getSuite().getParallel();
+        int threadCount = context.getSuite().getXmlSuite().getThreadCount();
+        
+        if (parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false")) {
+            // In parallel mode, limit browsers to thread count
+            CSWebDriverManager.setMaxBrowsersAllowed(threadCount);
+            logger.info("Parallel mode '{}' with thread-count={}: Limiting browsers to {}", 
+                parallelMode, threadCount, threadCount);
+        } else {
+            // In sequential mode, only allow 1 browser
+            CSWebDriverManager.setMaxBrowsersAllowed(1);
+            logger.info("Sequential mode: Limiting browsers to 1");
+        }
         
         // Initialize class-level resources
         initializeClassResources();
@@ -148,22 +163,66 @@ public abstract class CSBaseTest {
             
             // Setup browser if needed
             if (shouldInitializeBrowser(method)) {
-                // Check if driver already exists for this thread
-                driver = CSWebDriverManager.getDriver();
-                if (driver == null) {
-                    String browserType = getBrowserType(method);
-                    boolean headless = config.getBooleanProperty("browser.headless", false);
-                    logger.info("[{}] Creating NEW {} driver (headless: {})", Thread.currentThread().getName(), browserType, headless);
-                    driver = CSWebDriverManager.createDriver(browserType, headless, null);
-                    logger.info("[{}] Driver created: {}", Thread.currentThread().getName(), driver);
+                String threadName = Thread.currentThread().getName();
+                long threadId = Thread.currentThread().getId();
+                
+                // For parallel execution, ALWAYS create a new driver for each test
+                // to ensure proper thread isolation
+                String parallelMode = context.getSuite().getParallel();
+                boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
+                
+                if (isParallel) {
+                    // In parallel mode, reuse driver per thread
+                    logger.info("[{}] Thread ID {} - Parallel mode ({})", 
+                        threadName, threadId, parallelMode);
+                    
+                    // ALWAYS check ThreadLocal first to reuse existing driver
+                    driver = CSWebDriverManager.getDriver();
+                    
+                    if (driver == null) {
+                        logger.info("[{}] No existing driver in ThreadLocal, will create new one", threadName);
+                        // No driver for this thread yet, create a new one
+                        String browserType = getBrowserType(method);
+                        boolean headless = config.getBooleanProperty("browser.headless", false);
+                        logger.info("[{}] Thread ID {} - Creating NEW {} driver (headless: {})", 
+                            threadName, threadId, browserType, headless);
+                        driver = CSWebDriverManager.createDriver(browserType, headless, null);
+                        if (driver == null) {
+                            logger.error("[{}] Failed to create driver - browser limit may have been reached", threadName);
+                            throw new CSTestExecutionException("Failed to create WebDriver - browser limit reached");
+                        }
+                        logger.info("[{}] Thread ID {} - New driver created with hashCode: {}", 
+                            threadName, threadId, driver.hashCode());
+                    } else {
+                        // Reuse existing driver for this thread
+                        logger.info("[{}] Thread ID {} - Reusing existing driver with hashCode: {}", 
+                            threadName, threadId, driver.hashCode());
+                        // Clear cookies only
+                        try {
+                            driver.manage().deleteAllCookies();
+                        } catch (Exception e) {
+                            logger.warn("Failed to clear browser cookies: {}", e.getMessage());
+                        }
+                    }
                 } else {
-                    logger.info("[{}] Reusing existing driver for thread", Thread.currentThread().getName());
-                    // Clear any existing state
-                    try {
-                        driver.manage().deleteAllCookies();
-                        driver.get("about:blank");
-                    } catch (Exception e) {
-                        logger.warn("Failed to clear browser state: {}", e.getMessage());
+                    // Non-parallel mode - check for existing driver
+                    driver = CSWebDriverManager.getDriver();
+                    if (driver == null) {
+                        String browserType = getBrowserType(method);
+                        boolean headless = config.getBooleanProperty("browser.headless", false);
+                        logger.info("[{}] Creating NEW {} driver (headless: {})", threadName, browserType, headless);
+                        driver = CSWebDriverManager.createDriver(browserType, headless, null);
+                        logger.info("[{}] Driver created: {}", threadName, driver);
+                    } else {
+                        logger.info("[{}] Reusing existing driver for thread", threadName);
+                        // Clear cookies but don't navigate to about:blank as it creates confusion
+                        // The test will navigate to the appropriate URL
+                        try {
+                            driver.manage().deleteAllCookies();
+                            // Don't navigate to about:blank - let the test handle navigation
+                        } catch (Exception e) {
+                            logger.warn("Failed to clear browser cookies: {}", e.getMessage());
+                        }
                     }
                 }
                 
@@ -229,9 +288,17 @@ public abstract class CSBaseTest {
             // Execute custom teardown
             onTestEnd(method, result);
             
-            // Don't quit browser - it will be reused by the thread
-            // Browser cleanup will happen in @AfterClass or @AfterSuite
-            logger.info("[{}] Keeping browser open for thread reuse", Thread.currentThread().getName());
+            // In parallel mode, check if this thread has more tests to run
+            String parallelMode = result.getTestContext().getSuite().getParallel();
+            boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
+            
+            if (isParallel) {
+                // Keep browser open for thread reuse in parallel mode
+                logger.info("[{}] Keeping browser open for thread reuse in parallel mode", Thread.currentThread().getName());
+            } else {
+                // In sequential mode, we can close after each test if needed
+                logger.info("[{}] Sequential mode - keeping browser for next test", Thread.currentThread().getName());
+            }
             
             // Clear thread local data
             threadLocalData.remove();
@@ -393,7 +460,13 @@ public abstract class CSBaseTest {
         if (driver != null) {
             String timestamp = String.valueOf(System.currentTimeMillis());
             String fileName = name + "_" + timestamp + ".png";
-            String filePath = config.getProperty("report.directory", "target/screenshots") + "/" + fileName;
+            
+            // Use temp directory to avoid redundancy
+            File tempDir = new File(System.getProperty("java.io.tmpdir"), "cs-temp-screenshots");
+            if (!tempDir.exists()) {
+                tempDir.mkdirs();
+            }
+            String filePath = tempDir.getAbsolutePath() + "/" + fileName;
             
             File screenshot = CSWebDriverManager.takeScreenshot(filePath);
             if (screenshot != null && screenshot.exists()) {
@@ -454,7 +527,14 @@ public abstract class CSBaseTest {
             if (driver != null) {
                 String pageSource = driver.getPageSource();
                 String fileName = "page_source_" + System.currentTimeMillis() + ".html";
-                String filePath = config.getProperty("report.directory", "target/screenshots") + "/" + fileName;
+                
+                // Use temp directory to avoid redundancy
+                File tempDir = new File(System.getProperty("java.io.tmpdir"), "cs-temp-screenshots");
+                if (!tempDir.exists()) {
+                    tempDir.mkdirs();
+                }
+                String filePath = tempDir.getAbsolutePath() + "/" + fileName;
+                
                 CSFileUtils.writeStringToFile(filePath, pageSource);
                 addAttachment("Page Source", filePath);
             }

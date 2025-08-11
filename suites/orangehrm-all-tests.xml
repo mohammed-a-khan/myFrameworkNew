@@ -1,16 +1,16 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="OrangeHRM Failure Test Suite" parallel="methods" thread-count="3">
+<suite name="OrangeHRM All Tests Suite" parallel="methods" thread-count="3">
     
     <parameter name="browser.name" value="chrome"/>
     <parameter name="browser.headless" value="false"/>
     <parameter name="environment.name" value="qa"/>
     
-    <!-- Configure to run only the failing scenario -->
+    <!-- Configure to run ALL scenarios in the feature file -->
     <parameter name="featuresPath" value="features/orangehrm-simple-tests.feature"/>
     <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
-    <!-- Commented out: parameter cucumberOptions with tags @deliberate-failure -->
+    <!-- No cucumber tag filter - will run all scenarios -->
     
-    <test name="OrangeHRM Failure Test">
+    <test name="OrangeHRM All Tests">
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>

@@ -475,9 +475,24 @@ public class CSFeatureParser {
                                                         Map<String, String> example) {
         CSFeatureFile.Scenario expanded = new CSFeatureFile.Scenario();
         
-        // Keep original name without data values
-        expanded.setName(outline.getName());
-        expanded.setDescription(outline.getDescription());
+        // Expand placeholders in scenario name
+        String expandedName = outline.getName();
+        for (Map.Entry<String, String> entry : example.entrySet()) {
+            String placeholder = "<" + entry.getKey() + ">";
+            String value = entry.getValue();
+            expandedName = expandedName.replace(placeholder, value);
+        }
+        expanded.setName(expandedName);
+        
+        // Also expand description if it has placeholders
+        String expandedDescription = outline.getDescription() != null ? outline.getDescription() : "";
+        for (Map.Entry<String, String> entry : example.entrySet()) {
+            String placeholder = "<" + entry.getKey() + ">";
+            String value = entry.getValue();
+            expandedDescription = expandedDescription.replace(placeholder, value);
+        }
+        expanded.setDescription(expandedDescription);
+        
         expanded.setTags(new ArrayList<>(outline.getTags()));
         expanded.setOutline(false);
         expanded.setDataRow(new HashMap<>(example));  // Set a copy of the data row

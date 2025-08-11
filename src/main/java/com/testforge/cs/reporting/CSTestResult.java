@@ -321,7 +321,7 @@ public class CSTestResult {
      * Inner class to represent a screenshot
      */
     public static class Screenshot {
-        private final String path;
+        private String path;
         private final String name;
         private final long timestamp;
         
@@ -333,6 +333,10 @@ public class CSTestResult {
         
         public String getPath() {
             return path;
+        }
+        
+        public void setPath(String path) {
+            this.path = path;
         }
         
         public String getName() {

@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
 
 /**
  * WebDriver factory and manager for creating and managing browser instances
@@ -40,34 +41,105 @@ public class CSWebDriverManager {
     
     private static final ThreadLocal<WebDriver> threadLocalDriver = new ThreadLocal<>();
     private static final Map<String, WebDriver> driverPool = new ConcurrentHashMap<>();
+    private static final java.util.concurrent.atomic.AtomicInteger browserCount = new java.util.concurrent.atomic.AtomicInteger(0);
+    private static volatile int maxBrowsersAllowed = Integer.MAX_VALUE;
+    private static Semaphore browserSemaphore = new Semaphore(Integer.MAX_VALUE);
+    
+    // Register shutdown hook to ensure all browsers are closed
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            logger.info("JVM shutdown detected - cleaning up all browsers");
+            quitAllDrivers();
+        }));
+    }
+    
+    /**
+     * Set maximum number of browsers allowed
+     */
+    public static synchronized void setMaxBrowsersAllowed(int max) {
+        maxBrowsersAllowed = max;
+        browserSemaphore = new Semaphore(max);
+        logger.info("Maximum browsers allowed set to: {} (Semaphore permits: {})", max, browserSemaphore.availablePermits());
+    }
     
     /**
      * Create WebDriver instance
      */
     public static WebDriver createDriver(String browserType, boolean headless, Map<String, Object> capabilities) {
-        logger.info("Creating {} driver (headless: {})", browserType, headless);
+        String threadName = Thread.currentThread().getName();
+        long threadId = Thread.currentThread().getId();
         
-        WebDriver driver;
-        
-        // Check if remote execution is enabled
-        String remoteUrl = config.getProperty("selenium.remote.url");
-        if (remoteUrl != null && !remoteUrl.isEmpty()) {
-            driver = createRemoteDriver(browserType, remoteUrl, headless, capabilities);
-        } else {
-            driver = createLocalDriver(browserType, headless, capabilities);
+        // Check if this thread already has a driver
+        WebDriver existingDriver = threadLocalDriver.get();
+        if (existingDriver != null) {
+            try {
+                // Check if the driver is still valid
+                existingDriver.getTitle();
+                logger.warn("Thread {} (ID: {}) already has an ACTIVE driver! Returning existing driver.", threadName, threadId);
+                return existingDriver;
+            } catch (Exception e) {
+                logger.info("Thread {} (ID: {}) has a stale driver, will create new one", threadName, threadId);
+                threadLocalDriver.remove();
+                String threadIdKey = String.valueOf(threadId);
+                driverPool.remove(threadIdKey);
+            }
         }
         
-        // Configure driver
-        configureDriver(driver);
+        // Try to acquire a permit to create a browser
+        boolean acquired = false;
+        try {
+            logger.info("Thread {} attempting to acquire browser permit. Available permits: {}", 
+                threadName, browserSemaphore.availablePermits());
+            acquired = browserSemaphore.tryAcquire();
+            if (!acquired) {
+                logger.error("!!! BROWSER LIMIT REACHED !!! Thread {} cannot create browser. Max allowed: {}", 
+                    threadName, maxBrowsersAllowed);
+                return null;
+            }
+            logger.info("Thread {} acquired browser permit successfully", threadName);
+        } catch (Exception e) {
+            logger.error("Error acquiring browser permit", e);
+            return null;
+        }
         
-        // Store in thread local
-        threadLocalDriver.set(driver);
+        int currentCount = browserCount.incrementAndGet();
+        logger.error("!!! BROWSER #{} BEING CREATED !!! Thread: {} (ID: {}), Type: {}", 
+            currentCount, threadName, threadId, browserType);
+        logger.error("Current driver pool size before creation: {}", driverPool.size());
         
-        // Store in pool with thread ID
-        String threadId = String.valueOf(Thread.currentThread().getId());
-        driverPool.put(threadId, driver);
+        WebDriver driver = null;
         
-        return driver;
+        try {
+            // Check if remote execution is enabled
+            String remoteUrl = config.getProperty("selenium.remote.url");
+            if (remoteUrl != null && !remoteUrl.isEmpty()) {
+                driver = createRemoteDriver(browserType, remoteUrl, headless, capabilities);
+            } else {
+                driver = createLocalDriver(browserType, headless, capabilities);
+            }
+            
+            // Configure driver
+            configureDriver(driver);
+            
+            // Store in thread local
+            threadLocalDriver.set(driver);
+            
+            // Store in pool with thread ID
+            String threadIdKey = String.valueOf(threadId);
+            driverPool.put(threadIdKey, driver);
+            
+            logger.info("Browser successfully created for thread {}. Active browsers: {}", 
+                threadName, driverPool.size());
+            
+            return driver;
+        } catch (Exception e) {
+            // If driver creation fails, release the permit
+            if (acquired) {
+                browserSemaphore.release();
+                logger.info("Released browser permit due to creation failure");
+            }
+            throw e;
+        }
     }
     
     /**
@@ -268,7 +340,12 @@ public class CSWebDriverManager {
      * Get current thread's driver
      */
     public static WebDriver getDriver() {
-        return threadLocalDriver.get();
+        WebDriver driver = threadLocalDriver.get();
+        logger.debug("Getting driver for thread {} (ID: {}): {}", 
+            Thread.currentThread().getName(), 
+            Thread.currentThread().getId(),
+            driver != null ? "FOUND" : "NULL");
+        return driver;
     }
     
     /**
@@ -295,26 +372,58 @@ public class CSWebDriverManager {
                 threadLocalDriver.remove();
                 String threadId = String.valueOf(Thread.currentThread().getId());
                 driverPool.remove(threadId);
+                // Release the semaphore permit
+                browserSemaphore.release();
+                logger.info("Released browser permit. Available permits: {}", browserSemaphore.availablePermits());
             }
         }
     }
     
     /**
-     * Quit all drivers
+     * Quit all drivers - more robust cleanup
      */
-    public static void quitAllDrivers() {
-        logger.info("Quitting all {} drivers", driverPool.size());
+    public static synchronized void quitAllDrivers() {
+        logger.info("Quitting all {} drivers in pool", driverPool.size());
         
-        driverPool.forEach((threadId, driver) -> {
+        // Create a copy to avoid concurrent modification
+        Map<String, WebDriver> driversCopy = new HashMap<>(driverPool);
+        
+        driversCopy.forEach((threadId, driver) -> {
             try {
-                driver.quit();
+                if (driver != null) {
+                    // Check if driver session is still active
+                    try {
+                        driver.getTitle(); // Test if driver is still responsive
+                        logger.info("Closing driver for thread {}", threadId);
+                        driver.quit();
+                        // Release semaphore permit for each closed driver
+                        browserSemaphore.release();
+                        logger.info("Released browser permit for thread {}", threadId);
+                    } catch (Exception sessionError) {
+                        // Driver session already closed, just log it
+                        logger.debug("Driver session already closed for thread {}", threadId);
+                        // Still release the permit
+                        browserSemaphore.release();
+                    }
+                }
             } catch (Exception e) {
                 logger.error("Error quitting driver for thread {}", threadId, e);
             }
         });
         
+        // Clear all references
         driverPool.clear();
-        threadLocalDriver.remove();
+        
+        // Also check and clear ThreadLocal
+        WebDriver localDriver = threadLocalDriver.get();
+        if (localDriver != null) {
+            try {
+                localDriver.quit();
+            } catch (Exception e) {
+                logger.debug("Error quitting thread-local driver", e);
+            }
+            threadLocalDriver.remove();
+        }
     }
     
     /**
@@ -330,15 +439,28 @@ public class CSWebDriverManager {
                 return null;
             }
             
-            // Create directory if needed
-            Path path = Paths.get(filePath);
-            Files.createDirectories(path.getParent());
+            // Check if we should skip saving to file (when embedding is enabled)
+            CSConfigManager config = CSConfigManager.getInstance();
+            boolean embedScreenshots = Boolean.parseBoolean(
+                config.getProperty("cs.report.screenshots.embed", "false")
+            );
             
-            // Write screenshot data to file
-            Files.write(path, screenshotData);
-            
-            logger.info("Screenshot saved to: {}", filePath);
-            return path.toFile();
+            if (embedScreenshots) {
+                // When embedding, still create a temporary file for processing
+                // but it will be deleted after being embedded in the report
+                Path path = Paths.get(filePath);
+                Files.createDirectories(path.getParent());
+                Files.write(path, screenshotData);
+                logger.debug("Screenshot temporarily saved for embedding: {}", filePath);
+                return path.toFile();
+            } else {
+                // Normal file saving when not embedding
+                Path path = Paths.get(filePath);
+                Files.createDirectories(path.getParent());
+                Files.write(path, screenshotData);
+                logger.info("Screenshot saved to: {}", filePath);
+                return path.toFile();
+            }
             
         } catch (IOException e) {
             logger.error("Failed to save screenshot", e);

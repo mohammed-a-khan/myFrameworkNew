@@ -74,12 +74,7 @@ public class CSConfigManager {
      * Load default configuration files
      */
     private void loadDefaultConfigurations() {
-        // Load from classpath first
-        loadPropertiesFromClasspath(APPLICATION_PROPERTIES);
-        loadPropertiesFromClasspath(OBJECT_REPOSITORY_PROPERTIES);
-        loadPropertiesFromClasspath(SQL_QUERIES_PROPERTIES);
-        
-        // Then try to load from file system
+        // Load only from project root resources/config folder
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + APPLICATION_PROPERTIES);
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + OBJECT_REPOSITORY_PROPERTIES);
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + SQL_QUERIES_PROPERTIES);
@@ -90,7 +85,7 @@ public class CSConfigManager {
      */
     private void loadEnvironmentConfigurations() {
         String envFile = String.format("application-%s.properties", currentEnvironment);
-        loadPropertiesFromClasspath(envFile);
+        // Load only from project root resources/config folder
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + envFile);
     }
     

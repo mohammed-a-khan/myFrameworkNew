@@ -48,14 +48,20 @@ Feature: OrangeHRM Simple Tests
     But I wait for 1 seconds
 
   @deliberate-failure @screenshot-demo
-  Scenario: Deliberately failing test to demonstrate failure reporting
+  Scenario Outline: Deliberately failing test to demonstrate failure reporting
     Given I am on the login page
-    And I take a screenshot "login_page_initial"
-    When I enter username "Admin" and password "admin123"
-    And I take a screenshot "valid_credentials_entered"
+    And I take a screenshot "login_page_initial_<testCase>"
+    When I enter username "<username>" and password "<password>"
+    And I take a screenshot "valid_credentials_entered_<testCase>"
     And I click the login button
     Then I should see the dashboard
-    And I take a screenshot "dashboard_displayed"
+    And I take a screenshot "dashboard_displayed_<testCase>"
     # Now let's try to find a non-existent element which will fail
-    And I should see "NonExistentMenuOption" element
-    And I take a screenshot "after_failed_element_check"
+    And I should see "<nonExistentElement>" element
+    And I take a screenshot "after_failed_element_check_<testCase>"
+    
+    Examples:
+      | testCase | username | password  | nonExistentElement        |
+      | test1    | Admin    | admin123  | NonExistentMenuOption1    |
+      | test2    | Admin    | admin123  | NonExistentMenuOption2    |
+      | test3    | Admin    | admin123  | NonExistentMenuOption3    |

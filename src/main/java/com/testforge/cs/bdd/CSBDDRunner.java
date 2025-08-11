@@ -10,7 +10,9 @@ import com.testforge.cs.screenshot.CSScreenshotUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.ITestContext;
+import org.testng.ITestResult;
 import org.testng.annotations.AfterClass;
+import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
@@ -45,13 +47,17 @@ public class CSBDDRunner extends CSBaseTest {
     // Track test executions across threads
     private static final java.util.concurrent.atomic.AtomicInteger testCounter = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final Map<String, Integer> threadTestCount = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<Long, Boolean> threadHasMoreTests = new java.util.concurrent.ConcurrentHashMap<>();
     
     // Track feature file isolation
     private static final Map<String, Set<String>> featureScenarioMap = new java.util.concurrent.ConcurrentHashMap<>();
     
+    // Track iteration numbers for each scenario outline
+    private static final Map<String, java.util.concurrent.atomic.AtomicInteger> scenarioIterationMap = new java.util.concurrent.ConcurrentHashMap<>();
+    
     // Track which threads have finished their tests
     private static final java.util.concurrent.atomic.AtomicInteger completedTests = new java.util.concurrent.atomic.AtomicInteger(0);
-    private static final int TOTAL_TESTS = 12; // Expected number of tests
+    private static volatile int totalExpectedTests = 0; // Will be set dynamically
     
     @BeforeClass
     @Parameters({"featuresPath", "tags", "excludeTags", "stepDefPackages"})
@@ -60,6 +66,9 @@ public class CSBDDRunner extends CSBaseTest {
             @org.testng.annotations.Optional("") String tags,
             @org.testng.annotations.Optional("") String excludeTags,
             @org.testng.annotations.Optional("") String stepDefPackages) {
+        
+        logger.info("@BeforeClass - Setting up BDD Runner on thread: {}", 
+            Thread.currentThread().getName());
         
         this.featuresPath = featuresPath;
         this.tagsToRun = tags;
@@ -72,6 +81,7 @@ public class CSBDDRunner extends CSBaseTest {
         testCounter.set(0);
         completedTests.set(0);
         threadTestCount.clear();
+        scenarioIterationMap.clear();
         
         // Register step definition classes
         registerStepDefinitions();
@@ -83,14 +93,30 @@ public class CSBDDRunner extends CSBaseTest {
         discoverFeatureFiles();
     }
     
+    @AfterMethod(alwaysRun = true)
+    @Override
+    public void teardownTest(Method method, ITestResult result) {
+        String threadName = Thread.currentThread().getName();
+        logger.info("[{}] @AfterMethod for test: {}", threadName, method.getName());
+        
+        // Call parent teardown
+        super.teardownTest(method, result);
+        
+        // Don't close browsers here - let them be reused by thread pool
+        // Browsers will be closed in @AfterClass
+    }
+    
     @AfterClass(alwaysRun = true)
     public void teardownBDDRunner() {
-        logger.info("BDD Runner teardown - cleaning up thread-local browsers");
+        String threadName = Thread.currentThread().getName();
+        logger.info("BDD Runner @AfterClass for thread: {}", threadName);
         
-        // Clean up any browsers created by this test class
+        // Clean up ALL drivers in the pool, not just current thread's
+        // This is important because @AfterClass is only called once, not once per thread
+        logger.info("Cleaning up all browsers in the driver pool");
         CSWebDriverManager.quitAllDrivers();
         
-        logger.info("Final test execution summary:");
+        logger.info("Test execution summary for this class instance:");
         logger.info("  Total tests executed: {}", testCounter.get());
         logger.info("  Thread distribution: {}", threadTestCount);
     }
@@ -186,9 +212,15 @@ public class CSBDDRunner extends CSBaseTest {
     
     /**
      * Data provider for feature files
-     * The parallel attribute is determined dynamically based on suite configuration
+     * Uses parallel=true to enable parallel capability
+     * The suite's parallel attribute controls actual execution:
+     * - parallel="none" → Sequential (TestNG should respect this)
+     * - parallel="methods" → Parallel execution
+     * 
+     * Note: There's a TestNG quirk where DataProvider parallel=true can override suite parallel="none"
+     * To force sequential: Set suite parallel="none" AND set -Dtestng.data-provider-thread-count=1
      */
-    @DataProvider(name = "featureFiles")
+    @DataProvider(name = "featureFiles", parallel = true)
     public Object[][] getFeatureFiles(ITestContext context) {
         System.out.println("\n>>> DataProvider getFeatureFiles() called <<<");
         List<Object[]> testData = new ArrayList<>();
@@ -197,8 +229,106 @@ public class CSBDDRunner extends CSBaseTest {
         String parallelMode = context.getSuite().getParallel();
         boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
         
+        // IMPORTANT: Control thread count based on suite configuration
+        if (!isParallel) {
+            // Force sequential execution
+            System.setProperty("testng.data-provider-thread-count", "1");
+            context.getSuite().getXmlSuite().setDataProviderThreadCount(1);
+            logger.info("Suite has parallel='{}' - Forcing sequential execution by setting data-provider-thread-count=1", parallelMode);
+        } else {
+            // For parallel mode, respect the thread-count from suite
+            int suiteThreadCount = context.getSuite().getXmlSuite().getThreadCount();
+            if (suiteThreadCount > 0) {
+                System.setProperty("testng.data-provider-thread-count", String.valueOf(suiteThreadCount));
+                context.getSuite().getXmlSuite().setDataProviderThreadCount(suiteThreadCount);
+                logger.info("Suite has thread-count={}, setting data-provider-thread-count to match", suiteThreadCount);
+            }
+        }
+        
+        // Implement hierarchical thread count determination
+        // Priority: 1. thread-count from XML, 2. data-provider-thread-count from XML, 3. application.properties
+        int dataProviderThreadCount = -1;
+        String threadCountSource = "unknown";
+        
+        // Get XmlSuite for accessing attributes
+        org.testng.xml.XmlSuite xmlSuite = context.getSuite().getXmlSuite();
+        
+        if (xmlSuite != null) {
+            int xmlThreadCount = xmlSuite.getThreadCount();
+            int xmlDataProviderThreadCount = xmlSuite.getDataProviderThreadCount();
+            
+            // Check if data-provider-thread-count is explicitly set (not default value of 10)
+            boolean hasExplicitDataProviderThreadCount = xmlDataProviderThreadCount != 10;
+            
+            // Check if thread-count is explicitly set (not default value of 1)
+            boolean hasExplicitThreadCount = xmlThreadCount > 1;
+            
+            // Priority logic based on user requirement:
+            // 1. If thread-count is explicitly set, use it as the default for data-provider-thread-count
+            // 2. However, if data-provider-thread-count is ALSO explicitly set, override with that (more specific)
+            // 3. Otherwise fall back to application.properties
+            
+            if (hasExplicitThreadCount) {
+                // thread-count is explicitly set, use it as default
+                dataProviderThreadCount = xmlThreadCount;
+                threadCountSource = "thread-count attribute from suite XML";
+                logger.info("Using thread-count={} from suite XML as default for data-provider-thread-count", xmlThreadCount);
+                
+                // But check if data-provider-thread-count overrides it
+                if (hasExplicitDataProviderThreadCount) {
+                    dataProviderThreadCount = xmlDataProviderThreadCount;
+                    threadCountSource = "data-provider-thread-count attribute from suite XML (overrides thread-count)";
+                    logger.info("Note: Both thread-count={} and data-provider-thread-count={} are specified. " +
+                               "Using data-provider-thread-count={} as it explicitly overrides the thread-count default.", 
+                               xmlThreadCount, xmlDataProviderThreadCount, xmlDataProviderThreadCount);
+                }
+            } else if (hasExplicitDataProviderThreadCount) {
+                // Only data-provider-thread-count is explicitly set
+                dataProviderThreadCount = xmlDataProviderThreadCount;
+                threadCountSource = "data-provider-thread-count attribute from suite XML";
+                logger.info("Using data-provider-thread-count={} from suite XML", xmlDataProviderThreadCount);
+            }
+        }
+        
+        // Third priority: Fall back to application.properties
+        if (dataProviderThreadCount <= 0 || dataProviderThreadCount == 10) {
+            String propertyThreadCount = config.getProperty("thread.count", "1");
+            try {
+                dataProviderThreadCount = Integer.parseInt(propertyThreadCount);
+                threadCountSource = "thread.count from application.properties";
+                logger.info("No thread count specified in suite XML, using thread.count={} from application.properties", dataProviderThreadCount);
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid thread.count in application.properties: {}, using default of 1", propertyThreadCount);
+                dataProviderThreadCount = 1;
+                threadCountSource = "default fallback";
+            }
+        }
+        
+        // Allow system property override if needed
+        String systemThreadCount = System.getProperty("testng.data-provider-thread-count");
+        if (systemThreadCount != null) {
+            try {
+                int overrideCount = Integer.parseInt(systemThreadCount);
+                logger.info("System property testng.data-provider-thread-count detected: {} (overrides {})", 
+                    overrideCount, threadCountSource);
+                // Note: We can't actually change TestNG's thread pool size here, but we log it for awareness
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid system property testng.data-provider-thread-count: {}", systemThreadCount);
+            }
+        }
+        
         logger.info("DataProvider method called on thread: {} (parallel mode: {})", 
                 Thread.currentThread().getName(), parallelMode);
+        
+        // Log intelligent parallel handling
+        if (isParallel) {
+            logger.info("Parallel execution detected (mode: {}). DataProvider will run tests concurrently.", parallelMode);
+            logger.info("TestNG is using data-provider-thread-count={} (source: {})", dataProviderThreadCount, threadCountSource);
+            logger.info("Thread count hierarchy: thread-count (XML) -> data-provider-thread-count (XML) -> application.properties");
+        } else {
+            logger.info("Sequential execution mode. DataProvider will run tests one at a time.");
+            logger.info("Parallel mode is set to: {}", parallelMode != null ? parallelMode : "not specified (defaulting to none)");
+        }
         
         for (String featureFile : featureFiles) {
             try {
@@ -259,11 +389,11 @@ public class CSBDDRunner extends CSBaseTest {
         
         // Log thread pool information
         logger.info("DataProvider returning {} test cases, parallel={}", testData.size(), true);
-        logger.info("Expected to run on {} threads based on data-provider-thread-count", 3);
+        logger.info("Expected to run on {} threads (source: {})", dataProviderThreadCount, threadCountSource);
         
-        if (testData.size() != 12) {
-            logger.warn("WARNING: Expected 12 test scenarios but got {}", testData.size());
-        }
+        // Set the total expected tests for cleanup tracking
+        totalExpectedTests = testData.size();
+        logger.info("Total expected tests set to: {}", totalExpectedTests);
         
         // Print to console for debugging
         System.out.println("\n========== DATAPROVIDER SUMMARY ==========");
@@ -279,21 +409,34 @@ public class CSBDDRunner extends CSBaseTest {
     @BeforeMethod(alwaysRun = true)
     public void setupTest(Method method, Object[] params, ITestContext context) {
         String threadName = Thread.currentThread().getName();
-        logger.info("[{}] CSBDDRunner.setupTest starting for method: {}", threadName, method.getName());
+        long threadId = Thread.currentThread().getId();
+        logger.info("[{}] @BeforeMethod for: {}", threadName, method.getName());
         
-        // Call parent setup first
+        // Call parent setup first - this creates the driver
         super.setupTest(method, params, context);
         
         logger.info("[{}] After parent setup, driver = {}", threadName, driver);
         
-        // Now set up the driver for step definitions
+        // IMPORTANT: Each thread needs its own driver instance properly set
+        // The parent setupTest creates a new driver, now we need to ensure it's properly
+        // registered in all the thread-local storages
         if (driver != null) {
+            // Create CSDriver wrapper for this specific thread
             CSDriver csDriver = new CSDriver(driver);
+            
+            // Set in CSStepDefinitions ThreadLocal - this is critical for step execution
             CSStepDefinitions.setDriver(csDriver);
+            
+            // Also ensure it's in CSWebDriverManager's ThreadLocal
             CSWebDriverManager.setDriver(driver);
-            logger.info("[{}] Driver set in CSWebDriverManager: {}", threadName, CSWebDriverManager.getDriver());
+            
+            // Log to verify the driver is properly set for this thread
+            logger.info("[{}] Thread ID {} - Driver properly initialized and set in all ThreadLocals", threadName, threadId);
+            logger.info("[{}] CSWebDriverManager.getDriver() = {}", threadName, CSWebDriverManager.getDriver());
+            logger.info("[{}] Driver hashCode = {}", threadName, driver.hashCode());
         } else {
-            logger.warn("[{}] Driver is null after parent setup!", threadName);
+            logger.error("[{}] CRITICAL: Driver is null after parent setup! Thread ID: {}", threadName, threadId);
+            throw new RuntimeException("Failed to initialize driver for thread: " + threadName);
         }
     }
     
@@ -323,34 +466,78 @@ public class CSBDDRunner extends CSBaseTest {
             logger.info("Thread distribution after {} tests: {}", testNumber, threadTestCount);
         }
         
-        // Log driver status BEFORE waiting
-        logger.info("[{}] Test #{} - Driver status before wait: {}", threadName, testNumber, 
-            driver != null ? "INITIALIZED" : "NULL");
+        // Verify driver is available from multiple sources
+        logger.info("[{}] Test #{} - Verifying driver availability", threadName, testNumber);
+        logger.info("[{}] - Instance driver field: {}", threadName, driver != null ? "AVAILABLE" : "NULL");
+        logger.info("[{}] - CSWebDriverManager.getDriver(): {}", threadName, CSWebDriverManager.getDriver() != null ? "AVAILABLE" : "NULL");
         
-        // Wait a bit to ensure driver is fully initialized in BeforeMethod
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        // Verify driver is available
+        // Critical check - ensure driver is properly initialized for this thread
         if (driver == null) {
-            logger.error("[{}] Driver is null at start of test execution!", threadName);
+            logger.error("[{}] CRITICAL ERROR: Instance driver is null at start of test execution!", threadName);
             throw new RuntimeException("Driver not initialized for thread: " + threadName);
         }
+        
+        if (CSWebDriverManager.getDriver() == null) {
+            logger.error("[{}] CRITICAL ERROR: CSWebDriverManager.getDriver() is null!", threadName);
+            logger.warn("[{}] Attempting to re-set driver in CSWebDriverManager", threadName);
+            CSWebDriverManager.setDriver(driver);
+            
+            if (CSWebDriverManager.getDriver() == null) {
+                throw new RuntimeException("Failed to set driver in CSWebDriverManager for thread: " + threadName);
+            }
+        }
+        
+        // Re-ensure CSStepDefinitions has the driver for this thread
+        CSDriver csDriver = new CSDriver(driver);
+        CSStepDefinitions.setDriver(csDriver);
+        logger.info("[{}] Test #{} - Driver re-verified and set in all contexts", threadName, testNumber);
         
         // Track scenario execution per feature file
         featureScenarioMap.computeIfAbsent(featureFile, k -> new HashSet<>()).add(scenario.getName());
         
         // Create a new scenario runner for each test to ensure thread safety and feature isolation
         CSScenarioRunner threadSafeScenarioRunner = new CSScenarioRunner();
-        String scenarioName = feature.getName() + " - " + scenario.getName();
+        
+        // Build proper scenario name with iteration number for data-driven tests
+        String scenarioDisplayName = scenario.getName();
+        String baseScenarioName = scenario.getName(); // Keep original name for tracking
+        
+        // For data-driven scenarios (Scenario Outlines with Examples), add iteration number
+        if (scenario.getDataRow() != null && !scenario.getDataRow().isEmpty()) {
+            // Get or create iteration counter for this scenario
+            java.util.concurrent.atomic.AtomicInteger iterationCounter = 
+                scenarioIterationMap.computeIfAbsent(baseScenarioName, 
+                    k -> new java.util.concurrent.atomic.AtomicInteger(0));
+            
+            // Increment and get the iteration number
+            int iterationNumber = iterationCounter.incrementAndGet();
+            
+            // Format: ScenarioName_Iteration<number>
+            scenarioDisplayName = baseScenarioName + "_Iteration" + iterationNumber;
+            
+            logger.info("Data-driven scenario: {} (Iteration {})", baseScenarioName, iterationNumber);
+            logger.info("Data row for iteration {}: {}", iterationNumber, scenario.getDataRow());
+        }
+        
+        // Ensure we have a valid scenario name
+        if (scenarioDisplayName == null || scenarioDisplayName.trim().isEmpty()) {
+            scenarioDisplayName = "Unnamed Scenario";
+            logger.warn("Scenario has no name, using default: {}", scenarioDisplayName);
+        }
+        
+        // Ensure we have a valid feature name
+        String featureName = feature.getName();
+        if (featureName == null || featureName.trim().isEmpty()) {
+            featureName = "Unnamed Feature";
+            logger.warn("Feature has no name, using default: {}", featureName);
+        }
+        
+        String scenarioName = featureName + " - " + scenarioDisplayName;
         
         // Log feature file isolation info
-        logger.info("[ISOLATION] Executing scenario '{}' from feature file: {}", scenario.getName(), featureFile);
+        logger.info("[ISOLATION] Executing scenario '{}' from feature file: {}", scenarioDisplayName, featureFile);
         logger.info("[ISOLATION] Feature '{}' has executed scenarios: {}", 
-            feature.getName(), featureScenarioMap.get(featureFile));
+            featureName, featureScenarioMap.get(featureFile));
         logger.info("Executing scenario: {} (Tags: {}) - First step: {} {}", 
             scenarioName, scenario.getTags(), 
             scenario.getSteps().isEmpty() ? "NO STEPS" : scenario.getSteps().get(0).getKeyword(),
@@ -368,7 +555,7 @@ public class CSBDDRunner extends CSBaseTest {
         testResult.setEnvironment(config.getProperty("environment.name", "qa"));
         testResult.setBrowser(config.getProperty("browser.name", "chrome"));
         testResult.setThreadName(Thread.currentThread().getName());
-        testResult.setScenarioName(scenarioName);
+        testResult.setScenarioName(scenarioDisplayName);
         
         // Set current test context for reporting
         CSReportManager.setCurrentTestContext(testResult.getTestId());
@@ -512,6 +699,13 @@ public class CSBDDRunner extends CSBaseTest {
             
             // Clear test context
             CSReportManager.clearCurrentTestContext();
+            
+            // Track test completion
+            int completed = completedTests.incrementAndGet();
+            logger.info("[{}] Test completed. Total completed: {}/{}", threadName, completed, totalExpectedTests);
+            
+            // Note: Final cleanup will be handled by @AfterSuite and shutdown hook
+            // This ensures all browsers are properly closed even if tests fail
         }
     }
     

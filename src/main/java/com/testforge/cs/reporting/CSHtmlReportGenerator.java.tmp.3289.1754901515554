@@ -48,10 +48,9 @@ public class CSHtmlReportGenerator {
         try {
             // Get configuration for screenshot embedding
             CSConfigManager config = CSConfigManager.getInstance();
-            String embedProperty = config.getProperty("cs.report.screenshots.embed", "false");
-            boolean embedScreenshots = Boolean.parseBoolean(embedProperty);
-            logger.info("Screenshot embedding mode: {} (property value: {})", 
-                embedScreenshots ? "EMBEDDED" : "EXTERNAL", embedProperty);
+            boolean embedScreenshots = Boolean.parseBoolean(
+                config.getProperty("cs.report.screenshots.embed", "false")
+            );
             
             // Create timestamped folder for this test run
             String timestamp = LocalDateTime.now().format(FILE_TIMESTAMP_FORMAT);
@@ -97,9 +96,6 @@ public class CSHtmlReportGenerator {
             
             // Update latest report link to point to the new run folder
             updateLatestReportLink(reportDir, runFolder + "/index.html");
-            
-            // Clean up temp screenshots directory after report generation
-            cleanupTempScreenshots();
             
             logger.info("Enhanced V5 report generated: {}", filePath);
             return filePath;
@@ -5151,7 +5147,6 @@ public class CSHtmlReportGenerator {
                 if (new File(oldPath).isAbsolute()) {
                     oldFile = new File(oldPath);
                 } else {
-                    // For backward compatibility with old reports
                     oldFile = new File("cs-reports/" + oldPath);
                 }
                 
@@ -5225,40 +5220,6 @@ public class CSHtmlReportGenerator {
         cleanupOldFiles("cs-reports", "page_source_*.html");
     }
     
-    private void embedScreenshotsAsBase64(CSReportData reportData) {
-        logger.info("Embedding screenshots as Base64 in HTML report");
-        
-        for (CSTestResult test : reportData.getTestResults()) {
-            // Process the main screenshot path
-            if (test.getScreenshotPath() != null && !test.getScreenshotPath().isEmpty()) {
-                String base64DataUri = CSImageUtils.imageToBase64DataUri(test.getScreenshotPath());
-                if (base64DataUri != null) {
-                    test.setScreenshotPath(base64DataUri);
-                    logger.debug("Embedded screenshot for test: {}", test.getTestName());
-                }
-            }
-            
-            // Process the screenshots list
-            if (test.getScreenshots() != null && !test.getScreenshots().isEmpty()) {
-                for (CSTestResult.Screenshot screenshot : test.getScreenshots()) {
-                    String base64DataUri = CSImageUtils.imageToBase64DataUri(screenshot.getPath());
-                    if (base64DataUri != null) {
-                        screenshot.setPath(base64DataUri);
-                        logger.debug("Embedded screenshot: {}", screenshot.getName());
-                    }
-                }
-            }
-        }
-        
-        // Clean up all screenshot files from cs-reports since they're now embedded
-        cleanupOldFiles("cs-reports", "screenshot_*.png");
-        cleanupOldFiles("cs-reports", "pass_*.png");
-        cleanupOldFiles("cs-reports", "fail_*.png");
-        cleanupOldFiles("cs-reports/screenshots", "*.png");
-        
-        logger.info("Cleaned up temporary screenshot files after embedding");
-    }
-    
     private void saveReportDataJson(CSReportData reportData, String jsonPath) {
         try (FileWriter writer = new FileWriter(jsonPath)) {
             // Create a simple JSON representation
@@ -5293,29 +5254,6 @@ public class CSHtmlReportGenerator {
             }
         } catch (Exception e) {
             logger.warn("Failed to cleanup old files", e);
-        }
-    }
-    
-    private void cleanupTempScreenshots() {
-        try {
-            // Clean up temporary screenshots directory
-            File tempScreenshotsDir = new File(System.getProperty("java.io.tmpdir"), "cs-temp-screenshots");
-            if (tempScreenshotsDir.exists() && tempScreenshotsDir.isDirectory()) {
-                File[] files = tempScreenshotsDir.listFiles();
-                if (files != null) {
-                    for (File file : files) {
-                        if (file.delete()) {
-                            logger.debug("Deleted temp screenshot: {}", file.getName());
-                        }
-                    }
-                }
-                // Try to delete the directory itself
-                if (tempScreenshotsDir.delete()) {
-                    logger.info("Cleaned up temp screenshots directory");
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to cleanup temp screenshots", e);
         }
     }
     

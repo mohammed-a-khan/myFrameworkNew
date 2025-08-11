@@ -140,23 +140,8 @@ public class CSReportManager {
             String reportPath = null;
             
             if (generatedReportPath != null) {
-                // The V5 generator already creates the report file, so we don't need to write it again
-                // Just create a summary report file that points to the generated report
-                String timestamp = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(startTime);
-                String reportFileName = String.format("test-report_%s.html", timestamp);
-                reportPath = reportDirectory + File.separator + reportFileName;
-                
-                // Create a simple redirect to the actual report
-                String redirectContent = String.format(
-                    "<html><head><meta http-equiv=\"refresh\" content=\"0;url=%s\"></head><body>Redirecting to report...</body></html>",
-                    generatedReportPath.replace(reportDirectory + File.separator, "")
-                );
-                CSFileUtils.writeStringToFile(reportPath, redirectContent);
-                
-                // Write JSON data to cs-reports temporarily (will be moved by CSReportGeneratorV3)
-                String jsonPath = "cs-reports" + File.separator + "report-data.json";
-                CSJsonUtils.writeJsonFile(jsonPath, reportData, true);
-                
+                // The V5 generator already creates everything in the test-run folder
+                // No need to create redundant files in cs-reports root
                 logger.info("Report generated successfully: {}", generatedReportPath);
             } else {
                 logger.error("Failed to generate HTML report - path is null");
@@ -404,8 +389,11 @@ public class CSReportManager {
      */
     private static void captureScreenshot(String name) {
         try {
+            // Use temp directory to avoid redundancy
+            String tempDir = System.getProperty("java.io.tmpdir") + "/cs-temp-screenshots";
+            new File(tempDir).mkdirs();
             File screenshotFile = CSWebDriverManager.takeScreenshot(
-                config.getProperty("report.directory", "target/test-reports") + "/screenshots/" + name + ".png"
+                tempDir + "/" + name + ".png"
             );
             if (screenshotFile != null && screenshotFile.exists()) {
                 logger.info("Screenshot captured: {}", screenshotFile.getAbsolutePath());
@@ -471,20 +459,20 @@ public class CSReportManager {
             // Save screenshot and return path
             String fileName = screenshotName + "_" + System.currentTimeMillis() + ".png";
             
-            // Create screenshots directory in report directory
-            File screenshotsDir = new File(reportDirectory, "screenshots");
-            if (!screenshotsDir.exists()) {
-                screenshotsDir.mkdirs();
+            // Use temp directory to avoid redundancy - these will be moved to test-run folder later
+            File tempScreenshotsDir = new File(System.getProperty("java.io.tmpdir"), "cs-temp-screenshots");
+            if (!tempScreenshotsDir.exists()) {
+                tempScreenshotsDir.mkdirs();
             }
             
-            // Save the screenshot
-            File screenshotFile = new File(screenshotsDir, fileName);
+            // Save the screenshot to temp location
+            File screenshotFile = new File(tempScreenshotsDir, fileName);
             Files.write(screenshotFile.toPath(), screenshotData);
             
-            logger.info("Screenshot saved: {}", screenshotFile.getAbsolutePath());
+            logger.debug("Screenshot temporarily saved: {}", screenshotFile.getAbsolutePath());
             
-            // Return relative path for HTML report
-            return "screenshots/" + fileName;
+            // Return the absolute path for now - will be processed by report generator
+            return screenshotFile.getAbsolutePath();
         } catch (Exception e) {
             logger.error("Failed to save screenshot", e);
             return null;
@@ -502,26 +490,28 @@ public class CSReportManager {
                 return;
             }
             
-            // Create screenshots directory in report directory
-            File screenshotsDir = new File(reportDirectory, "screenshots");
-            if (!screenshotsDir.exists()) {
-                screenshotsDir.mkdirs();
+            // Use temp directory to avoid redundancy
+            File tempScreenshotsDir = new File(System.getProperty("java.io.tmpdir"), "cs-temp-screenshots");
+            if (!tempScreenshotsDir.exists()) {
+                tempScreenshotsDir.mkdirs();
             }
             
-            // Copy the screenshot to report directory
+            // Copy the screenshot to temp location
             String fileName = screenshotName + "_" + System.currentTimeMillis() + ".png";
-            File destFile = new File(screenshotsDir, fileName);
+            File destFile = new File(tempScreenshotsDir, fileName);
             Files.copy(sourceFile.toPath(), destFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             
-            // Add screenshot to current test result
-            String relativePath = "screenshots/" + fileName;
-            String currentTestId = reportMetadata.get("currentTestId") != null ? 
-                reportMetadata.get("currentTestId").toString() : null;
-            if (currentTestId != null) {
-                CSTestResult testResult = testResults.get(currentTestId);
+            // Add screenshot to current test result using absolute path
+            String relativePath = destFile.getAbsolutePath();
+            String testId = currentTestId.get();
+            if (testId != null) {
+                CSTestResult testResult = testResults.get(testId);
                 if (testResult != null) {
                     testResult.addScreenshot(relativePath, screenshotName);
+                    logger.debug("Added screenshot to test result: {} -> {}", testId, relativePath);
                 }
+            } else {
+                logger.warn("No current test context set, screenshot not associated with any test");
             }
             
             // Log as info
