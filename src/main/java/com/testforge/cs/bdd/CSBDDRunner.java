@@ -13,6 +13,7 @@ import org.testng.ITestContext;
 import org.testng.ITestResult;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
+import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.DataProvider;
@@ -48,6 +49,9 @@ public class CSBDDRunner extends CSBaseTest {
     private static final java.util.concurrent.atomic.AtomicInteger testCounter = new java.util.concurrent.atomic.AtomicInteger(0);
     private static final Map<String, Integer> threadTestCount = new java.util.concurrent.ConcurrentHashMap<>();
     private static final Map<Long, Boolean> threadHasMoreTests = new java.util.concurrent.ConcurrentHashMap<>();
+    
+    // Dynamic test executor for work distribution
+    private static CSDynamicTestExecutor dynamicExecutor;
     
     // Track feature file isolation
     private static final Map<String, Set<String>> featureScenarioMap = new java.util.concurrent.ConcurrentHashMap<>();
@@ -99,11 +103,8 @@ public class CSBDDRunner extends CSBaseTest {
         String threadName = Thread.currentThread().getName();
         logger.info("[{}] @AfterMethod for test: {}", threadName, method.getName());
         
-        // Call parent teardown
+        // Call parent teardown - this handles screenshots and cleanup
         super.teardownTest(method, result);
-        
-        // Don't close browsers here - let them be reused by thread pool
-        // Browsers will be closed in @AfterClass
     }
     
     @AfterClass(alwaysRun = true)
@@ -111,13 +112,27 @@ public class CSBDDRunner extends CSBaseTest {
         String threadName = Thread.currentThread().getName();
         logger.info("BDD Runner @AfterClass for thread: {}", threadName);
         
-        // Clean up ALL drivers in the pool, not just current thread's
-        // This is important because @AfterClass is only called once, not once per thread
-        logger.info("Cleaning up all browsers in the driver pool");
-        CSWebDriverManager.quitAllDrivers();
+        // Don't quit all drivers here - let each thread manage its own driver
+        // and use @AfterSuite for final cleanup
         
         logger.info("Test execution summary for this class instance:");
         logger.info("  Total tests executed: {}", testCounter.get());
+        logger.info("  Thread distribution: {}", threadTestCount);
+    }
+    
+    @AfterSuite(alwaysRun = true)
+    @Override
+    public void teardownSuite() {
+        logger.info("BDD Runner @AfterSuite - Ensuring all browsers are closed");
+        
+        // Call parent teardownSuite first (generates report, etc.)
+        super.teardownSuite();
+        
+        // Double-check that all browsers are closed
+        CSWebDriverManager.quitAllDrivers();
+        
+        logger.info("Final test execution summary:");
+        logger.info("  Total tests completed: {}/{}", completedTests.get(), totalExpectedTests);
         logger.info("  Thread distribution: {}", threadTestCount);
     }
     
@@ -228,6 +243,16 @@ public class CSBDDRunner extends CSBaseTest {
         // Get parallel mode from suite configuration
         String parallelMode = context.getSuite().getParallel();
         boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
+        
+        // Initialize dynamic executor for parallel mode
+        int threadCount = context.getSuite().getXmlSuite().getThreadCount();
+        if (isParallel && threadCount > 1) {
+            if (dynamicExecutor == null) {
+                dynamicExecutor = CSDynamicTestExecutor.getInstance(threadCount);
+                dynamicExecutor.reset();
+                logger.info("Initialized dynamic test executor with {} threads", threadCount);
+            }
+        }
         
         // IMPORTANT: Control thread count based on suite configuration
         if (!isParallel) {
@@ -344,6 +369,11 @@ public class CSBDDRunner extends CSBaseTest {
                         logger.info("Adding scenario to test data: {} with {} steps", 
                             scenario.getName(), scenario.getSteps().size());
                         testData.add(new Object[]{featureFile, feature, scenario});
+                        
+                        // Add to dynamic executor queue if in parallel mode
+                        if (dynamicExecutor != null) {
+                            dynamicExecutor.addTest(new CSDynamicTestExecutor.TestScenario(featureFile, feature, scenario));
+                        }
                     }
                 } else {
                     // Otherwise, filter scenarios by tags
@@ -362,6 +392,11 @@ public class CSBDDRunner extends CSBaseTest {
                             }
                         }
                         testData.add(new Object[]{featureFile, feature, scenario});
+                        
+                        // Add to dynamic executor queue if in parallel mode
+                        if (dynamicExecutor != null) {
+                            dynamicExecutor.addTest(new CSDynamicTestExecutor.TestScenario(featureFile, feature, scenario));
+                        }
                     }
                 }
                 

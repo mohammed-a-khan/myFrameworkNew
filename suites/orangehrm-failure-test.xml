@@ -1,5 +1,5 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="OrangeHRM Failure Test Suite" parallel="methods" thread-count="3">
+<suite name="OrangeHRM Failure Test Suite" parallel="none">
     
     <parameter name="browser.name" value="chrome"/>
     <parameter name="browser.headless" value="false"/>
@@ -8,7 +8,7 @@
     <!-- Configure to run only the failing scenario -->
     <parameter name="featuresPath" value="features/orangehrm-simple-tests.feature"/>
     <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
-    <!-- Commented out: parameter cucumberOptions with tags @deliberate-failure -->
+    <parameter name="cucumberOptions" value="--tags @simple"/>
     
     <test name="OrangeHRM Failure Test">
         <classes>

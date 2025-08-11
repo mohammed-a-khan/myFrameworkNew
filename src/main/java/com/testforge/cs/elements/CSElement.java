@@ -226,7 +226,9 @@ public class CSElement {
         logger.debug("Check if element is displayed: {}", description);
         CSReportManager.info("Checking if " + description + " is displayed");
         
-        return performFunction("isDisplayed", () -> {
+        // Perform the function with single attempt since findElement already has retries
+        // This avoids multiplicative wait times (3 function retries x 3 findElement retries = 9 total attempts)
+        return performFunctionSingleAttempt("isDisplayed", () -> {
             boolean displayed = getElement().isDisplayed();
             CSReportManager.info("Element " + description + " is " + (displayed ? "displayed" : "not displayed"));
             return displayed;
@@ -516,21 +518,37 @@ public class CSElement {
     private WebElement findElement() {
         int attempts = 0;
         Exception lastException = null;
+        long startTime = System.currentTimeMillis();
+        
+        // Get implicit wait timeout from driver
+        int implicitWaitSeconds = config.getInt("selenium.implicit.wait", 10);
+        
+        logger.debug("Finding element: {} with locator: {} (max retries: {}, implicit wait: {}s)", 
+            description, locator, maxRetries, implicitWaitSeconds);
         
         while (attempts < maxRetries) {
+            long attemptStartTime = System.currentTimeMillis();
+            
             try {
+                logger.debug("Attempt {}/{} to find element: {}", attempts + 1, maxRetries, description);
                 // Try primary locator
                 return driver.findElement(locator);
             } catch (NoSuchElementException e) {
                 lastException = e;
+                long attemptDuration = System.currentTimeMillis() - attemptStartTime;
+                logger.debug("Element not found on attempt {}/{} after {}ms", 
+                    attempts + 1, maxRetries, attemptDuration);
                 
                 // Try alternative locators
                 if (alternativeLocators != null && alternativeLocators.length > 0) {
+                    logger.debug("Trying {} alternative locators", alternativeLocators.length);
                     for (String altLocator : alternativeLocators) {
                         try {
                             By by = parseLocator(altLocator);
+                            logger.debug("Trying alternative locator: {}", altLocator);
                             return driver.findElement(by);
                         } catch (NoSuchElementException altE) {
+                            logger.debug("Alternative locator failed: {}", altLocator);
                             // Continue to next alternative
                         }
                     }
@@ -538,6 +556,9 @@ public class CSElement {
                 
                 attempts++;
                 if (attempts < maxRetries) {
+                    logger.debug("Waiting {}ms before retry {}/{}", retryDelay, attempts + 1, maxRetries);
+                    CSReportManager.info(String.format("[RETRY] Element not found, retrying in %dms (attempt %d/%d)", 
+                        retryDelay, attempts + 1, maxRetries));
                     try {
                         Thread.sleep(retryDelay);
                     } catch (InterruptedException ie) {
@@ -548,9 +569,15 @@ public class CSElement {
             }
         }
         
+        long totalDuration = System.currentTimeMillis() - startTime;
+        double totalSeconds = totalDuration / 1000.0;
+        
+        logger.error("Element not found after {} attempts and {} seconds: {}", 
+            attempts, String.format("%.1f", totalSeconds), description);
+        
         throw new CSElementNotFoundException(
             "Element not found: " + description + " using locator: " + locator, 
-            10
+            Math.round(totalSeconds)
         );
     }
     
@@ -683,19 +710,90 @@ public class CSElement {
     }
     
     /**
+     * Perform function with single attempt (no retries at function level)
+     * Use this for functions where the underlying operations already have retries
+     */
+    private <T> T performFunctionSingleAttempt(String functionName, java.util.function.Supplier<T> function) {
+        long startTime = System.currentTimeMillis();
+        
+        logger.debug("Executing function '{}' on element: {} (single attempt)", functionName, description);
+        
+        try {
+            T result = function.get();
+            long totalDuration = System.currentTimeMillis() - startTime;
+            logger.debug("Function '{}' succeeded after {}ms", functionName, totalDuration);
+            return result;
+        } catch (Exception e) {
+            long totalDuration = System.currentTimeMillis() - startTime;
+            double totalSeconds = totalDuration / 1000.0;
+            
+            // Check if it's an element not found exception
+            if (e.getCause() instanceof CSElementNotFoundException) {
+                CSElementNotFoundException enfe = (CSElementNotFoundException) e.getCause();
+                logger.warn("Function '{}' failed: Element not found after {} seconds", 
+                    functionName, enfe.getTimeoutSeconds());
+                CSReportManager.warn(String.format("Function '%s' failed: Element not found after %d seconds",
+                    functionName, enfe.getTimeoutSeconds()));
+            } else {
+                logger.warn("Function '{}' failed after {}ms: {}", 
+                    functionName, totalDuration, e.getMessage());
+                CSReportManager.warn(String.format("Function '%s' failed: %s", functionName, e.getMessage()));
+            }
+            
+            String errorMessage = String.format(
+                "Failed to execute function '%s' on element: %s after %.1f seconds", 
+                functionName, description, totalSeconds
+            );
+            
+            throw new CSElementException(errorMessage, e);
+        }
+    }
+    
+    /**
      * Perform function with retry and error handling
      */
     private <T> T performFunction(String functionName, java.util.function.Supplier<T> function) {
         Exception lastException = null;
+        long startTime = System.currentTimeMillis();
+        
+        logger.debug("Executing function '{}' on element: {} (max retries: {})", 
+            functionName, description, maxRetries);
         
         for (int attempt = 0; attempt < maxRetries; attempt++) {
+            long attemptStartTime = System.currentTimeMillis();
+            
             try {
-                return function.get();
+                logger.debug("Function '{}' attempt {}/{}", functionName, attempt + 1, maxRetries);
+                T result = function.get();
+                
+                long totalDuration = System.currentTimeMillis() - startTime;
+                logger.debug("Function '{}' succeeded after {}ms", functionName, totalDuration);
+                
+                return result;
             } catch (Exception e) {
                 lastException = e;
-                logger.warn("Function '{}' failed on attempt {}: {}", functionName, attempt + 1, e.getMessage());
+                long attemptDuration = System.currentTimeMillis() - attemptStartTime;
+                
+                // Check if it's an element not found exception
+                if (e.getCause() instanceof CSElementNotFoundException) {
+                    CSElementNotFoundException enfe = (CSElementNotFoundException) e.getCause();
+                    logger.warn("Function '{}' failed on attempt {}/{}: Element not found after {} seconds", 
+                        functionName, attempt + 1, maxRetries, enfe.getTimeoutSeconds());
+                    CSReportManager.warn(String.format("Function '%s' failed on attempt %d: Element not found after %d seconds",
+                        functionName, attempt + 1, enfe.getTimeoutSeconds()));
+                } else {
+                    logger.warn("Function '{}' failed on attempt {}/{} after {}ms: {}", 
+                        functionName, attempt + 1, maxRetries, attemptDuration, e.getMessage());
+                    CSReportManager.warn(String.format("Function '%s' failed on attempt %d: %s",
+                        functionName, attempt + 1, e.getMessage()));
+                }
                 
                 if (attempt < maxRetries - 1) {
+                    logger.debug("Waiting {}ms before retry {}/{} for function '{}'", 
+                        retryDelay, attempt + 2, maxRetries, functionName);
+                    CSReportManager.info(String.format("[RETRY] Function '%s' will retry in %dms (attempt %d/%d)",
+                        functionName, retryDelay, attempt + 2, maxRetries));
+                    
                     try {
                         Thread.sleep(retryDelay);
                         element = null; // Force re-find
@@ -707,10 +805,18 @@ public class CSElement {
             }
         }
         
-        throw new CSElementException(
-            "Failed to execute function '" + functionName + "' on element: " + description, 
-            lastException
+        long totalDuration = System.currentTimeMillis() - startTime;
+        double totalSeconds = totalDuration / 1000.0;
+        
+        logger.error("Function '{}' failed after {} attempts and {} seconds on element: {}", 
+            functionName, maxRetries, String.format("%.1f", totalSeconds), description);
+        
+        String errorMessage = String.format(
+            "Failed to execute function '%s' on element: %s after %d attempts and %.1f seconds", 
+            functionName, description, maxRetries, totalSeconds
         );
+        
+        throw new CSElementException(errorMessage, lastException);
     }
     
     /**
