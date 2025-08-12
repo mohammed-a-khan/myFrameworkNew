@@ -1,6 +1,7 @@
 package com.testforge.cs.bdd;
 
 import com.testforge.cs.annotations.CSDataRow;
+import com.testforge.cs.security.CSEncryptionUtils;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -173,8 +174,15 @@ public class CSStepDefinition {
     
     /**
      * Convert string parameter to the appropriate type
+     * Automatically decrypts encrypted values (wrapped in ENC())
      */
     private Object convertParameter(String value, Class<?> type) {
+        // First check if the value is encrypted and decrypt it
+        if (CSEncryptionUtils.isEncrypted(value)) {
+            value = CSEncryptionUtils.decrypt(value);
+        }
+        
+        // Then convert to the appropriate type
         if (type == String.class) {
             return value;
         } else if (type == Integer.class || type == int.class) {

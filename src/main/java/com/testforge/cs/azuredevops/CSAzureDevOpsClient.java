@@ -2,6 +2,7 @@ package com.testforge.cs.azuredevops;
 
 import com.testforge.cs.api.CSHttpClient;
 import com.testforge.cs.api.CSHttpResponse;
+import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.exceptions.CSAzureDevOpsException;
 import com.testforge.cs.utils.CSJsonUtils;
 import org.slf4j.Logger;
@@ -36,7 +37,36 @@ public class CSAzureDevOpsClient {
         this.personalAccessToken = personalAccessToken;
         this.baseUrl = String.format("https://dev.azure.com/%s/%s/_apis", organization, project);
         
-        this.httpClient = new CSHttpClient(baseUrl, Duration.ofSeconds(60));
+        // Check for proxy configuration
+        CSConfigManager config = CSConfigManager.getInstance();
+        boolean proxyEnabled = config.getBooleanProperty("azure.devops.proxy.enabled", false);
+        
+        if (proxyEnabled) {
+            String proxyHost = config.getProperty("azure.devops.proxy.server");
+            int proxyPort = config.getIntProperty("azure.devops.proxy.port", 8080);
+            
+            if (proxyHost != null && !proxyHost.isEmpty()) {
+                // Check for proxy authentication
+                String proxyUsername = config.getProperty("azure.devops.proxy.username");
+                String proxyPassword = config.getProperty("azure.devops.proxy.password");
+                
+                if (proxyUsername != null && !proxyUsername.isEmpty() && 
+                    proxyPassword != null && !proxyPassword.isEmpty()) {
+                    logger.info("Azure DevOps client will use authenticated proxy: {}:{} with user: {}", 
+                               proxyHost, proxyPort, proxyUsername);
+                    this.httpClient = new CSHttpClient(baseUrl, Duration.ofSeconds(60), 
+                                                       proxyHost, proxyPort, proxyUsername, proxyPassword);
+                } else {
+                    logger.info("Azure DevOps client will use proxy: {}:{}", proxyHost, proxyPort);
+                    this.httpClient = new CSHttpClient(baseUrl, Duration.ofSeconds(60), proxyHost, proxyPort);
+                }
+            } else {
+                logger.warn("Proxy is enabled but proxy.server is not configured. Proceeding without proxy.");
+                this.httpClient = new CSHttpClient(baseUrl, Duration.ofSeconds(60));
+            }
+        } else {
+            this.httpClient = new CSHttpClient(baseUrl, Duration.ofSeconds(60));
+        }
         
         // Set authentication header
         String authHeader = Base64.getEncoder().encodeToString(

@@ -1,6 +1,7 @@
 package com.testforge.cs.config;
 
 import com.testforge.cs.exceptions.CSConfigurationException;
+import com.testforge.cs.security.CSEncryptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,6 +127,7 @@ public class CSConfigManager {
     
     /**
      * Get property value
+     * Automatically decrypts values that are encrypted (wrapped in ENC())
      */
     public String getProperty(String key) {
         String value = System.getProperty(key);
@@ -134,7 +136,16 @@ public class CSConfigManager {
         }
         if (value == null) {
             logger.warn("Property not found: {}", key);
+            return null;
         }
+        
+        // Automatically decrypt if the value is encrypted
+        if (CSEncryptionUtils.isEncrypted(value)) {
+            String decrypted = CSEncryptionUtils.decrypt(value);
+            logger.debug("Decrypted value for key: {}", key);
+            return decrypted;
+        }
+        
         return value;
     }
     

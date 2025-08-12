@@ -1,0 +1,14 @@
+<\!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="WSL Chrome Test Suite" parallel="none">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <test name="Chrome Test in WSL">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

@@ -1,0 +1,26 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="ADO Tagged Test Suite" verbose="2">
+    <parameter name="browserName" value="chrome"/>
+    <parameter name="headless" value="false"/>
+    
+    <!-- Test configuration for Azure DevOps tagged tests -->
+    <test name="ADO Tagged Tests">
+        <classes>
+            <!-- Test class using annotations for ADO mapping -->
+            <class name="com.testforge.cs.tests.CSADOMappedTest">
+                <methods>
+                    <include name="testADOCase419_ValidLogin"/>
+                    <include name="testADOCase420_InvalidLogin"/>
+                </methods>
+            </class>
+            
+            <!-- Test class using tags in descriptions -->
+            <class name="com.testforge.cs.tests.CSADOTaggedTest">
+                <methods>
+                    <include name="testUserProfileUpdate"/>
+                    <include name="testCase422_LeaveRequest"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+</suite>

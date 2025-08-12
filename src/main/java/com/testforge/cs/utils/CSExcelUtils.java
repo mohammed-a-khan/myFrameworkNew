@@ -1,6 +1,7 @@
 package com.testforge.cs.utils;
 
 import com.testforge.cs.exceptions.CSDataException;
+import com.testforge.cs.security.CSEncryptionUtils;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -416,42 +417,56 @@ public class CSExcelUtils {
     
     /**
      * Get cell value as string
+     * Automatically decrypts encrypted values (wrapped in ENC())
      */
     private static String getCellValueAsString(Cell cell) {
         if (cell == null) {
             return "";
         }
         
+        String value = "";
         switch (cell.getCellType()) {
             case STRING:
-                return cell.getStringCellValue();
+                value = cell.getStringCellValue();
+                break;
             case NUMERIC:
                 if (DateUtil.isCellDateFormatted(cell)) {
                     Date date = cell.getDateCellValue();
                     LocalDateTime localDateTime = date.toInstant()
                         .atZone(ZoneId.systemDefault())
                         .toLocalDateTime();
-                    return localDateTime.toString();
+                    value = localDateTime.toString();
                 } else {
-                    double value = cell.getNumericCellValue();
-                    if (value == Math.floor(value)) {
-                        return String.valueOf((long) value);
+                    double numValue = cell.getNumericCellValue();
+                    if (numValue == Math.floor(numValue)) {
+                        value = String.valueOf((long) numValue);
+                    } else {
+                        value = String.valueOf(numValue);
                     }
-                    return String.valueOf(value);
                 }
+                break;
             case BOOLEAN:
-                return String.valueOf(cell.getBooleanCellValue());
+                value = String.valueOf(cell.getBooleanCellValue());
+                break;
             case FORMULA:
                 try {
-                    return String.valueOf(cell.getNumericCellValue());
+                    value = String.valueOf(cell.getNumericCellValue());
                 } catch (IllegalStateException e) {
-                    return cell.getStringCellValue();
+                    value = cell.getStringCellValue();
                 }
+                break;
             case BLANK:
                 return "";
             default:
-                return "";
+                value = "";
         }
+        
+        // Check if the value is encrypted and decrypt it
+        if (CSEncryptionUtils.isEncrypted(value)) {
+            value = CSEncryptionUtils.decrypt(value);
+        }
+        
+        return value;
     }
     
     /**

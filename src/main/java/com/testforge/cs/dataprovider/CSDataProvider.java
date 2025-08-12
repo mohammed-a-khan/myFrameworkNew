@@ -155,13 +155,14 @@ public class CSDataProvider {
     private static List<Map<String, Object>> loadJsonData(String path, CSDataSource dataSource) {
         String jsonContent = CSFileUtils.readTextFile(path);
         
-        // Try to parse as array first
+        // Try to parse as array first with automatic decryption
         try {
-            List<Map<String, Object>> jsonArray = CSJsonUtils.jsonToListOfMaps(jsonContent);
+            // Use the new method that automatically decrypts encrypted values
+            List<Map<String, Object>> jsonArray = CSJsonUtils.parseJsonArrayWithDecryption(jsonContent);
             return jsonArray;
         } catch (Exception e) {
-            // If not array, try as single object
-            Map<String, Object> singleObject = CSJsonUtils.jsonToMap(jsonContent);
+            // If not array, try as single object with automatic decryption
+            Map<String, Object> singleObject = CSJsonUtils.parseJsonWithDecryption(jsonContent);
             return Collections.singletonList(singleObject);
         }
     }

@@ -1,0 +1,17 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Azure DevOps BDD Test Suite" verbose="2" parallel="none">
+    
+    <!-- Parameters for BDD execution -->
+    <parameter name="browserName" value="chrome"/>
+    <parameter name="headless" value="false"/>
+    <parameter name="featuresPath" value="features/ado-mapped-tests.feature"/>
+    <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
+    
+    <!-- Test configuration for Azure DevOps BDD tests -->
+    <!-- CSBDDRunner will automatically detect ADO tags and publish to Azure DevOps if enabled -->
+    <test name="ADO BDD Tests">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>

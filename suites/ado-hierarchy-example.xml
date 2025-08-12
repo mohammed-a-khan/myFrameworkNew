@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="ADO Hierarchy Example Suite" parallel="tests" thread-count="2">
+    <!--
+    ================================
+    Azure DevOps Configuration Hierarchy
+    ================================
+    
+    The framework follows this priority order for Test Plan and Test Suite IDs:
+    1. HIGHEST PRIORITY: Suite XML parameters (defined below)
+    2. MEDIUM PRIORITY: Feature file tags (@TestPlanId:XXX, @TestSuiteId:XXX)
+    3. LOWEST PRIORITY: application.properties file (ado.test.plan.id, ado.test.suite.id)
+    
+    This allows flexible configuration where:
+    - Different suite XMLs can target different test plans/suites
+    - Feature files can override for specific scenarios
+    - Properties file provides default fallback values
+    -->
+    
+    <!-- Azure DevOps Test Plan and Suite Configuration -->
+    <!-- These values will override feature tags and properties -->
+    <parameter name="azure.devops.test.plan.id" value="500"/>
+    <parameter name="azure.devops.test.suite.id" value="501"/>
+    
+    <!-- Other BDD Configuration -->
+    <parameter name="featuresPath" value="features"/>
+    <parameter name="tags" value="@regression"/>
+    
+    <test name="BDD Tests with ADO Integration">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!--
+    Example Usage Scenarios:
+    
+    1. Run tests for Development Test Plan:
+       - Set azure.devops.test.plan.id = "100"
+       - Set azure.devops.test.suite.id = "101"
+    
+    2. Run tests for UAT Test Plan:
+       - Set azure.devops.test.plan.id = "200"
+       - Set azure.devops.test.suite.id = "201"
+    
+    3. Let feature files control the plan/suite:
+       - Remove or comment out the parameters above
+       - Use @TestPlanId:300 @TestSuiteId:301 in feature files
+    
+    4. Use default from properties:
+       - Remove parameters from suite XML
+       - Don't use tags in feature files
+       - Framework will use ado.test.plan.id from properties
+    -->
+</suite>

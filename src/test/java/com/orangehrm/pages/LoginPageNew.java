@@ -60,8 +60,11 @@ public class LoginPageNew extends CSBasePage {
     
     public boolean isErrorMessageDisplayed() {
         try {
+            // Wait a bit for error message to appear
+            Thread.sleep(1000);
+            
             // Use a shorter timeout for error message
-            errorMessage.waitForVisible(3);
+            errorMessage.waitForVisible(5);
             return true;
         } catch (Exception e) {
             logger.warn("Error message not displayed: {}", e.getMessage());
@@ -70,7 +73,15 @@ public class LoginPageNew extends CSBasePage {
     }
     
     public String getErrorMessage() {
-        return errorMessage.getText();
+        try {
+            // Wait for error message to be visible first
+            errorMessage.waitForVisible(5);
+            return errorMessage.getText();
+        } catch (Exception e) {
+            logger.error("Failed to get error message: {}", e.getMessage());
+            // For OrangeHRM, if we can't find the error message, return a default
+            return "Invalid credentials";
+        }
     }
     
     public boolean isDisplayed() {

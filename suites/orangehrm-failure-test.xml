@@ -1,5 +1,5 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="OrangeHRM Failure Test Suite" parallel="none">
+<suite name="OrangeHRM Failure Test Suite" parallel="methods" thread-count="2">
     
     <parameter name="browser.name" value="chrome"/>
     <parameter name="browser.headless" value="false"/>

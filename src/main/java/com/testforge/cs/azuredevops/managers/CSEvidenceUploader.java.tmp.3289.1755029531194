@@ -1,0 +1,562 @@
+package com.testforge.cs.azuredevops.managers;
+
+import com.testforge.cs.azuredevops.client.CSEnhancedADOClient;
+import com.testforge.cs.azuredevops.config.CSADOConfiguration;
+import com.testforge.cs.exceptions.CSAzureDevOpsException;
+import com.testforge.cs.screenshot.CSScreenshotUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+/**
+ * Manages uploading of test evidence (screenshots, videos, logs) to Azure DevOps
+ * Based on Playwright framework's EvidenceUploader
+ */
+public class CSEvidenceUploader {
+    private static final Logger logger = LoggerFactory.getLogger(CSEvidenceUploader.class);
+    private static CSEvidenceUploader instance;
+    
+    private final CSEnhancedADOClient client;
+    private final CSADOConfiguration config;
+    private final ExecutorService uploadExecutor;
+    private final Queue<UploadTask> uploadQueue;
+    private final Map<String, CompletableFuture<String>> uploadFutures;
+    
+    // File size limits
+    private static final long MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+    private static final long MAX_ARCHIVE_SIZE = 500 * 1024 * 1024; // 500 MB
+    
+    private CSEvidenceUploader() {
+        this.client = CSEnhancedADOClient.getInstance();
+        this.config = CSADOConfiguration.getInstance();
+        this.uploadExecutor = Executors.newFixedThreadPool(3);
+        this.uploadQueue = new ConcurrentLinkedQueue<>();
+        this.uploadFutures = new ConcurrentHashMap<>();
+    }
+    
+    public static synchronized CSEvidenceUploader getInstance() {
+        if (instance == null) {
+            instance = new CSEvidenceUploader();
+        }
+        return instance;
+    }
+    
+    /**
+     * Upload screenshot for test result
+     */
+    public CompletableFuture<String> uploadScreenshot(
+            String runId, 
+            String resultId, 
+            String screenshotPath,
+            String testName) {
+        
+        if (!config.isUploadScreenshots()) {
+            logger.debug("Screenshot upload disabled");
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        File file = new File(screenshotPath);
+        if (!file.exists()) {
+            logger.warn("Screenshot file not found: {}", screenshotPath);
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        String fileName = String.format("screenshot_%s_%s.png", 
+            testName.replaceAll("[^a-zA-Z0-9]", "_"),
+            System.currentTimeMillis());
+        
+        return uploadFile(runId, resultId, file, fileName, "image/png", "Screenshot");
+    }
+    
+    /**
+     * Upload video for test result
+     */
+    public CompletableFuture<String> uploadVideo(
+            String runId,
+            String resultId,
+            String videoPath,
+            String testName) {
+        
+        if (!config.isUploadVideos()) {
+            logger.debug("Video upload disabled");
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        File file = new File(videoPath);
+        if (!file.exists()) {
+            logger.warn("Video file not found: {}", videoPath);
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        String fileName = String.format("video_%s_%s.mp4",
+            testName.replaceAll("[^a-zA-Z0-9]", "_"),
+            System.currentTimeMillis());
+        
+        return uploadFile(runId, resultId, file, fileName, "video/mp4", "Video");
+    }
+    
+    /**
+     * Upload log file for test result
+     */
+    public CompletableFuture<String> uploadLog(
+            String runId,
+            String resultId,
+            String logPath,
+            String testName) {
+        
+        if (!config.isUploadLogs()) {
+            logger.debug("Log upload disabled");
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        File file = new File(logPath);
+        if (!file.exists()) {
+            logger.warn("Log file not found: {}", logPath);
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        String fileName = String.format("log_%s_%s.txt",
+            testName.replaceAll("[^a-zA-Z0-9]", "_"),
+            System.currentTimeMillis());
+        
+        return uploadFile(runId, resultId, file, fileName, "text/plain", "Log");
+    }
+    
+    /**
+     * Upload multiple files as archive
+     */
+    public CompletableFuture<String> uploadFilesAsArchive(
+            String runId,
+            String resultId,
+            List<String> filePaths,
+            String archiveName) {
+        
+        if (!config.isUploadAttachments()) {
+            logger.debug("Attachment upload disabled");
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // Create temporary archive
+                File archiveFile = createArchive(filePaths, archiveName);
+                
+                // Upload archive
+                String attachmentId = uploadFileSync(
+                    runId, 
+                    resultId, 
+                    archiveFile, 
+                    archiveName + ".zip",
+                    "application/zip",
+                    "Archive"
+                );
+                
+                // Clean up temporary file
+                archiveFile.delete();
+                
+                return attachmentId;
+                
+            } catch (Exception e) {
+                logger.error("Failed to upload archive: {}", archiveName, e);
+                throw new CSAzureDevOpsException("Failed to upload archive", e);
+            }
+        }, uploadExecutor);
+    }
+    
+    /**
+     * Upload file asynchronously
+     */
+    private CompletableFuture<String> uploadFile(
+            String runId,
+            String resultId,
+            File file,
+            String fileName,
+            String contentType,
+            String attachmentType) {
+        
+        // Check file size
+        if (file.length() > MAX_FILE_SIZE) {
+            logger.warn("File too large for upload: {} ({} bytes)", fileName, file.length());
+            return CompletableFuture.completedFuture(null);
+        }
+        
+        // Check if already uploading
+        String uploadKey = runId + "_" + resultId + "_" + fileName;
+        if (uploadFutures.containsKey(uploadKey)) {
+            return uploadFutures.get(uploadKey);
+        }
+        
+        CompletableFuture<String> future = CompletableFuture.supplyAsync(() -> {
+            try {
+                return uploadFileSync(runId, resultId, file, fileName, contentType, attachmentType);
+            } catch (Exception e) {
+                logger.error("Failed to upload file: {}", fileName, e);
+                throw new CSAzureDevOpsException("Failed to upload file", e);
+            }
+        }, uploadExecutor);
+        
+        uploadFutures.put(uploadKey, future);
+        
+        // Remove from map when complete
+        future.whenComplete((result, error) -> uploadFutures.remove(uploadKey));
+        
+        return future;
+    }
+    
+    /**
+     * Upload file synchronously
+     */
+    private String uploadFileSync(
+            String runId,
+            String resultId,
+            File file,
+            String fileName,
+            String contentType,
+            String attachmentType) {
+        
+        try {
+            logger.info("Uploading {} for test result: {}", attachmentType, resultId);
+            
+            // Read file content
+            byte[] content = Files.readAllBytes(file.toPath());
+            
+            // Upload to Azure DevOps attachments API
+            CSEnhancedADOClient.ADOAttachmentResponse attachmentResponse = 
+                client.uploadAttachment(content, fileName, contentType);
+            
+            // Link attachment to test result
+            linkAttachmentToTestResult(runId, resultId, attachmentResponse.id, fileName, attachmentType);
+            
+            logger.info("Successfully uploaded {}: {} (ID: {})", 
+                attachmentType, fileName, attachmentResponse.id);
+            
+            return attachmentResponse.id;
+            
+        } catch (Exception e) {
+            logger.error("Failed to upload file: {}", fileName, e);
+            throw new CSAzureDevOpsException("Failed to upload file", e);
+        }
+    }
+    
+    /**
+     * Link attachment to test result
+     */
+    private void linkAttachmentToTestResult(
+            String runId,
+            String resultId,
+            String attachmentId,
+            String fileName,
+            String attachmentType) {
+        
+        try {
+            String url = config.buildUrl(
+                config.getEndpoints().getTestResults(),
+                Map.of("runId", runId)
+            ) + "/" + resultId + "/attachments";
+            
+            Map<String, Object> attachmentData = new HashMap<>();
+            attachmentData.put("stream", attachmentId);
+            attachmentData.put("fileName", fileName);
+            attachmentData.put("comment", "Uploaded by CS TestForge Framework");
+            attachmentData.put("attachmentType", attachmentType);
+            
+            client.post(url, attachmentData, Map.class);
+            
+            logger.debug("Linked attachment {} to test result {}", attachmentId, resultId);
+            
+        } catch (Exception e) {
+            logger.error("Failed to link attachment to test result", e);
+            // Don't throw - attachment is uploaded, just not linked
+        }
+    }
+    
+    /**
+     * Create archive from files
+     */
+    private File createArchive(List<String> filePaths, String archiveName) throws IOException {
+        File tempFile = File.createTempFile(archiveName, ".zip");
+        
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tempFile))) {
+            for (String filePath : filePaths) {
+                File file = new File(filePath);
+                if (file.exists() && file.isFile()) {
+                    addFileToZip(file, zos);
+                }
+            }
+        }
+        
+        // Check archive size
+        if (tempFile.length() > MAX_ARCHIVE_SIZE) {
+            tempFile.delete();
+            throw new CSAzureDevOpsException("Archive too large: " + tempFile.length() + " bytes");
+        }
+        
+        return tempFile;
+    }
+    
+    /**
+     * Add file to zip archive
+     */
+    private void addFileToZip(File file, ZipOutputStream zos) throws IOException {
+        ZipEntry entry = new ZipEntry(file.getName());
+        zos.putNextEntry(entry);
+        
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] buffer = new byte[8192];
+            int length;
+            while ((length = fis.read(buffer)) > 0) {
+                zos.write(buffer, 0, length);
+            }
+        }
+        
+        zos.closeEntry();
+    }
+    
+    /**
+     * Upload all screenshots for a test
+     */
+    public List<CompletableFuture<String>> uploadTestEvidence(
+            String runId,
+            String resultId,
+            String testName) {
+        
+        List<CompletableFuture<String>> futures = new ArrayList<>();
+        
+        // Get screenshot directories - check both target/screenshots and screenshots
+        String[] screenshotDirs = {"target/screenshots", "screenshots", "test-output/screenshots"};
+        
+        for (String screenshotDir : screenshotDirs) {
+            File dir = new File(screenshotDir);
+            if (dir.exists() && dir.isDirectory()) {
+                // Find all screenshots - look for any PNG file in the directory
+                File[] screenshots = dir.listFiles((d, name) -> name.endsWith(".png"));
+                
+                if (screenshots != null && screenshots.length > 0) {
+                    logger.info("Found {} screenshots in {} for test: {}", 
+                        screenshots.length, screenshotDir, testName);
+                    
+                    for (File screenshot : screenshots) {
+                        // Check if this screenshot is related to current test or recent (within last 5 minutes)
+                        long ageInMillis = System.currentTimeMillis() - screenshot.lastModified();
+                        if (ageInMillis < 5 * 60 * 1000) { // 5 minutes
+                            logger.debug("Uploading screenshot: {}", screenshot.getName());
+                            futures.add(uploadScreenshot(runId, resultId, screenshot.getAbsolutePath(), testName));
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (futures.isEmpty()) {
+            logger.debug("No screenshots found to upload for test: {}", testName);
+        }
+        
+        // TODO: Add video and log upload logic based on your framework's structure
+        
+        return futures;
+    }
+    
+    /**
+     * Upload entire test report folder as a zip attachment to test run
+     */
+    public CompletableFuture<String> uploadTestReportFolder(String runId) {
+        try {
+            // Find the latest test report folder
+            File reportsDir = new File("cs-reports");
+            if (!reportsDir.exists() || !reportsDir.isDirectory()) {
+                logger.warn("Reports directory not found: cs-reports");
+                return CompletableFuture.completedFuture(null);
+            }
+            
+            // Find the latest test-run folder
+            File[] testRunFolders = reportsDir.listFiles((dir, name) -> 
+                name.startsWith("test-run-") && new File(dir, name).isDirectory());
+            
+            if (testRunFolders == null || testRunFolders.length == 0) {
+                logger.warn("No test run folders found in cs-reports");
+                return CompletableFuture.completedFuture(null);
+            }
+            
+            // Sort by modification time to get the latest
+            Arrays.sort(testRunFolders, (a, b) -> 
+                Long.compare(b.lastModified(), a.lastModified()));
+            
+            File latestTestRun = testRunFolders[0];
+            logger.info("Found latest test report folder: {}", latestTestRun.getName());
+            
+            // Create zip file of the entire test run folder
+            String zipFileName = String.format("test-evidence-%s-%s.zip", 
+                runId, System.currentTimeMillis());
+            File zipFile = new File(System.getProperty("java.io.tmpdir"), zipFileName);
+            
+            createZipFromFolder(latestTestRun, zipFile);
+            logger.info("Created evidence zip: {} ({} bytes)", 
+                zipFile.getName(), zipFile.length());
+            
+            // Upload the zip file to the test run
+            return uploadFileToTestRun(runId, zipFile, zipFileName, 
+                "application/zip", "Complete Test Evidence");
+            
+        } catch (Exception e) {
+            logger.error("Failed to upload test report folder", e);
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    /**
+     * Create a zip file from a folder
+     */
+    private void createZipFromFolder(File sourceFolder, File zipFile) throws IOException {
+        try (FileOutputStream fos = new FileOutputStream(zipFile);
+             ZipOutputStream zos = new ZipOutputStream(fos)) {
+            
+            zipFolder(sourceFolder, sourceFolder.getName(), zos);
+            logger.info("Created zip archive: {} from folder: {}", 
+                zipFile.getAbsolutePath(), sourceFolder.getAbsolutePath());
+        }
+    }
+    
+    /**
+     * Recursively zip a folder
+     */
+    private void zipFolder(File folder, String parentPath, ZipOutputStream zos) throws IOException {
+        File[] files = folder.listFiles();
+        if (files == null) return;
+        
+        for (File file : files) {
+            String entryName = parentPath + "/" + file.getName();
+            
+            if (file.isDirectory()) {
+                // Add directory entry
+                zos.putNextEntry(new ZipEntry(entryName + "/"));
+                zos.closeEntry();
+                // Recursively add directory contents
+                zipFolder(file, entryName, zos);
+            } else {
+                // Add file entry
+                zos.putNextEntry(new ZipEntry(entryName));
+                Files.copy(file.toPath(), zos);
+                zos.closeEntry();
+            }
+        }
+    }
+    
+    /**
+     * Upload file directly to test run (not test result)
+     */
+    private CompletableFuture<String> uploadFileToTestRun(
+            String runId,
+            File file,
+            String fileName,
+            String contentType,
+            String comment) {
+        
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // First upload the file stream
+                String attachmentUrl = config.buildUrl(
+                    "/test/runs/" + runId + "/attachments",
+                    Map.of("api-version", config.getApiVersion())
+                );
+                
+                // Create attachment metadata
+                Map<String, Object> attachmentData = new HashMap<>();
+                attachmentData.put("stream", Base64.getEncoder().encodeToString(
+                    Files.readAllBytes(file.toPath())));
+                attachmentData.put("fileName", fileName);
+                attachmentData.put("comment", comment);
+                attachmentData.put("attachmentType", "GeneralAttachment");
+                
+                CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                    client.post(attachmentUrl, attachmentData, Map.class);
+                
+                if (response.data != null && response.data.containsKey("id")) {
+                    String attachmentId = response.data.get("id").toString();
+                    logger.info("Uploaded {} to test run {} (ID: {})", 
+                        fileName, runId, attachmentId);
+                    
+                    // Clean up temp file
+                    if (file.getName().startsWith("test-evidence-")) {
+                        file.delete();
+                    }
+                    
+                    return attachmentId;
+                }
+                
+                return null;
+                
+            } catch (Exception e) {
+                logger.error("Failed to upload file to test run: {}", fileName, e);
+                return null;
+            }
+        }, uploadExecutor);
+    }
+    
+    /**
+     * Process upload queue
+     */
+    public void processUploadQueue() {
+        while (!uploadQueue.isEmpty()) {
+            UploadTask task = uploadQueue.poll();
+            if (task != null) {
+                task.execute();
+            }
+        }
+    }
+    
+    /**
+     * Wait for all uploads to complete
+     */
+    public void waitForUploads(long timeout, TimeUnit unit) {
+        try {
+            List<CompletableFuture<String>> allFutures = new ArrayList<>(uploadFutures.values());
+            CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0]))
+                .get(timeout, unit);
+        } catch (Exception e) {
+            logger.warn("Some uploads did not complete within timeout", e);
+        }
+    }
+    
+    /**
+     * Shutdown uploader
+     */
+    public void shutdown() {
+        logger.info("Shutting down evidence uploader");
+        
+        // Wait for remaining uploads
+        waitForUploads(30, TimeUnit.SECONDS);
+        
+        // Shutdown executor
+        uploadExecutor.shutdown();
+        try {
+            if (!uploadExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                uploadExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            uploadExecutor.shutdownNow();
+        }
+    }
+    
+    /**
+     * Upload task for queue
+     */
+    private static class UploadTask {
+        private final Runnable task;
+        
+        public UploadTask(Runnable task) {
+            this.task = task;
+        }
+        
+        public void execute() {
+            task.run();
+        }
+    }
+}

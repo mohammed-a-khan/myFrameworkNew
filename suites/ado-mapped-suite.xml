@@ -1,0 +1,32 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Azure DevOps Mapped Test Suite" verbose="2">
+    
+    <!-- Azure DevOps Configuration Parameters -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="false"/>
+    <parameter name="browser.implicit.wait" value="10"/>
+    <parameter name="browser.page.load.timeout" value="30"/>
+    <parameter name="browser.script.timeout" value="30"/>
+    
+    <!-- Test Run Configuration -->
+    <parameter name="take.screenshot.on.failure" value="true"/>
+    <parameter name="take.screenshot.on.success" value="true"/>
+    <parameter name="report.directory" value="reports/ado-integration"/>
+    
+    <!-- Azure DevOps specific parameters -->
+    <parameter name="azure.devops.enabled" value="true"/>
+    <parameter name="azure.devops.test.plan.id" value="417"/>
+    <parameter name="azure.devops.test.suite.id" value="418"/>
+    
+    <test name="ADO Mapped Tests">
+        <classes>
+            <class name="com.testforge.cs.tests.CSADOMappedTest">
+                <methods>
+                    <include name="testADOCase419_ValidLogin"/>
+                    <include name="testADOCase420_InvalidLogin"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+</suite>

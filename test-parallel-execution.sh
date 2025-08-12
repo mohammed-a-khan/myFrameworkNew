@@ -1,24 +1,34 @@
-#!/bin/bash
+#\!/bin/bash
 
-echo "======================================"
-echo "Testing Parallel Execution Fix"
-echo "======================================"
+echo "==========================================="
+echo "Testing Parallel Execution with 2 Threads"
+echo "==========================================="
 echo ""
-echo "This test should:"
-echo "1. Open 3 browsers simultaneously"
-echo "2. Execute tests in all 3 browsers in parallel"
-echo "3. Each browser should complete its test"
-echo ""
-echo "Running: mvn clean test -DsuiteXmlFile=suites/orangehrm-failure-test.xml"
-echo "======================================"
 
-mvn clean test -DsuiteXmlFile=suites/orangehrm-failure-test.xml
+# Create a test suite for parallel testing
+cat > suites/test-parallel.xml << 'XMLEOF'
+<\!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Parallel Test Suite" parallel="methods" thread-count="2">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="false"/>
+    <parameter name="browser.reuse.instance" value="true"/>
+    
+    <test name="Parallel Test">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>
+XMLEOF
+
+echo "Test suite created: suites/test-parallel.xml"
+echo "Running parallel test with thread-count=2..."
+echo ""
+
+# Run the test
+mvn test -DsuiteXmlFile=suites/test-parallel.xml 2>&1 | tee parallel-test.log
 
 echo ""
-echo "======================================"
-echo "Test execution completed!"
-echo "Check the logs above to verify:"
-echo "- 3 browsers opened"
-echo "- All 3 tests executed"
-echo "- Thread distribution shows 3 different threads"
-echo "======================================" 
+echo "Test complete. Check parallel-test.log for details."

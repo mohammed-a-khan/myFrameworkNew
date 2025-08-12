@@ -6,6 +6,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.Authenticator;
+import java.net.InetSocketAddress;
+import java.net.PasswordAuthentication;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -47,13 +51,52 @@ public class CSHttpClient {
      * Create HTTP client with base URL and timeout
      */
     public CSHttpClient(String baseUrl, Duration timeout) {
+        this(baseUrl, timeout, null, 0);
+    }
+    
+    /**
+     * Create HTTP client with base URL, timeout, and proxy configuration
+     */
+    public CSHttpClient(String baseUrl, Duration timeout, String proxyHost, int proxyPort) {
+        this(baseUrl, timeout, proxyHost, proxyPort, null, null);
+    }
+    
+    /**
+     * Create HTTP client with base URL, timeout, proxy configuration, and authentication
+     */
+    public CSHttpClient(String baseUrl, Duration timeout, String proxyHost, int proxyPort, 
+                       String proxyUsername, String proxyPassword) {
         this.baseUrl = baseUrl;
         this.defaultTimeout = timeout;
         this.defaultHeaders = new HashMap<>();
-        this.httpClient = HttpClient.newBuilder()
+        
+        HttpClient.Builder clientBuilder = HttpClient.newBuilder()
             .connectTimeout(timeout)
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+            .followRedirects(HttpClient.Redirect.NORMAL);
+        
+        // Configure proxy if provided
+        if (proxyHost != null && !proxyHost.isEmpty() && proxyPort > 0) {
+            logger.info("Configuring HTTP client with proxy: {}:{}", proxyHost, proxyPort);
+            InetSocketAddress proxyAddress = new InetSocketAddress(proxyHost, proxyPort);
+            clientBuilder.proxy(ProxySelector.of(proxyAddress));
+            
+            // Configure proxy authentication if provided
+            if (proxyUsername != null && !proxyUsername.isEmpty() && 
+                proxyPassword != null && !proxyPassword.isEmpty()) {
+                logger.info("Configuring proxy authentication for user: {}", proxyUsername);
+                clientBuilder.authenticator(new Authenticator() {
+                    @Override
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        if (getRequestorType() == RequestorType.PROXY) {
+                            return new PasswordAuthentication(proxyUsername, proxyPassword.toCharArray());
+                        }
+                        return null;
+                    }
+                });
+            }
+        }
+        
+        this.httpClient = clientBuilder.build();
         
         // Set default headers
         defaultHeaders.put("User-Agent", "CS-TestForge-Framework/1.0");

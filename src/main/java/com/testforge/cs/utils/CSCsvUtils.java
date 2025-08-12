@@ -1,6 +1,7 @@
 package com.testforge.cs.utils;
 
 import com.testforge.cs.exceptions.CSDataException;
+import com.testforge.cs.security.CSEncryptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,7 +86,12 @@ public class CSCsvUtils {
                 
                 Map<String, String> row = new LinkedHashMap<>();
                 for (int i = 0; i < headers.size() && i < values.size(); i++) {
-                    row.put(headers.get(i), values.get(i));
+                    String value = values.get(i);
+                    // Decrypt encrypted values
+                    if (CSEncryptionUtils.isEncrypted(value)) {
+                        value = CSEncryptionUtils.decrypt(value);
+                    }
+                    row.put(headers.get(i), value);
                 }
                 
                 // Add empty values for missing columns

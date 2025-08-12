@@ -43,11 +43,19 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         loginPage.navigateTo();
     }
     
+    @CSStep(description = "I am on the OrangeHRM login page")
+    public void navigateToOrangeHRMLoginPage() {
+        logger.info("Navigating to OrangeHRM login page");
+        loginPage = getPage(LoginPageNew.class);
+        loginPage.navigateTo();
+    }
+    
     @CSStep(description = "I am on the {pageName} page")
     public void navigateToPage(String pageName) {
         logger.info("Navigating to {} page", pageName);
         switch (pageName.toLowerCase()) {
             case "login":
+            case "orangehrm login":
                 loginPage = getPage(LoginPageNew.class);
                 loginPage.navigateTo();
                 break;
@@ -358,6 +366,44 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         }
     }
     
+    @CSStep(description = "I should see the dashboard page")
+    public void shouldSeeDashboardPage() {
+        logger.info("Verifying dashboard page is displayed");
+        dashboardPage = getPage(DashboardPageNew.class);
+        assertTrue(dashboardPage.isDisplayed(), "Dashboard page should be displayed");
+        CSReportManager.getInstance().logInfo("Dashboard page is displayed");
+    }
+    
+    @CSStep(description = "the dashboard header should display {headerText}")
+    public void dashboardHeaderShouldDisplay(String headerText) {
+        logger.info("Verifying dashboard header displays: {}", headerText);
+        dashboardPage = getPage(DashboardPageNew.class);
+        String actualHeader = dashboardPage.getHeaderText();
+        assertTrue(actualHeader.contains(headerText), 
+            "Dashboard header should contain '" + headerText + "' but was '" + actualHeader + "'");
+        CSReportManager.getInstance().logInfo("Dashboard header displays: " + headerText);
+    }
+    
+    @CSStep(description = "I should see an error message containing {errorText}")
+    public void shouldSeeErrorMessageContaining(String errorText) {
+        logger.info("Verifying error message contains: {}", errorText);
+        loginPage = getPage(LoginPageNew.class);
+        String actualMessage = loginPage.getErrorMessage();
+        assertTrue(actualMessage.contains(errorText), 
+            "Error message should contain '" + errorText + "' but was '" + actualMessage + "'");
+        CSReportManager.getInstance().logInfo("Error message contains: " + errorText);
+    }
+    
+    @CSStep(description = "I should remain on the login page")
+    public void shouldRemainOnLoginPage() {
+        logger.info("Verifying user remains on login page");
+        loginPage = getPage(LoginPageNew.class);
+        assertTrue(loginPage.isDisplayed(), "Should remain on login page");
+        assertTrue(getDriver().getCurrentUrl().contains("login"), 
+            "URL should contain 'login' but was: " + getDriver().getCurrentUrl());
+        CSReportManager.getInstance().logInfo("User remains on login page");
+    }
+    
     // ================== ACTION STEPS ==================
     
     @CSStep(description = "I click the {buttonName} button")
@@ -415,6 +461,14 @@ public class OrangeHRMSteps extends CSStepDefinitions {
                 }
             }
         }
+    }
+    
+    @CSStep(description = "I log the current URL")
+    public void logCurrentUrl() {
+        String currentUrl = getDriver().getCurrentUrl();
+        logger.info("Current URL: {}", currentUrl);
+        CSReportManager.getInstance().logInfo("Current URL: " + currentUrl);
+        System.out.println("DEBUG: CURRENT URL = " + currentUrl);
     }
     
     // ================== HELPER METHODS ==================

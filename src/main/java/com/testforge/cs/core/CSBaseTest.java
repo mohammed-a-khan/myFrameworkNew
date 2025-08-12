@@ -41,6 +41,7 @@ public abstract class CSBaseTest {
     protected CSTestResult testResult;
     protected CSReportManager reportManager;
     protected CSWaitUtils waitUtils;
+    protected ITestContext testContext;
     
     private static final ThreadLocal<Map<String, Object>> threadLocalData = ThreadLocal.withInitial(HashMap::new);
     private static final Map<String, CSTestResult> testResults = new ConcurrentHashMap<>();
@@ -72,8 +73,14 @@ public abstract class CSBaseTest {
         // Generate final report
         CSReportManager.getInstance().generateReport();
         
-        // Cleanup resources
+        // Properly close all WebDriver instances managed by the framework
+        logger.info("Closing all test browser instances...");
         CSWebDriverManager.quitAllDrivers();
+        
+        // DO NOT kill browser processes - this would close user's personal browsers
+        // The quitAllDrivers() method should properly close all test browsers
+        // If browsers remain open, it's a driver management issue that needs fixing
+        
         CSDbUtils.closeAllDataSources();
     }
     
@@ -83,12 +90,32 @@ public abstract class CSBaseTest {
     @BeforeClass(alwaysRun = true)
     public void setupClass(ITestContext context) {
         logger.info("Setting up test class: {}", this.getClass().getSimpleName());
+        this.testContext = context;
         
         // Set maximum browsers based on suite configuration (do it here since BeforeSuite can't have parameters)
         String parallelMode = context.getSuite().getParallel();
         int threadCount = context.getSuite().getXmlSuite().getThreadCount();
         
-        if (parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false")) {
+        // Check if IE is being used - IE doesn't handle parallel execution well
+        String browserName = context.getCurrentXmlTest() != null ? 
+            context.getCurrentXmlTest().getParameter("browser.name") : 
+            config.getProperty("browser.name", "chrome");
+        
+        // IMPORTANT: For parallel="methods", limit browsers to thread count
+        // This prevents creating extra browser instances that remain idle
+        if ("methods".equals(parallelMode) || "tests".equals(parallelMode) || "classes".equals(parallelMode)) {
+            logger.info("Parallel mode '{}' detected with {} threads - limiting browsers to thread count", 
+                parallelMode, threadCount);
+            CSWebDriverManager.setMaxBrowsersAllowed(threadCount);
+        }
+        
+        if ("ie".equalsIgnoreCase(browserName) || "internet explorer".equalsIgnoreCase(browserName)) {
+            // Force sequential execution for IE
+            CSWebDriverManager.setMaxBrowsersAllowed(1);
+            logger.warn("Internet Explorer detected - forcing sequential execution (max 1 browser)");
+            logger.warn("IE does not handle parallel execution well. Tests will run sequentially.");
+            logger.warn("Consider using Edge or Chrome for parallel test execution.");
+        } else if (parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false")) {
             // In parallel mode, limit browsers to thread count
             CSWebDriverManager.setMaxBrowsersAllowed(threadCount);
             logger.info("Parallel mode '{}' with thread-count={}: Limiting browsers to {}", 
@@ -120,6 +147,9 @@ public abstract class CSBaseTest {
     @BeforeMethod(alwaysRun = true)
     public void setupTest(Method method, Object[] params, ITestContext context) {
         try {
+            // Store test context
+            this.testContext = context;
+            
             // Get test information
             testName = method.getName();
             testId = UUID.randomUUID().toString();
@@ -176,11 +206,15 @@ public abstract class CSBaseTest {
                     logger.info("[{}] Thread ID {} - Parallel mode ({})", 
                         threadName, threadId, parallelMode);
                     
-                    // ALWAYS check ThreadLocal first to reuse existing driver
-                    driver = CSWebDriverManager.getDriver();
+                    // Check if browser should be reused
+                    boolean reuseBrowser = config.getBooleanProperty("browser.reuse.instance", true);
+                    
+                    // Check ThreadLocal for existing driver only if reuse is enabled
+                    driver = reuseBrowser ? CSWebDriverManager.getDriver() : null;
                     
                     if (driver == null) {
-                        logger.info("[{}] No existing driver in ThreadLocal, will create new one", threadName);
+                        logger.info("[{}] {} - will create new driver", threadName, 
+                            reuseBrowser ? "No existing driver in ThreadLocal" : "Browser reuse disabled");
                         // No driver for this thread yet, create a new one
                         String browserType = getBrowserType(method);
                         boolean headless = config.getBooleanProperty("browser.headless", false);
@@ -206,7 +240,8 @@ public abstract class CSBaseTest {
                     }
                 } else {
                     // Non-parallel mode - check for existing driver
-                    driver = CSWebDriverManager.getDriver();
+                    boolean reuseBrowser = config.getBooleanProperty("browser.reuse.instance", true);
+                    driver = reuseBrowser ? CSWebDriverManager.getDriver() : null;
                     if (driver == null) {
                         String browserType = getBrowserType(method);
                         boolean headless = config.getBooleanProperty("browser.headless", false);
@@ -214,7 +249,7 @@ public abstract class CSBaseTest {
                         driver = CSWebDriverManager.createDriver(browserType, headless, null);
                         logger.info("[{}] Driver created: {}", threadName, driver);
                     } else {
-                        logger.info("[{}] Reusing existing driver for thread", threadName);
+                        logger.info("[{}] Reusing existing driver for thread (browser.reuse.instance=true)", threadName);
                         // Clear cookies but don't navigate to about:blank as it creates confusion
                         // The test will navigate to the appropriate URL
                         try {
@@ -292,12 +327,20 @@ public abstract class CSBaseTest {
             String parallelMode = result.getTestContext().getSuite().getParallel();
             boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
             
-            if (isParallel) {
+            // Check if browser should be reused or closed after each test
+            boolean reuseBrowser = config.getBooleanProperty("browser.reuse.instance", true);
+            
+            if (!reuseBrowser) {
+                // Close browser after each test when reuse is disabled
+                logger.info("[{}] Closing browser after test (browser.reuse.instance=false)", Thread.currentThread().getName());
+                CSWebDriverManager.quitDriver();
+                driver = null;
+            } else if (isParallel) {
                 // Keep browser open for thread reuse in parallel mode
-                logger.info("[{}] Keeping browser open for thread reuse in parallel mode", Thread.currentThread().getName());
+                logger.info("[{}] Keeping browser open for thread reuse in parallel mode (browser.reuse.instance=true)", Thread.currentThread().getName());
             } else {
-                // In sequential mode, we can close after each test if needed
-                logger.info("[{}] Sequential mode - keeping browser for next test", Thread.currentThread().getName());
+                // In sequential mode, keep browser for next test
+                logger.info("[{}] Sequential mode - keeping browser for next test (browser.reuse.instance=true)", Thread.currentThread().getName());
             }
             
             // Clear thread local data
@@ -505,12 +548,26 @@ public abstract class CSBaseTest {
      * Get browser type for test
      */
     private String getBrowserType(Method method) {
+        // First check if there's a CSTest annotation with browser specification
         CSTest csTest = method.getAnnotation(CSTest.class);
         if (csTest != null && csTest.browsers().length > 0) {
             // Return first browser for now (can be enhanced for multi-browser testing)
             return csTest.browsers()[0];
         }
-        return config.getProperty("browser.name", "chrome");
+        
+        // Then check TestNG parameters from suite XML
+        if (testContext != null && testContext.getCurrentXmlTest() != null) {
+            String browserParam = testContext.getCurrentXmlTest().getParameter("browser.name");
+            if (browserParam != null && !browserParam.isEmpty()) {
+                logger.info("Using browser from TestNG parameter: {}", browserParam);
+                return browserParam;
+            }
+        }
+        
+        // Finally fall back to properties file
+        String browser = config.getProperty("browser.name", "chrome");
+        logger.debug("Using browser from properties: {}", browser);
+        return browser;
     }
     
     /**

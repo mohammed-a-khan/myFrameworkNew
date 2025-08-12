@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.testforge.cs.exceptions.CSDataException;
+import com.testforge.cs.security.CSEncryptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -462,5 +463,86 @@ public class CSJsonUtils {
             return merged;
         }
         return node2; // Return second node if types don't match
+    }
+    
+    /**
+     * Decrypt all encrypted values in JSON
+     * Automatically decrypts any string values wrapped with ENC()
+     */
+    public static String decryptJsonValues(String json) {
+        try {
+            JsonNode rootNode = mapper.readTree(json);
+            decryptNode(rootNode);
+            return mapper.writeValueAsString(rootNode);
+        } catch (JsonProcessingException e) {
+            throw new CSDataException("Failed to decrypt JSON values", e);
+        }
+    }
+    
+    /**
+     * Recursively decrypt all encrypted values in a JsonNode
+     */
+    private static void decryptNode(JsonNode node) {
+        if (node.isObject()) {
+            ObjectNode objectNode = (ObjectNode) node;
+            Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> field = fields.next();
+                JsonNode value = field.getValue();
+                if (value.isTextual()) {
+                    String textValue = value.asText();
+                    if (CSEncryptionUtils.isEncrypted(textValue)) {
+                        String decrypted = CSEncryptionUtils.decrypt(textValue);
+                        objectNode.put(field.getKey(), decrypted);
+                    }
+                } else {
+                    decryptNode(value);
+                }
+            }
+        } else if (node.isArray()) {
+            ArrayNode arrayNode = (ArrayNode) node;
+            for (int i = 0; i < arrayNode.size(); i++) {
+                JsonNode element = arrayNode.get(i);
+                if (element.isTextual()) {
+                    String textValue = element.asText();
+                    if (CSEncryptionUtils.isEncrypted(textValue)) {
+                        String decrypted = CSEncryptionUtils.decrypt(textValue);
+                        arrayNode.set(i, decrypted);
+                    }
+                } else {
+                    decryptNode(element);
+                }
+            }
+        }
+    }
+    
+    /**
+     * Read JSON file and auto-decrypt encrypted values
+     */
+    public static <T> T readJsonFileWithDecryption(String filePath, Class<T> clazz) {
+        try {
+            logger.debug("Reading JSON file with decryption: {}", filePath);
+            String jsonContent = Files.readString(Paths.get(filePath));
+            String decryptedJson = decryptJsonValues(jsonContent);
+            return mapper.readValue(decryptedJson, clazz);
+        } catch (IOException e) {
+            throw new CSDataException("Failed to read JSON file: " + filePath, e);
+        }
+    }
+    
+    /**
+     * Parse JSON to Map with auto-decryption
+     */
+    public static Map<String, Object> parseJsonWithDecryption(String json) {
+        String decryptedJson = decryptJsonValues(json);
+        return fromJson(decryptedJson, new TypeReference<Map<String, Object>>() {});
+    }
+    
+    /**
+     * Parse JSON array to List of Maps with auto-decryption
+     */
+    public static List<Map<String, Object>> parseJsonArrayWithDecryption(String json) {
+        String decryptedJson = decryptJsonValues(json);
+        return fromJson(decryptedJson, new TypeReference<List<Map<String, Object>>>() {});
     }
 }

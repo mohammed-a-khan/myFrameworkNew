@@ -3,6 +3,7 @@ package com.testforge.cs.visualization;
 import com.testforge.cs.context.CSThreadContext;
 import com.testforge.cs.listeners.CSTestListener;
 import com.testforge.cs.reporting.CSTestResult;
+import com.testforge.cs.visualization.CSTimelineVisualization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.ITestResult;

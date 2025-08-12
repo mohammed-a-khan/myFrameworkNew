@@ -127,6 +127,9 @@ public class CSHtmlReportGenerator {
         html.append("</head>\n");
         html.append("<body>\n");
         
+        // Brand Header with Logo
+        html.append(generateBrandHeader());
+        
         // Sidebar
         html.append(generateSidebar(reportData));
         
@@ -168,6 +171,54 @@ public class CSHtmlReportGenerator {
         html.append("</html>");
         
         return html.toString();
+    }
+    
+    private String generateBrandHeader() {
+        StringBuilder header = new StringBuilder();
+        
+        // Convert logo to base64 for embedding
+        String logoBase64 = getLogoAsBase64();
+        
+        header.append("<!-- Brand Header -->\n");
+        header.append("<div class=\"brand-header\">\n");
+        header.append("    <div class=\"brand-container\">\n");
+        
+        if (logoBase64 != null) {
+            header.append("        <img src=\"data:image/png;base64,").append(logoBase64).append("\" alt=\"Company Logo\" class=\"brand-logo\">\n");
+        }
+        
+        header.append("        <div class=\"brand-info\">\n");
+        header.append("            <h1 class=\"brand-title\"><i class=\"fas fa-vial\"></i>\n");
+        header.append("            <span>CS </span>Test Automation Report</h1>\n");
+        header.append("            <p class=\"brand-subtitle\">").append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a"))).append("</p>\n");
+        header.append("        </div>\n");
+        header.append("    </div>\n");
+        header.append("</div>\n");
+        
+        return header.toString();
+    }
+    
+    private String getLogoAsBase64() {
+        try {
+            // Check for logo in project root
+            File logoFile = new File("logo.png");
+            if (!logoFile.exists()) {
+                // Try resources folder
+                logoFile = new File("resources/logo.png");
+            }
+            if (!logoFile.exists()) {
+                // Try src/main/resources
+                logoFile = new File("src/main/resources/logo.png");
+            }
+            
+            if (logoFile.exists()) {
+                byte[] fileContent = Files.readAllBytes(logoFile.toPath());
+                return Base64.getEncoder().encodeToString(fileContent);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load logo file: {}", e.getMessage());
+        }
+        return null;
     }
     
     private String generateScreenshotModal() {
@@ -328,22 +379,82 @@ public class CSHtmlReportGenerator {
             min-height: 100vh;
         }
 
+        /* Brand Header Styles */
+        .brand-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 0.5rem 0;
+            margin-bottom: 0;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1001;
+        }
+        
+        .brand-container {
+            width: 100%;
+            padding: 0 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .brand-logo {
+            height: 40px;
+            width: auto;
+            filter: brightness(0) invert(1);
+            opacity: 0.95;
+            margin-left: 0;
+        }
+        
+        .brand-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.1rem;
+            margin-left: auto;
+        }
+        
+        .brand-info h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .brand-info h1 i {
+            font-size: 1.1rem;
+        }
+        
+        .brand-info h1 span {
+            font-weight: 700;
+        }
+        
+        .brand-info .brand-subtitle {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            line-height: 1;
+            margin: 0;
+        }
+        
         /* Sidebar */
         .sidebar {
             width: 240px;
             background-color: var(--sidebar-bg);
             color: white;
             position: fixed;
-            height: 100vh;
+            height: calc(100vh - 60px);
+            top: 60px;
             overflow-y: auto;
             z-index: 1000;
         }
 
-        .sidebar-header {
-            padding: 1.5rem;
-            background-color: var(--primary-dark);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
+        /* Sidebar header removed as requested */
 
         .sidebar-logo {
             font-size: 1.5rem;
@@ -417,6 +528,7 @@ public class CSHtmlReportGenerator {
         /* Main Content */
         .main-content {
             margin-left: 240px;
+            margin-top: 60px;
             flex: 1;
             padding: 2rem;
             max-width: calc(100vw - 240px);
@@ -1669,12 +1781,7 @@ public class CSHtmlReportGenerator {
         
         StringBuilder sidebar = new StringBuilder();
         sidebar.append("<div class=\"sidebar\">\n");
-        sidebar.append("    <div class=\"sidebar-header\">\n");
-        sidebar.append("        <div class=\"sidebar-logo\">\n");
-        sidebar.append("            <i class=\"fas fa-vial\"></i>\n");
-        sidebar.append("            <span>CS TestForge</span>\n");
-        sidebar.append("        </div>\n");
-        sidebar.append("    </div>\n");
+        // Removed sidebar-header with CS TestForge logo as requested
         sidebar.append("    <ul class=\"sidebar-menu\">\n");
         
         // Menu items

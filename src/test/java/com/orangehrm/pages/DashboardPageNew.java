@@ -67,8 +67,29 @@ public class DashboardPageNew extends CSBasePage {
     
     public boolean isDisplayed() {
         try {
-            // Try to find the header title with a shorter timeout
-            return headerTitle.isDisplayed(3); // 3 second timeout instead of default
+            // Wait a bit for page to load after login
+            Thread.sleep(2000);
+            
+            // Check if URL contains dashboard
+            String currentUrl = driver.getCurrentUrl();
+            logger.info("Current URL: {}", currentUrl);
+            
+            // For OrangeHRM, after successful login, URL should contain /dashboard
+            if (currentUrl.contains("/dashboard")) {
+                logger.info("Dashboard URL detected");
+                return true;
+            }
+            
+            // Also try to check if header element exists
+            try {
+                boolean headerVisible = headerTitle.isDisplayed(3);
+                logger.info("Dashboard header visible: {}", headerVisible);
+                return headerVisible;
+            } catch (Exception ex) {
+                logger.debug("Header not found: {}", ex.getMessage());
+            }
+            
+            return false;
         } catch (Exception e) {
             logger.debug("Dashboard not displayed: {}", e.getMessage());
             return false;
@@ -86,6 +107,10 @@ public class DashboardPageNew extends CSBasePage {
         } catch (Exception e) {
             return "";
         }
+    }
+    
+    public String getHeaderText() {
+        return getHeaderTitle();
     }
     
     // Validation Methods

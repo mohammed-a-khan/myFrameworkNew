@@ -1,5 +1,10 @@
 package com.testforge.cs.azuredevops;
 
+import com.testforge.cs.azuredevops.client.CSEnhancedADOClient;
+import com.testforge.cs.azuredevops.config.CSADOConfiguration;
+import com.testforge.cs.azuredevops.managers.CSTestRunManager;
+import com.testforge.cs.azuredevops.managers.CSTestSuiteManager;
+import com.testforge.cs.azuredevops.managers.CSEvidenceUploader;
 import com.testforge.cs.exceptions.CSAzureDevOpsException;
 import com.testforge.cs.reporting.CSReportManager;
 import com.testforge.cs.config.CSConfigManager;
@@ -9,19 +14,26 @@ import org.slf4j.LoggerFactory;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 /**
- * Publisher for sending test results to Azure DevOps
- * Integrates with CS framework reporting system
+ * Enhanced Azure DevOps publisher using comprehensive ADO integration
+ * Based on Playwright framework's implementation
  */
 public class CSAzureDevOpsPublisher {
     private static final Logger logger = LoggerFactory.getLogger(CSAzureDevOpsPublisher.class);
     private static CSAzureDevOpsPublisher instance;
     
-    private CSAzureDevOpsClient client;
+    // Enhanced ADO components
+    private CSEnhancedADOClient client;
+    private CSADOConfiguration config;
+    private CSTestRunManager testRunManager;
+    private CSTestSuiteManager testSuiteManager;
+    private CSEvidenceUploader evidenceUploader;
+    
     private boolean enabled;
-    private String currentTestRunId;
     
     private CSAzureDevOpsPublisher() {
         initialize();
@@ -35,30 +47,45 @@ public class CSAzureDevOpsPublisher {
     }
     
     /**
-     * Initialize Azure DevOps integration
+     * Initialize enhanced Azure DevOps integration
      */
     private void initialize() {
         try {
-            CSConfigManager config = CSConfigManager.getInstance();
+            logger.info("Initializing Azure DevOps integration...");
             
-            String organization = config.getProperty("azure.devops.organization");
-            String project = config.getProperty("azure.devops.project");
-            String token = config.getProperty("azure.devops.token");
+            // Initialize configuration
+            config = CSADOConfiguration.getInstance();
+            enabled = config.isEnabled();
             
-            enabled = Boolean.parseBoolean(config.getProperty("azure.devops.enabled", "false"));
+            if (!enabled) {
+                logger.info("Azure DevOps integration is disabled");
+                return;
+            }
             
-            if (enabled && organization != null && project != null && token != null) {
-                this.client = new CSAzureDevOpsClient(organization, project, token);
+            // Initialize enhanced components
+            client = CSEnhancedADOClient.getInstance();
+            testRunManager = CSTestRunManager.getInstance();
+            testSuiteManager = CSTestSuiteManager.getInstance();
+            evidenceUploader = CSEvidenceUploader.getInstance();
+            
+            // Test connection
+            if (client.testConnection()) {
+                logger.info("Azure DevOps integration initialized successfully");
+                logger.info("Organization: {}", config.getOrganizationUrl());
+                logger.info("Project: {}", config.getProjectName());
                 
-                // Test connection
-                if (client.testConnection()) {
-                    logger.info("Azure DevOps integration initialized successfully");
-                } else {
-                    logger.warn("Azure DevOps connection test failed - disabling integration");
-                    enabled = false;
+                // Initialize test points if configured
+                testSuiteManager.initializeTestPoints();
+                
+                // Log test plan and suite configuration
+                if (config.getTestPlanId() != null) {
+                    logger.info("Test Plan ID: {}", config.getTestPlanId());
+                }
+                if (config.getTestSuiteId() != null) {
+                    logger.info("Test Suite ID: {}", config.getTestSuiteId());
                 }
             } else {
-                logger.info("Azure DevOps integration disabled or not configured");
+                logger.error("Azure DevOps connection test failed - disabling integration");
                 enabled = false;
             }
             
@@ -78,18 +105,31 @@ public class CSAzureDevOpsPublisher {
         }
         
         try {
-            if (runName == null) {
-                runName = "CS TestForge Framework Run - " + 
-                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            CSTestRunManager.TestRunCreateRequest request = new CSTestRunManager.TestRunCreateRequest();
+            request.name = runName;
+            request.buildId = buildId;
+            
+            // Parse planId if it's numeric
+            if (planId != null && planId.matches("\\d+")) {
+                request.planId = Integer.parseInt(planId);
+            } else if (config.getTestPlanId() != null) {
+                request.planId = Integer.parseInt(config.getTestPlanId());
             }
             
-            CSTestRun testRun = client.createTestRun(runName, buildId, planId);
-            currentTestRunId = testRun.getId();
+            // Use configured suite ID if available
+            if (config.getTestSuiteId() != null) {
+                request.suiteId = Integer.parseInt(config.getTestSuiteId());
+            }
             
-            logger.info("Started Azure DevOps test run: {} (ID: {})", testRun.getName(), currentTestRunId);
-            logger.info("Test run URL: {}", testRun.getWebAccessUrl());
+            CSTestRunManager.TestRun testRun = testRunManager.createTestRun(request);
             
-            return currentTestRunId;
+            logger.info("Started Azure DevOps test run: {} (ID: {})", 
+                testRun.name, testRun.id);
+            if (testRun.webAccessUrl != null && !testRun.webAccessUrl.isEmpty()) {
+                logger.info("Test run URL: {}", testRun.webAccessUrl);
+            }
+            
+            return testRun.id;
             
         } catch (Exception e) {
             logger.error("Failed to start Azure DevOps test run", e);
@@ -98,40 +138,65 @@ public class CSAzureDevOpsPublisher {
     }
     
     /**
-     * Publish test results
+     * Start test run with default settings
+     */
+    public String startTestRun() {
+        return startTestRun(null, null, null);
+    }
+    
+    /**
+     * Publish single test result
+     */
+    public void publishTestResult(com.testforge.cs.reporting.CSTestResult testResult) {
+        if (!enabled) {
+            logger.debug("Azure DevOps integration disabled - skipping result publication");
+            return;
+        }
+        
+        if (!testRunManager.hasActiveTestRun()) {
+            logger.debug("No active test run - creating new test run");
+            startTestRun();
+        }
+        
+        try {
+            testRunManager.addTestResult(testResult);
+            logger.debug("Published test result: {}", testResult.getTestName());
+        } catch (Exception e) {
+            logger.error("Failed to publish test result: {}", testResult.getTestName(), e);
+        }
+    }
+    
+    /**
+     * Publish test results from report manager
      */
     public void publishTestResults() {
-        if (!enabled || currentTestRunId == null) {
-            logger.debug("Azure DevOps integration disabled or no active test run - skipping result publication");
+        if (!enabled) {
+            logger.debug("Azure DevOps integration disabled - skipping result publication");
             return;
+        }
+        
+        if (!testRunManager.hasActiveTestRun()) {
+            logger.debug("No active test run - creating new test run");
+            startTestRun();
         }
         
         try {
             // Get test results from report manager
             CSReportManager reportManager = CSReportManager.getInstance();
-            java.util.Collection<com.testforge.cs.reporting.CSTestResult> frameworkResultsCollection = reportManager.getAllTestResults();
-            List<com.testforge.cs.reporting.CSTestResult> frameworkResults = new java.util.ArrayList<>(frameworkResultsCollection);
+            java.util.Collection<com.testforge.cs.reporting.CSTestResult> frameworkResultsCollection = 
+                reportManager.getAllTestResults();
+            List<com.testforge.cs.reporting.CSTestResult> frameworkResults = 
+                new java.util.ArrayList<>(frameworkResultsCollection);
             
             if (frameworkResults.isEmpty()) {
                 logger.info("No test results to publish to Azure DevOps");
                 return;
             }
             
-            // Convert to Azure DevOps format
-            List<CSTestResult> azureResults = frameworkResults.stream()
-                .map(CSTestResult::fromFrameworkResult)
-                .collect(Collectors.toList());
+            // Use enhanced test run manager for batch upload with evidence
+            testRunManager.addTestResults(frameworkResults);
             
-            // Convert to API format
-            List<java.util.Map<String, Object>> apiResults = azureResults.stream()
-                .map(CSTestResult::toApiFormat)
-                .collect(Collectors.toList());
-            
-            // Send to Azure DevOps
-            client.addTestResults(currentTestRunId, apiResults);
-            
-            logger.info("Published {} test results to Azure DevOps run: {}", 
-                azureResults.size(), currentTestRunId);
+            logger.info("Published {} test results to Azure DevOps", frameworkResults.size());
             
         } catch (Exception e) {
             logger.error("Failed to publish test results to Azure DevOps", e);
@@ -143,21 +208,19 @@ public class CSAzureDevOpsPublisher {
      * Complete test run
      */
     public void completeTestRun() {
-        if (!enabled || currentTestRunId == null) {
-            logger.debug("Azure DevOps integration disabled or no active test run - skipping test run completion");
+        if (!enabled) {
+            logger.debug("Azure DevOps integration disabled - skipping test run completion");
+            return;
+        }
+        
+        if (!testRunManager.hasActiveTestRun()) {
+            logger.debug("No active test run - skipping test run completion");
             return;
         }
         
         try {
-            client.completeTestRun(currentTestRunId);
-            logger.info("Completed Azure DevOps test run: {}", currentTestRunId);
-            
-            // Get final test run info
-            CSTestRun completedRun = client.getTestRun(currentTestRunId);
-            logger.info("Final test run URL: {}", completedRun.getWebAccessUrl());
-            
-            currentTestRunId = null;
-            
+            testRunManager.completeTestRun();
+            logger.info("Completed Azure DevOps test run");
         } catch (Exception e) {
             logger.error("Failed to complete Azure DevOps test run", e);
             throw new CSAzureDevOpsException("Failed to complete test run", e);
@@ -173,9 +236,15 @@ public class CSAzureDevOpsPublisher {
             return null;
         }
         
+        if (!config.isCreateBugsOnFailure()) {
+            logger.debug("Bug creation disabled - skipping");
+            return null;
+        }
+        
         try {
-            String title = String.format("Test Failure: %s", failedTest.getTestName());
+            String title = config.formatBugTitle(failedTest.getTestName(), failedTest.getErrorMessage());
             
+            // Build bug description
             StringBuilder description = new StringBuilder();
             description.append("<div><strong>Test Details:</strong></div>");
             description.append("<ul>");
@@ -195,26 +264,73 @@ public class CSAzureDevOpsPublisher {
                 description.append("<pre>").append(failedTest.getStackTrace()).append("</pre>");
             }
             
-            java.util.Map<String, Object> fields = new java.util.HashMap<>();
-            fields.put("System.Priority", 2); // High priority
-            fields.put("System.Severity", "2 - High");
-            fields.put("Microsoft.VSTS.TCM.ReproSteps", description.toString());
-            fields.put("System.Tags", "automated-test;cs-testforge-framework");
+            // Create patch document for bug creation
+            List<Map<String, Object>> patchDocument = new java.util.ArrayList<>();
             
-            String bugId = client.createWorkItem(title, description.toString(), "Bug", fields);
+            addPatchOperation(patchDocument, "add", "/fields/System.Title", title);
+            addPatchOperation(patchDocument, "add", "/fields/System.Description", description.toString());
+            addPatchOperation(patchDocument, "add", "/fields/Microsoft.VSTS.TCM.ReproSteps", description.toString());
             
+            // Add configured bug template fields
+            if (config.getBugTemplate() != null) {
+                CSADOConfiguration.BugTemplate template = config.getBugTemplate();
+                
+                if (template.getAssignedTo() != null && !template.getAssignedTo().isEmpty()) {
+                    addPatchOperation(patchDocument, "add", "/fields/System.AssignedTo", template.getAssignedTo());
+                }
+                
+                if (template.getAreaPath() != null && !template.getAreaPath().isEmpty()) {
+                    addPatchOperation(patchDocument, "add", "/fields/System.AreaPath", template.getAreaPath());
+                }
+                
+                if (template.getIterationPath() != null && !template.getIterationPath().isEmpty()) {
+                    addPatchOperation(patchDocument, "add", "/fields/System.IterationPath", template.getIterationPath());
+                }
+                
+                addPatchOperation(patchDocument, "add", "/fields/Microsoft.VSTS.Common.Priority", template.getPriority());
+                addPatchOperation(patchDocument, "add", "/fields/Microsoft.VSTS.Common.Severity", template.getSeverity());
+                
+                if (template.getTags() != null && template.getTags().length > 0) {
+                    addPatchOperation(patchDocument, "add", "/fields/System.Tags", String.join("; ", template.getTags()));
+                }
+            }
+            
+            // Create work item
+            String url = config.buildUrl(config.getEndpoints().getWorkItems(), null) + "/$Bug";
+            
+            CSEnhancedADOClient.ADORequestOptions options = 
+                new CSEnhancedADOClient.ADORequestOptions("POST", url);
+            options.headers = new HashMap<>();
+            options.headers.put("Content-Type", "application/json-patch+json");
+            options.body = patchDocument;
+            
+            @SuppressWarnings("unchecked")
+            CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
+                client.request(options, Map.class);
+            
+            String bugId = response.data.get("id").toString();
             logger.info("Created bug {} for failed test: {}", bugId, failedTest.getTestName());
             
             return bugId;
             
         } catch (Exception e) {
             logger.error("Failed to create bug for failed test: {}", failedTest.getTestName(), e);
-            throw new CSAzureDevOpsException("Failed to create bug", e);
+            return null;
         }
     }
     
+    private void addPatchOperation(List<Map<String, Object>> patchDocument, 
+                                  String op, String path, Object value) {
+        Map<String, Object> operation = new HashMap<>();
+        operation.put("op", op);
+        operation.put("path", path);
+        operation.put("value", value);
+        patchDocument.add(operation);
+    }
+    
     /**
-     * Get available test plans
+     * Get test plans
      */
     public List<CSTestPlan> getTestPlans() {
         if (!enabled) {
@@ -222,7 +338,10 @@ public class CSAzureDevOpsPublisher {
         }
         
         try {
-            return client.getTestPlans();
+            String url = config.buildUrl(config.getEndpoints().getTestPlans(), null);
+            CSEnhancedADOClient.ADOListResponse<CSTestPlan> response = 
+                client.getList(url, CSTestPlan.class);
+            return response.value;
         } catch (Exception e) {
             logger.error("Failed to get test plans", e);
             return java.util.Collections.emptyList();
@@ -230,7 +349,7 @@ public class CSAzureDevOpsPublisher {
     }
     
     /**
-     * Get available builds
+     * Get builds
      */
     public List<CSBuild> getBuilds(int count) {
         if (!enabled) {
@@ -238,7 +357,11 @@ public class CSAzureDevOpsPublisher {
         }
         
         try {
-            return client.getBuilds(count);
+            String url = config.buildUrl(config.getEndpoints().getBuilds(), null);
+            url = url + "&$top=" + count;
+            CSEnhancedADOClient.ADOListResponse<CSBuild> response = 
+                client.getList(url, CSBuild.class);
+            return response.value;
         } catch (Exception e) {
             logger.error("Failed to get builds", e);
             return java.util.Collections.emptyList();
@@ -256,14 +379,31 @@ public class CSAzureDevOpsPublisher {
      * Get current test run ID
      */
     public String getCurrentTestRunId() {
-        return currentTestRunId;
+        if (testRunManager != null && testRunManager.getCurrentTestRun() != null) {
+            return testRunManager.getCurrentTestRun().id;
+        }
+        return null;
     }
     
     /**
-     * Get Azure DevOps client
+     * Get enhanced ADO client
      */
-    public CSAzureDevOpsClient getClient() {
+    public CSEnhancedADOClient getClient() {
         return client;
+    }
+    
+    /**
+     * Get test run manager
+     */
+    public CSTestRunManager getTestRunManager() {
+        return testRunManager;
+    }
+    
+    /**
+     * Get test suite manager
+     */
+    public CSTestSuiteManager getTestSuiteManager() {
+        return testSuiteManager;
     }
     
     /**
@@ -294,16 +434,23 @@ public class CSAzureDevOpsPublisher {
         } catch (Exception e) {
             logger.error("Azure DevOps workflow failed", e);
             
-            // Try to complete the run even if publishing failed
-            if (currentTestRunId != null) {
+            // Try to abort the run on error
+            if (testRunManager != null && testRunManager.hasActiveTestRun()) {
                 try {
-                    completeTestRun();
-                } catch (Exception completeEx) {
-                    logger.error("Failed to complete test run after workflow error", completeEx);
+                    testRunManager.abortTestRun("Workflow failed: " + e.getMessage());
+                } catch (Exception abortEx) {
+                    logger.error("Failed to abort test run after workflow error", abortEx);
                 }
             }
             
             throw new CSAzureDevOpsException("Azure DevOps workflow failed", e);
         }
+    }
+    
+    /**
+     * Execute workflow with default settings
+     */
+    public void executeFullWorkflow() {
+        executeFullWorkflow(null, null, null);
     }
 }
