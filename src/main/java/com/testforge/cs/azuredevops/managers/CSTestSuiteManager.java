@@ -446,9 +446,11 @@ public class CSTestSuiteManager {
             return;
         }
         
+        Integer testPointId = null;
+        
         try {
             // Find the test point for this test case
-            Integer testPointId = findTestPointByTestCase(testCaseId, planId, suiteId);
+            testPointId = findTestPointByTestCase(testCaseId, planId, suiteId);
             
             if (testPointId == null) {
                 logger.warn("No test point found for test case {} in plan {} suite {}", 
@@ -456,49 +458,116 @@ public class CSTestSuiteManager {
                 return;
             }
             
-            // Update the test point with the result
+            // The correct API endpoint for updating test points outcomes
+            // Uses the Update Test Points API which accepts an array of test point updates
             String url = config.buildUrl(
-                "/test/plans/" + planId + "/suites/" + suiteId + "/points/" + testPointId,
+                "/test/plans/" + planId + "/suites/" + suiteId + "/points",
                 null
             );
             
-            // Create update payload
-            Map<String, Object> updateData = new HashMap<>();
+            // Create update payload - Azure DevOps expects an array of test point updates
+            List<Map<String, Object>> testPointUpdates = new ArrayList<>();
+            Map<String, Object> pointUpdate = new HashMap<>();
             
-            // Set the outcome
+            // Specify the test point ID to update
+            pointUpdate.put("id", testPointId);
+            
+            // Create the results object with outcome
             Map<String, Object> results = new HashMap<>();
             results.put("outcome", outcome);
-            if (runId != null) {
+            
+            // Add run and result references if provided
+            if (runId != null && resultId != null) {
                 Map<String, Object> lastTestRun = new HashMap<>();
-                lastTestRun.put("id", runId);
+                lastTestRun.put("id", Integer.parseInt(runId));
                 results.put("lastTestRun", lastTestRun);
-            }
-            if (resultId != null) {
+                
                 Map<String, Object> lastResult = new HashMap<>();
-                lastResult.put("id", resultId);
+                lastResult.put("id", Integer.parseInt(resultId));
                 results.put("lastResult", lastResult);
             }
-            results.put("state", "Completed");
+            
+            results.put("state", 2); // 2 = Completed state in ADO
             results.put("lastUpdatedDate", LocalDateTime.now().toString());
+            results.put("lastUpdatedBy", "CS TestForge Framework");
             
-            updateData.put("results", Arrays.asList(results));
+            // Add results to the point update
+            pointUpdate.put("results", results);
             
-            // PATCH the test point
+            // Add to the array
+            testPointUpdates.add(pointUpdate);
+            
+            // PATCH the test points (array format)
+            @SuppressWarnings("unchecked")
+            CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
+                client.patch(url, testPointUpdates, Map.class);
+            
+            if (response.data != null) {
+                logger.info("Successfully updated test point {} for test case {} with outcome: {}", 
+                    testPointId, testCaseId, outcome);
+                
+                // Also try to update via the test results API to ensure the outcome is reflected
+                updateTestCaseOutcomeViaResults(planId, suiteId, testPointId, testCaseId, outcome, runId, resultId);
+            } else {
+                logger.warn("Test point update response was null for test point {}", testPointId);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to update test point outcome for test case {}", testCaseId, e);
+            // Try alternate approach
+            updateTestCaseOutcomeViaResults(planId, suiteId, testPointId, testCaseId, outcome, runId, resultId);
+        }
+    }
+    
+    /**
+     * Alternative method to update test case outcome using test results API
+     */
+    private void updateTestCaseOutcomeViaResults(String planId, String suiteId, Integer testPointId, 
+                                                 Integer testCaseId, String outcome, String runId, String resultId) {
+        if (runId == null || resultId == null) {
+            return;
+        }
+        
+        try {
+            // Update the test result to ensure it has the correct associations
+            String url = config.buildUrl(
+                "/test/runs/" + runId + "/results/" + resultId,
+                null
+            );
+            
+            Map<String, Object> updateData = new HashMap<>();
+            updateData.put("outcome", outcome);
+            updateData.put("state", "Completed");
+            
+            // Add test point association
+            if (testPointId != null) {
+                Map<String, Object> testPoint = new HashMap<>();
+                testPoint.put("id", testPointId);
+                updateData.put("testPoint", testPoint);
+            }
+            
+            // Add test case association
+            Map<String, Object> testCase = new HashMap<>();
+            testCase.put("id", testCaseId);
+            updateData.put("testCase", testCase);
+            
+            // Add test plan association
+            Map<String, Object> testPlan = new HashMap<>();
+            testPlan.put("id", Integer.parseInt(planId));
+            updateData.put("testPlan", testPlan);
+            
             @SuppressWarnings("unchecked")
             CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
                 (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
                 client.patch(url, updateData, Map.class);
             
             if (response.data != null) {
-                logger.info("Updated test point {} for test case {} with outcome: {}", 
-                    testPointId, testCaseId, outcome);
-            } else {
-                logger.warn("Failed to update test point {} outcome", testPointId);
+                logger.debug("Updated test result {} with test case associations", resultId);
             }
             
         } catch (Exception e) {
-            logger.error("Failed to update test point outcome for test case {}", testCaseId, e);
-            // Don't throw - continue with other operations
+            logger.debug("Could not update test result associations: {}", e.getMessage());
         }
     }
 }

@@ -1,474 +1,624 @@
-# CS Test Automation Framework
+# CS TestForge Selenium Framework
 
-An enterprise-grade test automation framework built with Java 17, Selenium, and TestNG, designed for scalability, maintainability, and ease of use. This framework provides comprehensive testing capabilities without relying on third-party libraries for reporting, BDD, or API testing.
+A comprehensive Selenium automation framework with native BDD support, Azure DevOps integration, and extensive reporting capabilities built on Java 17 and TestNG.
+
+## 🚀 Latest Features (August 2024)
+
+- **Azure DevOps Integration**: Full integration with Test Plans, Test Suites, and automatic result publishing with test point updates
+- **Certificate Authentication**: Support for client certificates (PFX, P12, PEM) for secure API testing  
+- **Native BDD Implementation**: Cucumber-style testing without Cucumber dependency using CSBDDRunner
+- **Enhanced Reporting**: ExtentReports integration with screenshots, logs, and timeline visualization
+- **Object Repository**: Centralized element management with hot-reload capability
 
 ## Table of Contents
 - [Features](#features)
-- [Architecture](#architecture)
+- [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
-- [Framework Components](#framework-components)
-- [Usage Examples](#usage-examples)
-- [Configuration](#configuration)
+- [Page Object Model](#page-object-model)
+- [BDD Testing](#bdd-testing)
+- [Data-Driven Testing](#data-driven-testing)
+- [API Testing & Certificate Authentication](#api-testing--certificate-authentication)
+- [Azure DevOps Integration](#azure-devops-integration)
+- [Test Suites](#test-suites)
 - [Reporting](#reporting)
-- [Advanced Features](#advanced-features)
-- [Best Practices](#best-practices)
+- [Configuration](#configuration)
+- [Running Tests](#running-tests)
 
 ## Features
 
-### Core Features
-- **Complete Selenium Abstraction**: Users never interact with WebDriver/WebElement directly
-- **Thread-Safe Parallel Execution**: Built-in support for multi-threaded test execution
-- **Annotation-Driven Architecture**: Simplified test creation with custom annotations
-- **Native HTML Reporting**: Beautiful reports without third-party dependencies
-- **BDD Support**: Cucumber-style testing without Cucumber
-- **Data-Driven Testing**: Support for Excel, CSV, JSON, and Database data sources
-- **API Testing**: Native HTTP client for REST and SOAP testing
-- **Azure DevOps Integration**: Native integration without external libraries
+### Core Framework
+- **CSBaseTest & CSBasePage**: Base classes providing common functionality
+- **CSElement**: Enhanced WebElement wrapper with 30+ convenience methods
+- **CSDriverFactory**: Automatic WebDriver management with WebDriverManager
+- **CSThreadContext**: Thread-safe execution for parallel testing
+- **Custom Annotations**: @CSTest, @CSPage, @CSLocator, @CSRetry, @CSDataSource, @CSStep
 
-### Advanced Features
-- **Video Recording**: Automatic test execution recording
-- **Screenshot Capture**: Automatic screenshots on failures
-- **Object Repository**: JSON-based element definitions with hot-reload
-- **SQL Query Manager**: Centralized query management
-- **Event System**: Asynchronous event processing
-- **Timeline Visualization**: Parallel execution visualization
-- **Environment Collection**: Comprehensive system information gathering
+### Testing Capabilities
+- **BDD Support**: Native implementation with @CSStep annotations and CSBDDRunner
+- **Data Providers**: Excel, CSV, JSON, and Database support
+- **Parallel Execution**: Thread-safe with configurable thread pools
+- **Retry Mechanism**: Automatic retry with @CSRetry annotation
+- **Screenshot/Video**: Automatic capture on failures
 
-## Architecture
+### Integrations
+- **Azure DevOps**: Test Plans, Test Suites, Test Points with automatic result publishing
+- **ExtentReports**: Rich HTML reports with charts and timeline
+- **WebDriverManager**: Automatic driver downloads
+- **Apache POI**: Excel data handling
+- **Jackson**: JSON processing
+
+## Project Structure
 
 ```
 cs-framework/
-├── src/main/java/com/testforge/cs/
-│   ├── annotations/        # Custom annotations (@CSTest, @CSPage, etc.)
-│   ├── core/              # Core classes (CSBaseTest, CSBasePage)
-│   ├── driver/            # WebDriver management
-│   ├── elements/          # Element wrapper classes
-│   ├── config/            # Configuration management
-│   ├── utils/             # Utility classes
-│   ├── reporting/         # Report generation
-│   ├── bdd/               # BDD implementation
-│   ├── api/               # API testing components
-│   ├── dataprovider/      # Data provider implementations
-│   ├── events/            # Event management
-│   ├── exceptions/        # Custom exceptions
-│   └── ...
-└── src/test/java/
-    └── examples/          # Example tests and pages
+├── src/
+│   ├── main/java/com/testforge/cs/
+│   │   ├── annotations/         # Custom annotations
+│   │   ├── api/                # API testing & certificates
+│   │   ├── azuredevops/        # Azure DevOps integration
+│   │   ├── bdd/                # BDD implementation
+│   │   ├── config/             # Configuration management
+│   │   ├── core/               # Base classes
+│   │   ├── dataprovider/       # Data providers
+│   │   ├── driver/             # WebDriver management
+│   │   ├── elements/           # Element wrappers
+│   │   ├── listeners/          # TestNG listeners
+│   │   ├── reporting/          # Report generation
+│   │   ├── repository/         # Object repository
+│   │   ├── security/           # Encryption utilities
+│   │   └── utils/              # Utility classes
+│   └── test/
+│       ├── java/com/
+│       │   ├── orangehrm/      # OrangeHRM test implementation
+│       │   │   ├── pages/      # Page objects
+│       │   │   ├── stepdefs/   # Step definitions
+│       │   │   └── tests/      # Test classes
+│       │   └── testforge/cs/
+│       │       └── tests/api/  # API tests
+│       └── resources/
+│           ├── certificates/    # SSL certificates
+│           ├── config/         # Configuration files
+│           └── features/       # BDD feature files
+├── features/                    # BDD feature files
+├── suites/                     # TestNG suite files
+└── object-repository/          # Element definitions
 ```
 
 ## Getting Started
 
 ### Prerequisites
-- Java 17 or higher
-- Maven 3.6 or higher
-- IDE with Maven support (IntelliJ IDEA, Eclipse)
+- Java 17+
+- Maven 3.6+
+- Chrome/Firefox/Edge browser
+- Azure DevOps account (optional)
 
 ### Installation
 
-1. Clone the repository:
 ```bash
+# Clone repository
 git clone <repository-url>
 cd cs-framework
+
+# Install dependencies
+mvn clean install -DskipTests
+
+# Run sample test
+mvn test -Dsurefire.suiteXmlFiles=suites/orangehrm-simple-only.xml
 ```
 
-2. Build the project:
-```bash
-mvn clean install
-```
+## Page Object Model
 
-3. Run example tests:
-```bash
-mvn test
-```
+### Creating Page Objects
 
-## Framework Components
-
-### 1. Page Objects
-
-Create page objects by extending `CSBasePage` and using `@CSPage` annotation:
+Pages extend `CSBasePage` and use `@CSLocator` annotations:
 
 ```java
-@CSPage(name = "LoginPage", url = "${app.url}/login")
-public class LoginPage extends CSBasePage {
+package com.orangehrm.pages;
+
+import com.testforge.cs.core.CSBasePage;
+import com.testforge.cs.elements.CSElement;
+import com.testforge.cs.annotations.CSLocator;
+import com.testforge.cs.annotations.CSPage;
+
+@CSPage(name = "OrangeHRM Login Page")
+public class LoginPageNew extends CSBasePage {
     
-    @CSLocator(
-        value = "username",
-        type = CSLocator.LocatorType.ID,
-        name = "Username field"
-    )
-    public CSElement usernameField;
+    // Using Object Repository
+    @CSLocator(locatorKey = "login.username.field")
+    private CSElement usernameField;
     
-    @CSLocator(
-        value = "password",
-        type = CSLocator.LocatorType.ID,
-        name = "Password field"
-    )
-    public CSElement passwordField;
+    @CSLocator(locatorKey = "login.password.field")
+    private CSElement passwordField;
     
-    @CSLocator(
-        value = "button[type='submit']",
-        type = CSLocator.LocatorType.CSS,
-        name = "Login button"
-    )
-    public CSElement loginButton;
+    @CSLocator(locatorKey = "login.submit.button")
+    private CSElement loginButton;
     
-    public void login(String username, String password) {
-        usernameField.clearAndType(username);
-        passwordField.clearAndType(password);
-        loginButton.click();
+    @CSLocator(locatorKey = "login.error.message")
+    private CSElement errorMessage;
+    
+    private static final String LOGIN_PATH = "/web/index.php/auth/login";
+    
+    public void navigateTo() {
+        String baseUrl = config.getProperty("app.base.url");
+        navigateTo(baseUrl + LOGIN_PATH);
         waitForPageLoad();
     }
+    
+    public void enterUsername(String username) {
+        logger.info("Entering username: {}", username);
+        usernameField.waitForVisible();
+        usernameField.clearAndType(username);
+    }
+    
+    public void enterPassword(String password) {
+        logger.info("Entering password");
+        passwordField.clearAndType(password);
+    }
+    
+    public void clickLogin() {
+        logger.info("Clicking login button");
+        loginButton.click();
+    }
+    
+    public void login(String username, String password) {
+        enterUsername(username);
+        enterPassword(password);
+        clickLogin();
+    }
 }
 ```
 
-### 2. Test Classes
+## BDD Testing
 
-Create test classes by extending `CSBaseTest`:
+### Feature Files
+
+Create feature files in `features/` directory:
+
+```gherkin
+@simple @quick
+Feature: OrangeHRM Simple Tests
+  Quick tests demonstrating clean step syntax
+
+  @login-simple
+  Scenario: Simple login test
+    Given I am on the login page
+    When I enter username "Admin" and password "admin123"
+    And I click the login button
+    Then I should see the dashboard
+
+  @login-negative
+  Scenario: Invalid login test
+    Given I am on the login page
+    When I login with username "invalid" and password "wrong"
+    Then I should see an error message "Invalid credentials"
+
+  @data-driven-simple
+  Scenario Outline: Multiple login attempts
+    Given I am on the login page
+    When I login with username "<username>" and password "<password>"
+    Then I should see an error message "<errorMessage>"
+    
+    Examples:
+      | username  | password    | errorMessage         |
+      | testuser  | wrongpass   | Invalid credentials  |
+      | admin     | badpass     | Invalid credentials  |
+      | ""        | ""          | Invalid credentials  |
+```
+
+### Step Definitions
+
+Step definitions use `@CSStep` annotation:
 
 ```java
-@CSTest(
-    name = "Login Test Suite",
-    description = "Tests for login functionality",
-    category = "Smoke",
-    tags = {"login", "authentication"}
-)
-public class LoginTest extends CSBaseTest {
+package com.orangehrm.stepdefs;
+
+import com.testforge.cs.annotations.CSStep;
+import com.testforge.cs.annotations.CSFeature;
+import com.testforge.cs.bdd.CSStepDefinitions;
+import com.orangehrm.pages.LoginPageNew;
+import com.orangehrm.pages.DashboardPageNew;
+
+@CSFeature(name = "OrangeHRM Steps", tags = {"@orangehrm", "@all"})
+public class OrangeHRMSteps extends CSStepDefinitions {
     
-    private LoginPage loginPage;
+    private LoginPageNew loginPage;
+    private DashboardPageNew dashboardPage;
     
-    @CSBeforeMethod
-    public void setupPages() {
-        loginPage = new LoginPage();
-    }
-    
-    @Test(description = "Test successful login")
-    @CSRetry(maxAttempts = 2, delay = 1000)
-    public void testSuccessfulLogin() {
+    @CSStep(description = "I am on the login page")
+    public void navigateToLoginPage() {
+        logger.info("Navigating to login page");
+        loginPage = getPage(LoginPageNew.class);
         loginPage.navigateTo();
-        loginPage.login("testuser", "password123");
-        
-        Assert.assertTrue(homePage.isUserLoggedIn(), 
-            "User should be logged in");
+    }
+    
+    @CSStep(description = "I enter username {username} and password {password}")
+    public void enterCredentials(String username, String password) {
+        logger.info("Entering credentials - Username: {}", username);
+        loginPage = getPage(LoginPageNew.class);
+        loginPage.enterUsername(username);
+        loginPage.enterPassword(password);
+    }
+    
+    @CSStep(description = "I click the login button")
+    public void clickLoginButton() {
+        logger.info("Clicking login button");
+        loginPage = getPage(LoginPageNew.class);
+        loginPage.clickLogin();
+    }
+    
+    @CSStep(description = "I should see the dashboard")
+    public void verifyDashboard() {
+        logger.info("Verifying dashboard is displayed");
+        dashboardPage = getPage(DashboardPageNew.class);
+        assertTrue(dashboardPage.isDisplayed(), "Dashboard should be displayed");
+    }
+    
+    @CSStep(description = "I should see an error message {errorMessage}")
+    public void verifyErrorMessage(String errorMessage) {
+        logger.info("Verifying error message: {}", errorMessage);
+        loginPage = getPage(LoginPageNew.class);
+        String actualError = loginPage.getErrorMessage();
+        assertTrue(actualError.contains(errorMessage), 
+            "Expected error: " + errorMessage);
     }
 }
 ```
 
-### 3. Data-Driven Testing
+## Data-Driven Testing
 
-Use `@CSDataSource` annotation for data-driven tests:
+### Excel Data Provider
 
 ```java
-@Test(
-    description = "Test with Excel data",
-    dataProvider = "excelData",
-    dataProviderClass = CSDataProvider.class
-)
+@Test(dataProvider = "excelData", dataProviderClass = CSDataProvider.class)
 @CSDataSource(
     type = CSDataSource.Type.EXCEL,
-    path = "src/test/resources/data/test_data.xlsx",
-    sheet = "LoginData",
-    keyField = "TestCase"
+    path = "src/test/resources/data/testdata.xlsx",
+    sheet = "LoginData"
 )
-public void testWithExcelData(Map<String, String> testData) {
-    String username = testData.get("Username");
-    String password = testData.get("Password");
-    
-    loginPage.login(username, password);
-    // Assertions...
+public void testWithExcelData(Map<String, String> data) {
+    loginPage.login(data.get("Username"), data.get("Password"));
+    // Assertions
 }
 ```
 
-### 4. BDD Testing
-
-Create BDD-style tests without Cucumber:
+### JSON Data Provider
 
 ```java
-@CSFeature(
-    name = "User Authentication",
-    description = "As a user, I want to login to the application"
+@Test(dataProvider = "jsonData", dataProviderClass = CSDataProvider.class)
+@CSDataSource(
+    type = CSDataSource.Type.JSON,
+    path = "src/test/resources/data/users.json"
 )
-public class BDDLoginTest extends CSBaseTest {
+public void testWithJsonData(Map<String, Object> userData) {
+    // Use JSON data
+}
+```
+
+## API Testing & Certificate Authentication
+
+### Certificate Authentication Test
+
+```java
+package com.testforge.cs.tests.api;
+
+import com.testforge.cs.api.CSCertificateManager;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+
+public class CSCertificateAuthenticationTest {
     
-    @CSBeforeFeature
-    public void setupFeature() {
-        CSStepRegistry registry = CSStepRegistry.getInstance();
-        
-        registry.registerStep("I am on the login page", () -> {
-            loginPage.navigateTo();
-        });
-        
-        registry.registerStep("I enter username {string} and password {string}", 
-            (String username, String password) -> {
-                loginPage.usernameField.clearAndType(username);
-                loginPage.passwordField.clearAndType(password);
-            });
-    }
+    private CSCertificateManager certificateManager;
     
     @Test
-    @CSScenario(
-        name = "Successful login",
-        steps = {
-            @CSStep("Given I am on the login page"),
-            @CSStep("When I enter username \"testuser\" and password \"pass123\""),
-            @CSStep("Then I should be logged in successfully")
+    public void testAPICallWithClientCertificate() {
+        certificateManager = CSCertificateManager.getInstance();
+        
+        // Load certificate
+        SSLContext sslContext = certificateManager.loadCertificate(
+            "certificates/badssl.com-client.p12",
+            "badssl.com"
+        );
+        
+        // Create HTTP client with certificate
+        SSLConnectionSocketFactory sslSocketFactory = 
+            new SSLConnectionSocketFactory(sslContext);
+        
+        try (CloseableHttpClient httpClient = HttpClients.custom()
+                .setSSLSocketFactory(sslSocketFactory)
+                .build()) {
+            
+            HttpGet request = new HttpGet("https://client.badssl.com/");
+            HttpResponse response = httpClient.execute(request);
+            
+            Assert.assertEquals(response.getStatusLine().getStatusCode(), 200);
         }
-    )
-    public void testSuccessfulLogin() {
-        // Steps are executed automatically
     }
 }
 ```
 
-### 5. API Testing
+## Azure DevOps Integration
 
-Test REST and SOAP APIs using native HTTP client:
+### Configuration
+
+1. Set environment variables:
+```bash
+export ADO_ORGANIZATION_URL=https://dev.azure.com/yourorg
+export ADO_PROJECT_NAME=YourProject
+export ADO_PAT_TOKEN_ENCRYPTED=<encrypted-token>
+export CS_ENCRYPTION_KEY=<your-key>
+```
+
+2. Encrypt PAT token:
+```bash
+CS_ENCRYPTION_KEY="your-key" java -cp target/classes \
+    com.testforge.cs.security.CSEncryptionUtils encrypt "your-pat-token"
+```
+
+### Test Mapping
+
+Use annotations to map tests to Azure DevOps:
 
 ```java
-public class APITest extends CSBaseTest {
+@Test
+@TestCaseId(419)  // Azure DevOps Test Case ID
+public void testLogin() {
+    // Test implementation
+}
+```
+
+### BDD Suite for Azure DevOps
+
+```xml
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Azure DevOps BDD Test Suite" verbose="2" parallel="none">
     
-    private CSHttpClient httpClient;
-    private CSSoapClient soapClient;
+    <parameter name="browserName" value="chrome"/>
+    <parameter name="headless" value="false"/>
+    <parameter name="featuresPath" value="features/ado-mapped-tests.feature"/>
+    <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
     
-    @Test(description = "Test REST API")
-    public void testRestApi() {
-        CSHttpResponse response = httpClient.get(endpoint)
-            .header("Authorization", "Bearer token")
-            .queryParam("page", "1")
-            .execute();
-        
-        Assert.assertEquals(response.getStatusCode(), 200);
-        
-        Map<String, Object> body = CSJsonUtils.jsonToMap(response.getBody());
-        Assert.assertNotNull(body.get("data"));
-    }
+    <test name="ADO BDD Tests">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>
+```
+
+## Test Suites
+
+### Available Test Suites
+
+The framework includes numerous pre-configured suites in the `suites/` directory:
+
+#### OrangeHRM Test Suites
+- `orangehrm-simple-only.xml` - Basic login tests
+- `orangehrm-comprehensive-only.xml` - Full test coverage
+- `orangehrm-parallel-test.xml` - Parallel execution demo
+- `orangehrm-sequential-test.xml` - Sequential execution
+
+#### Azure DevOps Suites  
+- `ado-bdd-suite.xml` - BDD tests with ADO integration
+- `ado-mapped-suite.xml` - Tests mapped to ADO test cases
+- `ado-hierarchy-example.xml` - Hierarchical test organization
+
+#### Feature-Specific Suites
+- `certificate-auth-suite.xml` - Certificate authentication tests
+- `reporting-demo-suite.xml` - Reporting features demo
+- `simple-login-test.xml` - Minimal login test
+
+### Example Suite Configuration
+
+```xml
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Comprehensive Test Suite" verbose="1">
     
-    @Test(description = "Test SOAP API")
-    public void testSoapApi() {
-        String soapRequest = "<soap:Envelope>...</soap:Envelope>";
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <!-- BDD feature configuration -->
+    <parameter name="cs.feature.path" 
+               value="features/orangehrm-comprehensive-tests.feature"/>
+    <parameter name="cs.step.packages" value="com.orangehrm.stepdefs"/>
+    
+    <test name="OrangeHRM Comprehensive Tests">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+</suite>
+```
+
+## Reporting
+
+### ExtentReports Integration
+
+The framework generates comprehensive HTML reports with:
+- Test execution summary with pass/fail charts
+- Detailed step-by-step logs
+- Screenshots on failures
+- System and environment information
+- Execution timeline
+
+Reports are generated at: `target/cs-reports/`
+
+### Custom Reporting in Tests
+
+```java
+public class ReportingExampleTest extends CSBaseTest {
+    
+    @Test(description = "Demo test showing reporting features")
+    public void testWithCustomReporting() {
+        // Logging with different levels
+        reportManager.logInfo("═══════════════════════════════════");
+        reportManager.logInfo("TEST: Custom Reporting Demo");
+        reportManager.logInfo("Started at: " + LocalDateTime.now());
+        reportManager.logInfo("═══════════════════════════════════");
         
-        CSSoapResponse response = soapClient.sendRequest(
-            endpoint, soapAction, soapRequest);
+        // Step logging
+        reportManager.logInfo("STEP 1: Navigate to login page");
+        LoginPageNew loginPage = new LoginPageNew();
+        loginPage.navigateTo();
         
-        Assert.assertFalse(response.hasFault());
-        String value = response.getNodeValue("//Result");
+        // Conditional logging
+        if (loginPage.isDisplayed()) {
+            reportManager.logInfo("✓ PASS: Login page loaded");
+        } else {
+            reportManager.logError("✗ FAIL: Login page failed to load");
+        }
+        
+        // Screenshot capture
+        reportManager.captureScreenshot("login-page");
     }
 }
 ```
 
 ## Configuration
 
-### 1. Framework Configuration
-
-Create `config.properties` in `src/test/resources`:
+### config.properties
 
 ```properties
+# Application settings
+app.base.url=https://opensource-demo.orangehrmlive.com
+
 # Browser configuration
-browser.type=chrome
+browser.name=chrome
 browser.headless=false
+browser.window.maximize=true
 browser.implicit.wait=10
 browser.page.load.timeout=30
 
-# Application configuration
-app.url=https://example.com
-api.base.url=https://api.example.com
-
-# Test configuration
-test.environment=QA
+# Test execution
+test.retry.count=2
 test.parallel.enabled=true
-test.thread.count=5
+test.thread.count=3
+screenshot.on.failure=true
 
 # Reporting
-report.dir=target/test-reports
-report.screenshots=true
-report.video.recording=false
+report.dir=target/cs-reports
+report.name=Test Execution Report
+extent.report.enabled=true
 
-# Database configuration
-db.default.url=jdbc:mysql://localhost:3306/testdb
-db.default.username=testuser
-db.default.password=password
+# Azure DevOps (optional)
+ado.enabled=true
+ado.organization.url=https://dev.azure.com/yourorg
+ado.project.name=YourProject
+ado.test.plan.id=46
+ado.test.suite.id=47
+
+# Encryption
+cs.encryption.key=${CS_ENCRYPTION_KEY}
 ```
 
-### 2. Environment-Specific Configuration
-
-Create environment-specific files:
-- `config-dev.properties`
-- `config-qa.properties`
-- `config-prod.properties`
-
-Run with specific environment:
-```bash
-mvn test -Dtest.environment=qa
-```
-
-### 3. Object Repository
-
-Define elements in `object-repository.json`:
+### Object Repository (object-repository.json)
 
 ```json
 {
-  "pages": {
-    "LoginPage": {
-      "elements": {
-        "username": {
-          "locator": "id=username",
-          "alternativeLocators": ["css=#username", "name=user"],
-          "description": "Username input field"
-        },
-        "password": {
-          "locator": "id=password",
-          "description": "Password input field"
-        }
-      }
-    }
+  "login.username.field": {
+    "locator": "//input[@name='username']",
+    "type": "xpath"
+  },
+  "login.password.field": {
+    "locator": "//input[@name='password']",
+    "type": "xpath"
+  },
+  "login.submit.button": {
+    "locator": "//button[@type='submit']",
+    "type": "xpath"
+  },
+  "login.error.message": {
+    "locator": "//p[contains(@class,'alert')]",
+    "type": "xpath"
   }
 }
 ```
 
-## Reporting
+## Running Tests
 
-### HTML Reports
+### Maven Commands
 
-The framework generates comprehensive HTML reports with:
-- Test execution overview
-- Pass/fail statistics with charts
-- Detailed test logs
-- Screenshots and videos
-- Performance metrics
-- Timeline visualization
+```bash
+# Run specific suite
+mvn test -Dsurefire.suiteXmlFiles=suites/orangehrm-simple-only.xml
 
-Reports are generated at: `target/test-reports/index.html`
+# Run with browser options
+mvn test -Dbrowser.name=chrome -Dbrowser.headless=true
 
-### Report Features
-- Interactive charts using Canvas API
-- Responsive design
-- Search and filter capabilities
-- Export to PDF functionality
-- Real-time updates during execution
+# Run BDD tests
+mvn test -Dsurefire.suiteXmlFiles=suites/orangehrm-comprehensive-only.xml
 
-## Advanced Features
+# Run with Azure DevOps integration
+CS_ENCRYPTION_KEY="your-key" mvn test \
+    -Dsurefire.suiteXmlFiles=suites/ado-bdd-suite.xml
 
-### 1. Parallel Execution
+# Run parallel tests
+mvn test -Dsurefire.suiteXmlFiles=suites/orangehrm-parallel-test.xml
 
-Configure parallel execution in `testng.xml`:
-
-```xml
-<suite name="Test Suite" parallel="methods" thread-count="5">
-    <test name="Parallel Tests">
-        <classes>
-            <class name="com.example.tests.LoginTest"/>
-            <class name="com.example.tests.SearchTest"/>
-        </classes>
-    </test>
-</suite>
+# Run certificate authentication tests
+mvn test -Dtest=CSCertificateAuthenticationTest
 ```
 
-### 2. Custom Wait Conditions
+### Direct TestNG Execution
 
-```java
-// Wait for custom condition
-waitUtils.waitForCondition(driver -> 
-    element.getText().equals("Ready"),
-    30, "Element should show 'Ready'"
-);
+```bash
+# Using TestNG directly
+java -cp "target/classes:target/test-classes:target/dependency/*" \
+     org.testng.TestNG suites/orangehrm-simple-only.xml
 
-// Wait for JavaScript
-csDriver.waitForJQuery();
-csDriver.waitForAngular();
-```
-
-### 3. Event Listeners
-
-```java
-CSEventManager.getInstance().addEventListener(new CSEventListener() {
-    @Override
-    public void onEvent(EventType eventType, Object eventData) {
-        if (eventType == EventType.TEST_FAILED) {
-            // Custom action on test failure
-        }
-    }
-});
-```
-
-### 4. Performance Testing
-
-```java
-@Test
-public void testPerformance() {
-    long startTime = System.currentTimeMillis();
-    
-    // Test actions...
-    
-    long duration = System.currentTimeMillis() - startTime;
-    reportManager.addPerformanceMetric("loginTime", duration);
-    
-    Assert.assertTrue(duration < 3000, 
-        "Login should complete within 3 seconds");
-}
+# With environment variables for ADO
+export CS_ENCRYPTION_KEY="your-key"
+java -cp "target/classes:target/test-classes:target/dependency/*" \
+     -Dcs.encryption.key="$CS_ENCRYPTION_KEY" \
+     org.testng.TestNG suites/ado-bdd-suite.xml
 ```
 
 ## Best Practices
 
-### 1. Page Object Guidelines
-- Keep page objects focused on element definitions and basic interactions
-- Use descriptive names for elements
-- Implement wait strategies in page methods
-- Avoid assertions in page objects
-
-### 2. Test Design
-- Follow AAA pattern (Arrange, Act, Assert)
-- Use meaningful test names and descriptions
-- Keep tests independent and atomic
-- Use data-driven approach for similar scenarios
-
-### 3. Framework Usage
-- Leverage custom annotations for metadata
-- Use configuration files for environment-specific data
-- Implement proper error handling
-- Take advantage of built-in retry mechanisms
-
-### 4. Maintenance
-- Regularly update object repository
-- Keep test data organized
-- Monitor test execution trends
-- Clean up old reports and recordings
+1. **Page Objects**: Keep page classes focused on element interactions
+2. **Step Definitions**: Use descriptive step patterns with placeholders
+3. **Data Management**: Externalize test data in Excel/JSON files
+4. **Object Repository**: Centralize element locators for maintainability
+5. **Parallel Execution**: Design tests to be thread-safe
+6. **Reporting**: Use meaningful log messages and capture screenshots
+7. **Azure DevOps**: Map test cases using @TestCaseId annotations
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **WebDriver not found**
-   - Ensure drivers are in PATH or use WebDriverManager
+1. **WebDriver Issues**
+   - WebDriverManager automatically downloads drivers
    - Check browser version compatibility
+   - Verify PATH settings
 
-2. **Parallel execution failures**
-   - Verify thread-safe implementation
-   - Check resource conflicts
-   - Review CSThreadContext usage
+2. **Azure DevOps Integration**
+   - Ensure PAT token has correct permissions
+   - Verify test case IDs exist in ADO
+   - Check network connectivity
 
-3. **Report generation issues**
-   - Check write permissions
-   - Verify report directory exists
-   - Review log files for errors
+3. **Certificate Authentication**
+   - Verify certificate files exist in `src/test/resources/certificates/`
+   - Check certificate password is correct
+   - Ensure certificate is not expired
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add/update tests
-5. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+4. **BDD Tests**
+   - Verify feature files exist in specified path
+   - Check step definitions package is correct
+   - Ensure CSBDDRunner is used in suite file
 
 ## Support
 
-For questions and support:
-- Create an issue in the repository
-- Contact the framework team
-- Check the documentation wiki
+For issues and support:
+- Review test examples in `src/test/java/com/orangehrm/`
+- Check suite configurations in `suites/` directory
+- Review feature files in `features/` directory
 
 ---
 
-Built with ❤️ by the TestForge Team
+**Version**: 1.0.0  
+**Last Updated**: August 2024  
+**Framework**: CS TestForge

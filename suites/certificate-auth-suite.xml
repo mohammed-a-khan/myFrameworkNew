@@ -1,0 +1,34 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Certificate Authentication Test Suite" parallel="false" thread-count="1">
+    
+    <parameter name="browser" value="chrome"/>
+    <parameter name="headless" value="true"/>
+    <parameter name="environment" value="test"/>
+    
+    <!-- API Certificate Authentication Tests -->
+    <test name="API Certificate Authentication Tests">
+        <classes>
+            <class name="com.testforge.cs.tests.api.CSCertificateAuthenticationTest">
+                <methods>
+                    <include name="testCertificateLoading"/>
+                    <include name="testAPICallWithClientCertificate"/>
+                    <include name="testHTTPSConnectionWithCertificate"/>
+                    <include name="testMultipleCertificateFormats"/>
+                    <include name="testCertificateCaching"/>
+                    <include name="testInvalidCertificatePassword"/>
+                    <include name="testNonExistentCertificate"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- BDD Certificate Authentication Scenarios -->
+    <test name="BDD Certificate Authentication">
+        <parameter name="cucumber.features" value="src/test/resources/features/CertificateAuthentication.feature"/>
+        <parameter name="cucumber.plugin" value="pretty, html:target/cucumber-reports/certificate-auth.html, json:target/cucumber-reports/certificate-auth.json"/>
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>
