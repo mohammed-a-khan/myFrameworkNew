@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS TestForge - Encryption Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #93186C;
+            --primary-dark: #6b1250;
+            --primary-light: #b54a94;
+            --primary-ultralight: #f5e6f1;
+            --secondary-color: #FF6B35;
+            --bg-color: #f7f7f7;
+            --card-bg: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #3b82f6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 30px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .tagline {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        /* Card */
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: var(--text-secondary);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: -2px;
+        }
+
+        .tab:hover {
+            color: var(--primary-color);
+        }
+
+        .tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .tab-icon {
+            margin-right: 8px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            resize: vertical;
+            min-height: 120px;
+            transition: border-color 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background: #E55100;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+        }
+
+        /* Result Box */
+        .result-box {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px solid var(--success-color);
+        }
+
+        .result-box.show {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-box.error {
+            border-color: var(--error-color);
+            background: #ffebee;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .result-label {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .copy-btn {
+            padding: 6px 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .copy-btn.copied {
+            background: var(--success-color);
+        }
+
+        .result-content {
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Help Section */
+        .help-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: var(--primary-ultralight);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .help-title {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .help-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .help-text code {
+            background: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            color: var(--primary-dark);
+            font-size: 13px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🔐</div>
+                <span>CS TestForge Framework</span>
+            </div>
+            <div class="tagline">Secure Encryption Tool for Test Data</div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <div class="card">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('encrypt')">
+                    <span class="tab-icon">🔒</span>Encrypt
+                </button>
+                <button class="tab" onclick="switchTab('decrypt')">
+                    <span class="tab-icon">🔓</span>Decrypt
+                </button>
+            </div>
+
+            <!-- Encrypt Tab -->
+            <div id="encrypt-tab" class="tab-content active">
+                <div class="form-group">
+                    <label for="plainText">Enter value to encrypt:</label>
+                    <textarea id="plainText" placeholder="Enter password, API key, or any sensitive value"></textarea>
+                </div>
+                
+                <button class="btn" onclick="encryptValue()">Encrypt Value</button>
+                
+                <div id="encryptResult" class="result-box">
+                    <div class="result-header">
+                        <span class="result-label">Encrypted Value:</span>
+                        <button class="copy-btn" onclick="copyText('encryptedValue')">Copy</button>
+                    </div>
+                    <div class="result-content" id="encryptedValue"></div>
+                </div>
+            </div>
+
+            <!-- Decrypt Tab -->
+            <div id="decrypt-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="encryptedText">Enter encrypted value:</label>
+                    <textarea id="encryptedText" placeholder="Enter ENC(...) value to decrypt"></textarea>
+                </div>
+                
+                <button class="btn btn-secondary" onclick="decryptValue()">Decrypt Value</button>
+                
+                <div id="decryptResult" class="result-box">
+                    <div class="result-header">
+                        <span class="result-label">Decrypted Value:</span>
+                        <button class="copy-btn" onclick="copyText('decryptedValue')">Copy</button>
+                    </div>
+                    <div class="result-content" id="decryptedValue"></div>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="help-section">
+                <div class="help-title">📖 How to Use</div>
+                <div class="help-text">
+                    <strong>To encrypt:</strong> Enter any sensitive value and click Encrypt. Copy the <code>ENC(...)</code> result.<br><br>
+                    <strong>Use in framework:</strong><br>
+                    • Properties: <code>password=ENC(encrypted_value)</code><br>
+                    • Feature files: <code>When I enter "ENC(encrypted_value)"</code><br>
+                    • JSON/Excel/CSV: Place <code>ENC(encrypted_value)</code> in any field<br><br>
+                    <strong>Note:</strong> The framework automatically decrypts these values when reading them. No configuration needed!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        CS TestForge Framework © 2024 | Powered by AES-256-GCM Encryption
+    </div>
+
+    <script>
+        // Internal master key - same as Java framework
+        const MASTER_KEY = "CSTestForge2024MasterKey!@#$%^&*";
+        const IV_LENGTH = 12;
+        const TAG_LENGTH = 128;
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Activate selected tab
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            // Hide results when switching tabs
+            document.querySelectorAll('.result-box').forEach(box => {
+                box.classList.remove('show');
+            });
+        }
+
+        // Get encryption key
+        async function getKey() {
+            const encoder = new TextEncoder();
+            const keyBytes = encoder.encode(MASTER_KEY);
+            const key256 = new Uint8Array(32);
+            key256.set(keyBytes.slice(0, 32));
+            
+            return await crypto.subtle.importKey(
+                'raw',
+                key256,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        // Encrypt value
+        async function encryptValue() {
+            const plainText = document.getElementById('plainText').value.trim();
+            if (!plainText) {
+                alert('Please enter a value to encrypt');
+                return;
+            }
+
+            try {
+                const key = await getKey();
+                const encoder = new TextEncoder();
+                const data = encoder.encode(plainText);
+                
+                // Generate random IV
+                const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+                
+                // Encrypt
+                const encryptedData = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv, tagLength: TAG_LENGTH },
+                    key,
+                    data
+                );
+                
+                // Combine IV and encrypted data
+                const combined = new Uint8Array(iv.length + encryptedData.byteLength);
+                combined.set(iv, 0);
+                combined.set(new Uint8Array(encryptedData), iv.length);
+                
+                // Convert to base64 and wrap in ENC()
+                const base64 = btoa(String.fromCharCode.apply(null, combined));
+                const result = `ENC(${base64})`;
+                
+                // Show result
+                document.getElementById('encryptedValue').textContent = result;
+                document.getElementById('encryptResult').classList.add('show');
+                document.getElementById('encryptResult').classList.remove('error');
+                
+            } catch (e) {
+                console.error('Encryption error:', e);
+                showError('encryptResult', 'Encryption failed: ' + e.message);
+            }
+        }
+
+        // Decrypt value
+        async function decryptValue() {
+            let encryptedText = document.getElementById('encryptedText').value.trim();
+            if (!encryptedText) {
+                alert('Please enter an encrypted value to decrypt');
+                return;
+            }
+
+            try {
+                // Extract from ENC() wrapper if present
+                if (encryptedText.startsWith('ENC(') && encryptedText.endsWith(')')) {
+                    encryptedText = encryptedText.substring(4, encryptedText.length - 1);
+                }
+                
+                const key = await getKey();
+                
+                // Decode from base64
+                const combined = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+                
+                // Extract IV and encrypted data
+                const iv = combined.slice(0, IV_LENGTH);
+                const encryptedData = combined.slice(IV_LENGTH);
+                
+                // Decrypt
+                const decryptedData = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv, tagLength: TAG_LENGTH },
+                    key,
+                    encryptedData
+                );
+                
+                // Convert to string
+                const decoder = new TextDecoder();
+                const result = decoder.decode(decryptedData);
+                
+                // Show result
+                document.getElementById('decryptedValue').textContent = result;
+                document.getElementById('decryptResult').classList.add('show');
+                document.getElementById('decryptResult').classList.remove('error');
+                
+            } catch (e) {
+                console.error('Decryption error:', e);
+                showError('decryptResult', 'Invalid encrypted value or corrupted data');
+            }
+        }
+
+        // Copy text to clipboard
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            const button = event.currentTarget || event.target;
+            
+            // Method 1: Try modern clipboard API
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        showCopySuccess(button);
+                    })
+                    .catch(() => {
+                        // If clipboard API fails, try fallback
+                        fallbackCopy(text, button);
+                    });
+            } else {
+                // Use fallback for older browsers
+                fallbackCopy(text, button);
+            }
+        }
+
+        // Fallback copy method
+        function fallbackCopy(text, button) {
+            // Create a textarea element
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'absolute';
+            textarea.style.left = '-9999px';
+            textarea.style.top = '0';
+            textarea.setAttribute('readonly', '');
+            document.body.appendChild(textarea);
+            
+            // Select and copy the text
+            textarea.select();
+            textarea.setSelectionRange(0, 99999); // For mobile devices
+            
+            let success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.error('Copy failed:', err);
+            }
+            
+            // Remove the textarea
+            document.body.removeChild(textarea);
+            
+            if (success) {
+                showCopySuccess(button);
+            } else {
+                // Last resort: prompt user to copy manually
+                prompt('Copy failed. Please copy manually:', text);
+            }
+        }
+
+        // Show copy success
+        function showCopySuccess(button) {
+            if (!button) return;
+            
+            const originalText = button.textContent;
+            button.textContent = '✓ Copied';
+            button.classList.add('copied');
+            
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        }
+
+        // Show error
+        function showError(resultId, message) {
+            const resultBox = document.getElementById(resultId);
+            resultBox.classList.add('show', 'error');
+            resultBox.querySelector('.result-content').textContent = message;
+            resultBox.querySelector('.copy-btn').style.display = 'none';
+        }
+
+        // Clear results when input changes
+        document.getElementById('plainText').addEventListener('input', () => {
+            document.getElementById('encryptResult').classList.remove('show');
+        });
+        
+        document.getElementById('encryptedText').addEventListener('input', () => {
+            document.getElementById('decryptResult').classList.remove('show');
+        });
+    </script>
+</body>
+</html>

@@ -114,6 +114,7 @@ cs-reports/
 reports/
 *.html
 !**/src/**/*.html
+!encryption-tool.html
 
 # Screenshots and Videos
 screenshots/
