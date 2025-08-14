@@ -54,7 +54,6 @@ public class CSBDDRunner extends CSBaseTest {
     private CSAzureDevOpsPublisher adoPublisher;
     private boolean adoTestRunStarted = false; // Track if we've started an ADO test run
     private String suiteAdoEnabled; // Track suite parameter for ado.enabled
-    private Set<Integer> adoTestPointIds = new HashSet<>(); // Collect test point IDs for the test run
     
     // Suite XML parameters for ADO (highest priority)
     private String suiteXmlTestPlanId;
@@ -171,11 +170,14 @@ public class CSBDDRunner extends CSBaseTest {
     public void teardownSuite() {
         logger.info("BDD Runner @AfterSuite - Ensuring all browsers are closed");
         
-        // Complete the ADO test run if one was started
+        // Publish any remaining test results to ADO before completing
         if (adoPublisher != null && adoPublisher.isEnabled() && adoTestRunStarted) {
             try {
-                // Don't call publishTestResults() here as test results are already published individually
-                // Just complete the test run
+                // Publish all test results that might not have been sent yet
+                adoPublisher.publishTestResults();
+                logger.info("Published all test results to Azure DevOps");
+                
+                // Now complete the test run
                 adoPublisher.completeTestRun();
                 logger.info("Completed Azure DevOps test run");
             } catch (Exception e) {
@@ -497,11 +499,6 @@ public class CSBDDRunner extends CSBaseTest {
             System.out.println("  " + name + ": " + count + " instances"));
         System.out.println("==========================================\n");
         
-        // Collect test points for ADO if enabled
-        if (adoPublisher != null && adoPublisher.isEnabled()) {
-            collectTestPointsAndCreateTestRun(testData);
-        }
-        
         return testData.toArray(new Object[0][]);
     }
     
@@ -724,42 +721,48 @@ public class CSBDDRunner extends CSBaseTest {
         if (adoPublisher != null && adoPublisher.isEnabled()) {
             adoMetadata = extractADOMetadataFromScenario(feature, scenario);
             
-            // Check if we have metadata (TestCaseId is required)
-            if (adoMetadata != null) {
-                // Check if ALL three IDs are present (TestPlan, TestSuite, and TestCase)
-                if (adoMetadata.hasTestCaseMapping() && 
-                    adoMetadata.getTestPlanId() != null && 
-                    adoMetadata.getTestSuiteId() != null) {
-                    
-                    logger.info("Found complete ADO mapping for scenario - Test Case: {}, Test Plan: {}, Test Suite: {}", 
-                        adoMetadata.getTestCaseId(), 
-                        adoMetadata.getTestPlanId(), 
-                        adoMetadata.getTestSuiteId());
-                    
-                    // Test run should already be created with test points in DataProvider
-                    // Just log that we have ADO mapping
-                    
-                    // Add ADO metadata to test result
-                    if (testResult.getMetadata() == null) {
-                        testResult.setMetadata(new HashMap<>());
+            // Check if ALL three IDs are present (TestPlan, TestSuite, and TestCase)
+            if (adoMetadata != null && adoMetadata.hasTestCaseMapping() && 
+                adoMetadata.getTestPlanId() != null && 
+                adoMetadata.getTestSuiteId() != null) {
+                
+                logger.info("Found complete ADO mapping for scenario - Test Case: {}, Test Plan: {}, Test Suite: {}", 
+                    adoMetadata.getTestCaseId(), 
+                    adoMetadata.getTestPlanId(), 
+                    adoMetadata.getTestSuiteId());
+                
+                // Start ADO test run if not already started
+                if (!adoTestRunStarted && adoPublisher.isEnabled()) {
+                    try {
+                        String runName = "BDD Test Run - " + LocalDateTime.now();
+                        adoPublisher.startTestRun(runName, null, null);
+                        logger.info("Started Azure DevOps test run: {}", runName);
+                        adoTestRunStarted = true;
+                    } catch (Exception e) {
+                        logger.error("Failed to start ADO test run", e);
                     }
-                    Map<String, String> metadataMap = CSADOTagExtractor.toMetadataMap(adoMetadata);
-                    testResult.getMetadata().putAll(metadataMap);
-                } else {
-                    // Log which IDs are missing (TestCaseId is present but other IDs missing)
-                    List<String> missingIds = new ArrayList<>();
-                    if (adoMetadata.getTestPlanId() == null) {
-                        missingIds.add("TestPlanId");
-                    }
-                    if (adoMetadata.getTestSuiteId() == null) {
-                        missingIds.add("TestSuiteId");
-                    }
-                    logger.info("Skipping ADO integration for scenario '{}' (TestCase: {}) - Missing IDs: {}", 
-                        scenario.getName(), adoMetadata.getTestCaseId(), String.join(", ", missingIds));
                 }
+                
+                // Add ADO metadata to test result
+                if (testResult.getMetadata() == null) {
+                    testResult.setMetadata(new HashMap<>());
+                }
+                Map<String, String> metadataMap = CSADOTagExtractor.toMetadataMap(adoMetadata);
+                testResult.getMetadata().putAll(metadataMap);
             } else {
-                // No TestCaseId found - already logged in extractADOMetadataFromScenario
-                logger.debug("ADO integration skipped for scenario '{}' - no TestCaseId", scenario.getName());
+                // Log which IDs are missing
+                List<String> missingIds = new ArrayList<>();
+                if (adoMetadata == null || !adoMetadata.hasTestCaseMapping()) {
+                    missingIds.add("TestCaseId");
+                }
+                if (adoMetadata == null || adoMetadata.getTestPlanId() == null) {
+                    missingIds.add("TestPlanId");
+                }
+                if (adoMetadata == null || adoMetadata.getTestSuiteId() == null) {
+                    missingIds.add("TestSuiteId");
+                }
+                logger.info("Skipping ADO integration for scenario '{}' - Missing IDs: {}", 
+                    scenario.getName(), String.join(", ", missingIds));
             }
         }
         
@@ -1135,107 +1138,22 @@ public class CSBDDRunner extends CSBaseTest {
     }
     
     /**
-     * Collect test points and create test run with those points
-     */
-    private void collectTestPointsAndCreateTestRun(List<Object[]> testData) {
-        Set<Integer> testPointIds = new HashSet<>();
-        
-        for (Object[] test : testData) {
-            String featureFile = (String) test[0];
-            CSFeatureFile feature = (CSFeatureFile) test[1];
-            CSFeatureFile.Scenario scenario = (CSFeatureFile.Scenario) test[2];
-            
-            CSADOTagExtractor.ADOMetadata metadata = extractADOMetadataFromScenario(feature, scenario);
-            
-            if (metadata != null && 
-                metadata.hasTestCaseMapping() && 
-                metadata.getTestPlanId() != null && 
-                metadata.getTestSuiteId() != null) {
-                
-                // Get test point ID for this test case
-                Integer testPointId = adoPublisher.getTestPointId(
-                    metadata.getTestPlanId(),
-                    metadata.getTestSuiteId(),
-                    metadata.getTestCaseId()
-                );
-                
-                if (testPointId != null) {
-                    testPointIds.add(testPointId);
-                    logger.info("Collected test point {} for test case {}", testPointId, metadata.getTestCaseId());
-                }
-            }
-        }
-        
-        // Create test run with collected test points
-        if (!testPointIds.isEmpty()) {
-            try {
-                String runName = "BDD Test Run - " + LocalDateTime.now();
-                List<Integer> pointIdList = new ArrayList<>(testPointIds);
-                adoPublisher.startTestRunWithPoints(runName, pointIdList);
-                logger.info("Started Azure DevOps test run with {} test points: {}", pointIdList.size(), pointIdList);
-                adoTestRunStarted = true;
-                adoTestPointIds = testPointIds;
-            } catch (Exception e) {
-                logger.error("Failed to start ADO test run with test points", e);
-            }
-        } else {
-            logger.info("No test points found for ADO test run");
-        }
-    }
-    
-    /**
      * Extract ADO metadata from scenario and feature tags
-     * Hierarchy: Feature/Scenario Tags > Suite XML > Properties File
-     * TestCaseId MUST be in scenario tags, otherwise skip ADO integration
+     * Hierarchy: Suite XML > Feature/Scenario Tags > Properties File
      */
     private CSADOTagExtractor.ADOMetadata extractADOMetadataFromScenario(
             CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
         
         CSADOTagExtractor.ADOMetadata metadata = new CSADOTagExtractor.ADOMetadata();
         
-        // FIRST: Extract test case ID from scenario tags (REQUIRED for ADO integration)
-        boolean hasTestCaseId = false;
+        // Extract test case ID from scenario tags (always from tags)
         for (String tag : scenario.getTags()) {
-            Matcher caseMatcher = TEST_CASE_PATTERN.matcher(tag);
-            if (caseMatcher.find()) {
-                metadata.setTestCaseId(Integer.parseInt(caseMatcher.group(1)));
-                hasTestCaseId = true;
-                logger.debug("Found Test Case ID in scenario tag: {}", metadata.getTestCaseId());
-                break;
-            }
-        }
-        
-        // If no TestCaseId found, skip ADO integration for this scenario
-        if (!hasTestCaseId) {
-            logger.debug("No TestCaseId found in scenario '{}' - skipping ADO integration", scenario.getName());
-            return null;
+            extractFromTag(tag, metadata);
         }
         
         // HIERARCHY FOR TEST PLAN ID:
-        // 1. First priority: Scenario tags
-        for (String tag : scenario.getTags()) {
-            Matcher planMatcher = TEST_PLAN_PATTERN.matcher(tag);
-            if (planMatcher.find()) {
-                metadata.setTestPlanId(Integer.parseInt(planMatcher.group(1)));
-                logger.debug("Using Test Plan ID from scenario tag: {}", metadata.getTestPlanId());
-                break;
-            }
-        }
-        
-        // 2. Second priority: Feature tags
-        if (metadata.getTestPlanId() == null) {
-            for (String tag : feature.getTags()) {
-                Matcher planMatcher = TEST_PLAN_PATTERN.matcher(tag);
-                if (planMatcher.find()) {
-                    metadata.setTestPlanId(Integer.parseInt(planMatcher.group(1)));
-                    logger.debug("Using Test Plan ID from feature tag: {}", metadata.getTestPlanId());
-                    break;
-                }
-            }
-        }
-        
-        // 3. Third priority: Suite XML parameter (optional)
-        if (metadata.getTestPlanId() == null && suiteXmlTestPlanId != null && !suiteXmlTestPlanId.isEmpty()) {
+        // 1. First priority: Suite XML parameter
+        if (suiteXmlTestPlanId != null && !suiteXmlTestPlanId.isEmpty()) {
             try {
                 metadata.setTestPlanId(Integer.parseInt(suiteXmlTestPlanId));
                 logger.debug("Using Test Plan ID from suite XML: {}", suiteXmlTestPlanId);
@@ -1244,7 +1162,32 @@ public class CSBDDRunner extends CSBaseTest {
             }
         }
         
-        // 4. Fourth priority: Properties file
+        // 2. Second priority: Feature/Scenario tags
+        if (metadata.getTestPlanId() == null) {
+            // Check scenario tags first
+            for (String tag : scenario.getTags()) {
+                Matcher planMatcher = TEST_PLAN_PATTERN.matcher(tag);
+                if (planMatcher.find()) {
+                    metadata.setTestPlanId(Integer.parseInt(planMatcher.group(1)));
+                    logger.debug("Using Test Plan ID from scenario tag: {}", metadata.getTestPlanId());
+                    break;
+                }
+            }
+            
+            // If not in scenario, check feature tags
+            if (metadata.getTestPlanId() == null) {
+                for (String tag : feature.getTags()) {
+                    Matcher planMatcher = TEST_PLAN_PATTERN.matcher(tag);
+                    if (planMatcher.find()) {
+                        metadata.setTestPlanId(Integer.parseInt(planMatcher.group(1)));
+                        logger.debug("Using Test Plan ID from feature tag: {}", metadata.getTestPlanId());
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 3. Third priority: Properties file
         if (metadata.getTestPlanId() == null) {
             String planId = config.getProperty("ado.test.plan.id");
             if (planId != null && !planId.isEmpty()) {
@@ -1258,30 +1201,8 @@ public class CSBDDRunner extends CSBaseTest {
         }
         
         // HIERARCHY FOR TEST SUITE ID:
-        // 1. First priority: Scenario tags
-        for (String tag : scenario.getTags()) {
-            Matcher suiteMatcher = TEST_SUITE_PATTERN.matcher(tag);
-            if (suiteMatcher.find()) {
-                metadata.setTestSuiteId(Integer.parseInt(suiteMatcher.group(1)));
-                logger.debug("Using Test Suite ID from scenario tag: {}", metadata.getTestSuiteId());
-                break;
-            }
-        }
-        
-        // 2. Second priority: Feature tags
-        if (metadata.getTestSuiteId() == null) {
-            for (String tag : feature.getTags()) {
-                Matcher suiteMatcher = TEST_SUITE_PATTERN.matcher(tag);
-                if (suiteMatcher.find()) {
-                    metadata.setTestSuiteId(Integer.parseInt(suiteMatcher.group(1)));
-                    logger.debug("Using Test Suite ID from feature tag: {}", metadata.getTestSuiteId());
-                    break;
-                }
-            }
-        }
-        
-        // 3. Third priority: Suite XML parameter (optional)
-        if (metadata.getTestSuiteId() == null && suiteXmlTestSuiteId != null && !suiteXmlTestSuiteId.isEmpty()) {
+        // 1. First priority: Suite XML parameter
+        if (suiteXmlTestSuiteId != null && !suiteXmlTestSuiteId.isEmpty()) {
             try {
                 metadata.setTestSuiteId(Integer.parseInt(suiteXmlTestSuiteId));
                 logger.debug("Using Test Suite ID from suite XML: {}", suiteXmlTestSuiteId);
@@ -1290,7 +1211,32 @@ public class CSBDDRunner extends CSBaseTest {
             }
         }
         
-        // 4. Fourth priority: Properties file
+        // 2. Second priority: Feature/Scenario tags
+        if (metadata.getTestSuiteId() == null) {
+            // Check scenario tags first
+            for (String tag : scenario.getTags()) {
+                Matcher suiteMatcher = TEST_SUITE_PATTERN.matcher(tag);
+                if (suiteMatcher.find()) {
+                    metadata.setTestSuiteId(Integer.parseInt(suiteMatcher.group(1)));
+                    logger.debug("Using Test Suite ID from scenario tag: {}", metadata.getTestSuiteId());
+                    break;
+                }
+            }
+            
+            // If not in scenario, check feature tags
+            if (metadata.getTestSuiteId() == null) {
+                for (String tag : feature.getTags()) {
+                    Matcher suiteMatcher = TEST_SUITE_PATTERN.matcher(tag);
+                    if (suiteMatcher.find()) {
+                        metadata.setTestSuiteId(Integer.parseInt(suiteMatcher.group(1)));
+                        logger.debug("Using Test Suite ID from feature tag: {}", metadata.getTestSuiteId());
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // 3. Third priority: Properties file
         if (metadata.getTestSuiteId() == null) {
             String suiteId = config.getProperty("ado.test.suite.id");
             if (suiteId != null && !suiteId.isEmpty()) {

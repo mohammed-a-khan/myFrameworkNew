@@ -497,11 +497,6 @@ public class CSBDDRunner extends CSBaseTest {
             System.out.println("  " + name + ": " + count + " instances"));
         System.out.println("==========================================\n");
         
-        // Collect test points for ADO if enabled
-        if (adoPublisher != null && adoPublisher.isEnabled()) {
-            collectTestPointsAndCreateTestRun(testData);
-        }
-        
         return testData.toArray(new Object[0][]);
     }
     
@@ -736,8 +731,17 @@ public class CSBDDRunner extends CSBaseTest {
                         adoMetadata.getTestPlanId(), 
                         adoMetadata.getTestSuiteId());
                     
-                    // Test run should already be created with test points in DataProvider
-                    // Just log that we have ADO mapping
+                    // Start ADO test run if not already started
+                    if (!adoTestRunStarted && adoPublisher.isEnabled()) {
+                        try {
+                            String runName = "BDD Test Run - " + LocalDateTime.now();
+                            adoPublisher.startTestRun(runName, null, null);
+                            logger.info("Started Azure DevOps test run: {}", runName);
+                            adoTestRunStarted = true;
+                        } catch (Exception e) {
+                            logger.error("Failed to start ADO test run", e);
+                        }
+                    }
                     
                     // Add ADO metadata to test result
                     if (testResult.getMetadata() == null) {
@@ -1131,55 +1135,6 @@ public class CSBDDRunner extends CSBaseTest {
         } catch (Exception e) {
             logger.warn("Failed to initialize Azure DevOps integration: {}", e.getMessage());
             // Don't fail test execution if ADO initialization fails
-        }
-    }
-    
-    /**
-     * Collect test points and create test run with those points
-     */
-    private void collectTestPointsAndCreateTestRun(List<Object[]> testData) {
-        Set<Integer> testPointIds = new HashSet<>();
-        
-        for (Object[] test : testData) {
-            String featureFile = (String) test[0];
-            CSFeatureFile feature = (CSFeatureFile) test[1];
-            CSFeatureFile.Scenario scenario = (CSFeatureFile.Scenario) test[2];
-            
-            CSADOTagExtractor.ADOMetadata metadata = extractADOMetadataFromScenario(feature, scenario);
-            
-            if (metadata != null && 
-                metadata.hasTestCaseMapping() && 
-                metadata.getTestPlanId() != null && 
-                metadata.getTestSuiteId() != null) {
-                
-                // Get test point ID for this test case
-                Integer testPointId = adoPublisher.getTestPointId(
-                    metadata.getTestPlanId(),
-                    metadata.getTestSuiteId(),
-                    metadata.getTestCaseId()
-                );
-                
-                if (testPointId != null) {
-                    testPointIds.add(testPointId);
-                    logger.info("Collected test point {} for test case {}", testPointId, metadata.getTestCaseId());
-                }
-            }
-        }
-        
-        // Create test run with collected test points
-        if (!testPointIds.isEmpty()) {
-            try {
-                String runName = "BDD Test Run - " + LocalDateTime.now();
-                List<Integer> pointIdList = new ArrayList<>(testPointIds);
-                adoPublisher.startTestRunWithPoints(runName, pointIdList);
-                logger.info("Started Azure DevOps test run with {} test points: {}", pointIdList.size(), pointIdList);
-                adoTestRunStarted = true;
-                adoTestPointIds = testPointIds;
-            } catch (Exception e) {
-                logger.error("Failed to start ADO test run with test points", e);
-            }
-        } else {
-            logger.info("No test points found for ADO test run");
         }
     }
     

@@ -38,11 +38,67 @@ public class CSTestRunManager {
         this.evidenceUploader = CSEvidenceUploader.getInstance();
     }
     
+    /**
+     * Get suite manager instance
+     */
+    public CSTestSuiteManager getSuiteManager() {
+        return suiteManager;
+    }
+    
     public static synchronized CSTestRunManager getInstance() {
         if (instance == null) {
             instance = new CSTestRunManager();
         }
         return instance;
+    }
+    
+    /**
+     * Create test run with specific test points
+     */
+    public String createTestRunWithPoints(String name, String planId, String suiteId, List<Integer> testPointIds) {
+        try {
+            Map<String, Object> runData = new HashMap<>();
+            runData.put("name", name);
+            runData.put("plan", Map.of("id", planId));
+            runData.put("state", "InProgress");
+            runData.put("automated", true);
+            
+            // Add test points to the run
+            if (testPointIds != null && !testPointIds.isEmpty()) {
+                runData.put("pointIds", testPointIds);
+                logger.info("Creating test run with {} test points: {}", testPointIds.size(), testPointIds);
+            }
+            
+            // Add custom fields
+            if (config.getCustomFields() != null) {
+                runData.putAll(config.getCustomFields());
+            }
+            
+            String url = config.buildUrl(config.getEndpoints().getTestRuns(), null);
+            @SuppressWarnings("unchecked")
+            CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
+                client.post(url, runData, Map.class);
+            
+            TestRun testRun = new TestRun();
+            testRun.id = response.data.get("id").toString();
+            testRun.name = response.data.get("name").toString();
+            testRun.state = response.data.get("state").toString();
+            testRun.url = response.data.get("url").toString();
+            testRun.webAccessUrl = response.data.get("webAccessUrl") != null ? 
+                response.data.get("webAccessUrl").toString() : "";
+            
+            currentTestRun = testRun;
+            
+            logger.info("Created test run with points: {} (ID: {})", testRun.name, testRun.id);
+            logger.info("Test run URL: {}", testRun.webAccessUrl);
+            
+            return testRun.id;
+            
+        } catch (Exception e) {
+            logger.error("Failed to create test run with points", e);
+            throw new CSAzureDevOpsException("Failed to create test run", e);
+        }
     }
     
     /**
@@ -188,37 +244,27 @@ public class CSTestRunManager {
                 }
             }
             
+            // IMPORTANT: When a test run is created with specific test points,
+            // Azure DevOps automatically creates placeholder test results for those points.
+            // We need to UPDATE the existing result, not create a new one.
+            
+            // First, get existing test results from the run to find the one for this test point
+            Integer existingResultId = null;
+            if (testPointId != null) {
+                existingResultId = findExistingTestResultForTestPoint(currentTestRun.id, testPointId);
+            }
+            
             // Prepare test result data
             Map<String, Object> resultData = new HashMap<>();
-            resultData.put("testCaseTitle", testResult.getTestName());
-            resultData.put("automatedTestName", testResult.getClassName() + "." + testResult.getMethodName());
-            resultData.put("automatedTestStorage", testResult.getClassName());
+            
             resultData.put("outcome", mapTestStatus(testResult.getStatus().toString()));
             resultData.put("state", "Completed");
             resultData.put("startedDate", testResult.getStartTime());
             resultData.put("completedDate", testResult.getEndTime());
             resultData.put("durationInMs", testResult.getDuration());
-            
-            // Add test case reference if available - this links the result to the test case
-            if (testCaseId != null) {
-                Map<String, Object> testCase = new HashMap<>();
-                testCase.put("id", testCaseId);
-                resultData.put("testCase", testCase);
-                
-                // Also add test plan reference to properly link to plan
-                if (testPlanId != null) {
-                    Map<String, Object> testPlan = new HashMap<>();
-                    testPlan.put("id", testPlanId);
-                    resultData.put("testPlan", testPlan);
-                }
-            }
-            
-            // Only add test point if we found one - don't create new test points
-            if (testPointId != null) {
-                Map<String, Object> testPoint = new HashMap<>();
-                testPoint.put("id", testPointId);
-                resultData.put("testPoint", testPoint);
-            }
+            resultData.put("testCaseTitle", testResult.getTestName());
+            resultData.put("automatedTestName", testResult.getClassName() + "." + testResult.getMethodName());
+            resultData.put("automatedTestStorage", testResult.getClassName());
             
             if (testResult.getErrorMessage() != null) {
                 resultData.put("errorMessage", testResult.getErrorMessage());
@@ -228,53 +274,106 @@ public class CSTestRunManager {
                 resultData.put("stackTrace", testResult.getStackTrace());
             }
             
-            // Add result to Azure DevOps
-            String url = config.buildUrl(
-                config.getEndpoints().getTestResults(),
-                Map.of("runId", currentTestRun.id)
-            );
+            Integer resultId = null;
+            String url;
             
-            List<Map<String, Object>> results = Arrays.asList(resultData);
-            
-            // Post test results - ADO returns an object with "value" array
-            @SuppressWarnings("unchecked")
-            CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
-                (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
-                client.post(url, results, Map.class);
-            
-            // Get the result ID from response
-            if (response.data != null && response.data.containsKey("value")) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> createdResults = (List<Map<String, Object>>) response.data.get("value");
+            // If we found an existing result, UPDATE it. Otherwise, create a new one.
+            if (existingResultId != null) {
+                // UPDATE existing test result
+                // IMPORTANT: Azure DevOps expects /results endpoint for updates, not /results/{id}
+                url = config.buildUrl(
+                    config.getEndpoints().getTestResults(),
+                    Map.of("runId", currentTestRun.id)
+                );
                 
-                if (createdResults != null && !createdResults.isEmpty()) {
-                    Map<String, Object> createdResult = createdResults.get(0);
-                    Integer resultId = (Integer) createdResult.get("id");
+                logger.info("Updating existing test result {} for test point {}", existingResultId, testPointId);
+                
+                // Add the result ID to the update payload
+                resultData.put("id", existingResultId);
+                
+                // IMPORTANT: PATCH expects an ARRAY of test results, even for a single result
+                List<Map<String, Object>> resultsArray = Arrays.asList(resultData);
+                
+                @SuppressWarnings("unchecked")
+                CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                    (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
+                    client.patch(url, resultsArray, Map.class);
+                
+                // The PATCH response also returns an object with "value" array
+                if (response.data != null && response.data.containsKey("value")) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> updatedResults = (List<Map<String, Object>>) response.data.get("value");
                     
-                    // Store mapping
-                    String testKey = testResult.getClassName() + "." + testResult.getMethodName();
-                    testResultMapping.put(testKey, resultId);
-                    
-                    // Upload evidence if configured
-                    if (config.isUploadAttachments()) {
-                        uploadTestEvidence(currentTestRun.id, resultId.toString(), testResult);
+                    if (updatedResults != null && !updatedResults.isEmpty()) {
+                        Map<String, Object> updatedResult = updatedResults.get(0);
+                        resultId = Integer.parseInt(updatedResult.get("id").toString());
+                        logger.debug("Successfully updated test result ID: {}", resultId);
                     }
+                } else {
+                    // Fallback if response format is different
+                    resultId = existingResultId;
+                }
+                
+            } else {
+                // CREATE new test result (fallback for non-test-point scenarios)
+                url = config.buildUrl(
+                    config.getEndpoints().getTestResults(),
+                    Map.of("runId", currentTestRun.id)
+                );
+                
+                // For new results, we need the test point ID
+                if (testPointId != null) {
+                    resultData.put("testPointId", testPointId);
+                }
+                if (testCaseId != null) {
+                    resultData.put("testCaseId", testCaseId);
+                }
+                
+                List<Map<String, Object>> results = Arrays.asList(resultData);
+                
+                // Post test results - ADO returns an object with "value" array
+                @SuppressWarnings("unchecked")
+                CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                    (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
+                    client.post(url, results, Map.class);
+            
+                // Get the result ID from response
+                if (response.data != null && response.data.containsKey("value")) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> createdResults = (List<Map<String, Object>>) response.data.get("value");
                     
-                    logger.info("Added test result for: {} (ID: {})", testResult.getTestName(), resultId);
-                    
-                    // Update test point outcome in test plan
-                    if (testCaseId != null && planIdStr != null && suiteIdStr != null) {
-                        String outcome = mapTestStatus(testResult.getStatus().toString());
-                        suiteManager.updateTestPointOutcome(
-                            planIdStr, 
-                            suiteIdStr, 
-                            testCaseId, 
-                            outcome, 
-                            currentTestRun.id, 
-                            resultId.toString()
-                        );
-                        logger.debug("Updated test point outcome for test case {} to {}", testCaseId, outcome);
+                    if (createdResults != null && !createdResults.isEmpty()) {
+                        Map<String, Object> createdResult = createdResults.get(0);
+                        resultId = (Integer) createdResult.get("id");
                     }
+                }
+            }
+            
+            if (resultId != null) {
+                // Store mapping
+                String testKey = testResult.getClassName() + "." + testResult.getMethodName();
+                testResultMapping.put(testKey, resultId);
+                
+                // Upload evidence if configured
+                if (config.isUploadAttachments()) {
+                    uploadTestEvidence(currentTestRun.id, resultId.toString(), testResult);
+                }
+                
+                logger.info("Updated test result for: {} (ID: {})", testResult.getTestName(), resultId);
+                
+                // IMPORTANT: Update test point outcome in the test plan
+                // This is required to show the correct outcome in the test plan view
+                if (testCaseId != null && planIdStr != null && suiteIdStr != null && testPointId != null) {
+                    String outcome = mapTestStatus(testResult.getStatus().toString());
+                    logger.debug("Updating test point outcome for test case {} to {}", testCaseId, outcome);
+                    suiteManager.updateTestPointOutcome(
+                        planIdStr, 
+                        suiteIdStr, 
+                        testCaseId, 
+                        outcome, 
+                        currentTestRun.id, 
+                        resultId.toString()
+                    );
                 }
             }
             
@@ -303,6 +402,8 @@ public class CSTestRunManager {
             for (CSTestResult testResult : testResults) {
                 Integer testCaseId = null;
                 Integer testPlanId = null;
+                Integer testSuiteId = null;
+                Integer testPointId = null;
                 
                 // Extract test case ID from metadata if available
                 if (testResult.getMetadata() != null) {
@@ -320,9 +421,41 @@ public class CSTestRunManager {
                             logger.warn("Invalid test plan ID in metadata");
                         }
                     }
+                    if (testResult.getMetadata().containsKey("ado.testsuite.id")) {
+                        try {
+                            testSuiteId = Integer.parseInt(testResult.getMetadata().get("ado.testsuite.id").toString());
+                        } catch (NumberFormatException e) {
+                            logger.warn("Invalid test suite ID in metadata");
+                        }
+                    }
+                }
+                
+                // Use metadata values or fall back to config values
+                String planIdStr = testPlanId != null ? testPlanId.toString() : config.getTestPlanId();
+                String suiteIdStr = testSuiteId != null ? testSuiteId.toString() : config.getTestSuiteId();
+                
+                // Find test point for this test case
+                if (testCaseId != null && planIdStr != null && suiteIdStr != null) {
+                    testPointId = suiteManager.findTestPointByTestCase(
+                        testCaseId,
+                        planIdStr,
+                        suiteIdStr
+                    );
                 }
                 
                 Map<String, Object> resultData = new HashMap<>();
+                
+                // When a test run is created with specific test points, Azure DevOps requires specific fields
+                if (testPointId != null) {
+                    // Use testPointId (capital P) as required by ADO API
+                    resultData.put("testPointId", testPointId);
+                }
+                
+                // Add test case ID directly for planned test results
+                if (testCaseId != null) {
+                    resultData.put("testCaseId", testCaseId);
+                }
+                
                 resultData.put("testCaseTitle", testResult.getTestName());
                 resultData.put("automatedTestName", testResult.getClassName() + "." + testResult.getMethodName());
                 resultData.put("automatedTestStorage", testResult.getClassName());
@@ -331,20 +464,6 @@ public class CSTestRunManager {
                 resultData.put("startedDate", testResult.getStartTime());
                 resultData.put("completedDate", testResult.getEndTime());
                 resultData.put("durationInMs", testResult.getDuration());
-                
-                // Add test case reference if available - this links the result to the test case
-                if (testCaseId != null) {
-                    Map<String, Object> testCase = new HashMap<>();
-                    testCase.put("id", testCaseId);
-                    resultData.put("testCase", testCase);
-                    
-                    // Also add test plan reference to properly link to plan
-                    if (testPlanId != null) {
-                        Map<String, Object> testPlan = new HashMap<>();
-                        testPlan.put("id", testPlanId);
-                        resultData.put("testPlan", testPlan);
-                    }
-                }
                 
                 if (testResult.getErrorMessage() != null) {
                     resultData.put("errorMessage", testResult.getErrorMessage());
@@ -649,6 +768,52 @@ public class CSTestRunManager {
         }
         
         return description.toString();
+    }
+    
+    /**
+     * Find existing test result for a test point in the current run
+     */
+    private Integer findExistingTestResultForTestPoint(String runId, Integer testPointId) {
+        try {
+            // Get all test results from the current run
+            String url = config.buildUrl(
+                config.getEndpoints().getTestResults(),
+                Map.of("runId", runId)
+            );
+            
+            @SuppressWarnings("unchecked")
+            CSEnhancedADOClient.ADOResponse<Map<String, Object>> response = 
+                (CSEnhancedADOClient.ADOResponse<Map<String, Object>>) (CSEnhancedADOClient.ADOResponse<?>) 
+                client.get(url, Map.class);
+            
+            if (response.data != null && response.data.containsKey("value")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> results = (List<Map<String, Object>>) response.data.get("value");
+                
+                // Find the result that matches our test point
+                for (Map<String, Object> result : results) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> testPoint = (Map<String, Object>) result.get("testPoint");
+                    if (testPoint != null) {
+                        Object pointId = testPoint.get("id");
+                        if (pointId != null && pointId.toString().equals(testPointId.toString())) {
+                            Object resultId = result.get("id");
+                            if (resultId != null) {
+                                logger.debug("Found existing test result {} for test point {}", resultId, testPointId);
+                                return Integer.parseInt(resultId.toString());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            logger.debug("No existing test result found for test point {}", testPointId);
+            return null;
+            
+        } catch (Exception e) {
+            logger.error("Failed to find existing test result for test point {}", testPointId, e);
+            return null;
+        }
     }
     
     /**

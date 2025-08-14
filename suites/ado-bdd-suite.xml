@@ -8,7 +8,9 @@
     <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
     
     <!-- Test configuration for Azure DevOps BDD tests -->
-    <!-- CSBDDRunner will automatically detect ADO tags and publish to Azure DevOps if enabled -->
+    <!-- CSBDDRunner will automatically detect ADO tags from feature files -->
+    <!-- ADO IDs will be extracted from feature/scenario tags with this priority: -->
+    <!-- 1. Feature/Scenario tags 2. Suite XML (optional) 3. application.properties -->
     <test name="ADO BDD Tests">
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>

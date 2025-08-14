@@ -222,6 +222,12 @@ public class CSEnhancedADOClient {
         if (httpResponse.statusCode() >= 400) {
             String errorMsg = String.format("ADO request failed: %d %s", 
                 httpResponse.statusCode(), response.statusText);
+            
+            // Log error response body for debugging
+            if (httpResponse.body() != null && !httpResponse.body().isEmpty()) {
+                logger.error("Error response body: {}", httpResponse.body());
+            }
+            
             ADOError error = new ADOError(errorMsg);
             error.status = httpResponse.statusCode();
             error.statusText = response.statusText;

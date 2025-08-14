@@ -145,6 +145,51 @@ public class CSAzureDevOpsPublisher {
     }
     
     /**
+     * Start test run with specific test points
+     */
+    public String startTestRunWithPoints(String runName, List<Integer> testPointIds) {
+        if (!enabled) {
+            logger.debug("Azure DevOps integration disabled");
+            return null;
+        }
+        
+        try {
+            String testRunId = testRunManager.createTestRunWithPoints(
+                runName != null ? runName : "Test Run - " + LocalDateTime.now(),
+                config.getTestPlanId(),
+                config.getTestSuiteId(),
+                testPointIds
+            );
+            
+            logger.info("Started test run with {} test points: {}", testPointIds.size(), testRunId);
+            return testRunId;
+        } catch (Exception e) {
+            logger.error("Failed to start test run with points", e);
+            throw new CSAzureDevOpsException("Failed to start test run", e);
+        }
+    }
+    
+    /**
+     * Get test point ID for a test case
+     */
+    public Integer getTestPointId(Integer testPlanId, Integer testSuiteId, Integer testCaseId) {
+        if (!enabled) {
+            return null;
+        }
+        
+        try {
+            return testRunManager.getSuiteManager().findTestPointByTestCase(
+                testCaseId,
+                testPlanId != null ? testPlanId.toString() : config.getTestPlanId(),
+                testSuiteId != null ? testSuiteId.toString() : config.getTestSuiteId()
+            );
+        } catch (Exception e) {
+            logger.error("Failed to get test point ID", e);
+            return null;
+        }
+    }
+    
+    /**
      * Publish single test result
      */
     public void publishTestResult(com.testforge.cs.reporting.CSTestResult testResult) {

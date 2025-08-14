@@ -28,6 +28,7 @@ public class CSConfigManager {
     private String currentEnvironment;
     
     private static final String DEFAULT_CONFIG_PATH = "resources/config/";
+    private static final String OBJECT_REPOSITORIES_PATH = "object-repositories/";
     private static final String APPLICATION_PROPERTIES = "application.properties";
     private static final String OBJECT_REPOSITORY_PROPERTIES = "object-repository.properties";
     private static final String SQL_QUERIES_PROPERTIES = "SqlQueries.properties";
@@ -75,10 +76,30 @@ public class CSConfigManager {
      * Load default configuration files
      */
     private void loadDefaultConfigurations() {
-        // Load only from project root resources/config folder
+        // Load application and SQL properties from config folder
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + APPLICATION_PROPERTIES);
-        loadPropertiesFromFile(DEFAULT_CONFIG_PATH + OBJECT_REPOSITORY_PROPERTIES);
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + SQL_QUERIES_PROPERTIES);
+        
+        // Load object repositories from object-repositories folder
+        loadObjectRepositories();
+    }
+    
+    /**
+     * Load all object repository files from object-repositories folder
+     */
+    private void loadObjectRepositories() {
+        File orFolder = new File(OBJECT_REPOSITORIES_PATH);
+        if (orFolder.exists() && orFolder.isDirectory()) {
+            File[] propFiles = orFolder.listFiles((dir, name) -> name.endsWith(".properties"));
+            if (propFiles != null) {
+                for (File file : propFiles) {
+                    loadPropertiesFromFile(file.getPath());
+                    logger.info("Loaded object repository: {}", file.getName());
+                }
+            }
+        } else {
+            logger.warn("Object repositories folder not found: {}", OBJECT_REPOSITORIES_PATH);
+        }
     }
     
     /**

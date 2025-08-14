@@ -45,6 +45,7 @@ public class CSLocatorResolver {
     private void loadObjectRepository() {
         // Try multiple locations for the object repository
         String[] repositoryFiles = {
+            "object-repositories/object-repository.properties",
             "resources/config/object-repository.properties",
             "locators.properties",
             "object-repository.properties",
