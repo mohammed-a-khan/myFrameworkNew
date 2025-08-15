@@ -25,9 +25,9 @@ public class LoginPageEnhanced extends CSBasePage {
     public void navigateTo() {
         CSReportManager.info("Navigating to Akhan Login Page");
         
-        String url = config.getProperty("akhan.url", "https://akhan-ui-sit.myshare.net/");
+        String url = config.getProperty("cs.akhan.url", "https://akhan-ui-sit.myshare.net/");
         CSReportManager.info("Target URL: " + url);
-        CSReportManager.info("Environment: " + config.getProperty("akhan.environment", "SIT"));
+        CSReportManager.info("Environment: " + config.getProperty("cs.akhan.environment", "SIT"));
         
         // Navigate with automatic reporting from base class
         super.navigateTo(url);
@@ -58,7 +58,7 @@ public class LoginPageEnhanced extends CSBasePage {
         
         // Wait for navigation
         CSReportManager.info("Waiting for login process to complete");
-        CSWaitUtils.waitForSeconds(2);
+        CSWaitUtils.waitForSeconds(config.getIntProperty("cs.wait.medium", 2000) / 1000);
         
         CSReportManager.pass("Login process completed");
     }

@@ -3,6 +3,7 @@ package com.akhan.stepdefs;
 import com.testforge.cs.annotations.CSStep;
 import com.testforge.cs.annotations.CSFeature;
 import com.testforge.cs.bdd.CSStepDefinitions;
+import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.reporting.CSReportManager;
 import com.akhan.pages.LoginPage;
 import com.akhan.pages.HomePage;
@@ -17,6 +18,7 @@ import java.util.Map;
 @CSFeature(name = "Akhan Application Steps", tags = {"@akhan"})
 public class AkhanSteps extends CSStepDefinitions {
     
+    private static final CSConfigManager config = CSConfigManager.getInstance();
     private LoginPage loginPage;
     private HomePage homePage;
     private ESSSeriesPage essSeriesPage;
@@ -60,7 +62,7 @@ public class AkhanSteps extends CSStepDefinitions {
         loginPage = getPage(LoginPage.class);
         loginPage.navigateTo();
         // Using default password for simplicity - in real test, get from config
-        loginPage.login(username, "testpass");
+        loginPage.login(username, config.getProperty("cs.akhan.password.default", "testpass"));
         homePage = getPage(HomePage.class);
         assertTrue(homePage.isHomeHeaderDisplayed(), "Should be logged in");
     }
@@ -147,6 +149,11 @@ public class AkhanSteps extends CSStepDefinitions {
             File testDataFile = new File("resources/testdata/akhan-test-data.json");
             JsonNode root = mapper.readTree(testDataFile);
             esssKeyFromTestData = root.path("esssSearch").path("esssKey").asText();
+            
+            // If not found in JSON, use config fallback
+            if (esssKeyFromTestData == null || esssKeyFromTestData.isEmpty()) {
+                esssKeyFromTestData = config.getProperty("cs.test.esss.key", "MESA 2001-5");
+            }
             
             CSReportManager.getInstance().logInfo("Using ESSS key from test data: " + esssKeyFromTestData);
             

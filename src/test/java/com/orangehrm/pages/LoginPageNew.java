@@ -30,7 +30,7 @@ public class LoginPageNew extends CSBasePage {
     
     // Page Methods
     public void navigateTo() {
-        String baseUrl = config.getProperty("app.base.url");
+        String baseUrl = config.getProperty("cs.app.base.url");
         navigateTo(baseUrl + LOGIN_PATH);
         waitForPageLoad();
     }
@@ -61,10 +61,10 @@ public class LoginPageNew extends CSBasePage {
     public boolean isErrorMessageDisplayed() {
         try {
             // Wait a bit for error message to appear
-            Thread.sleep(1000);
+            Thread.sleep(config.getIntProperty("cs.wait.short", 1000));
             
             // Use a shorter timeout for error message
-            errorMessage.waitForVisible(5);
+            errorMessage.waitForVisible(config.getIntProperty("cs.wait.long", 5000) / 1000);
             return true;
         } catch (Exception e) {
             logger.warn("Error message not displayed: {}", e.getMessage());
@@ -75,7 +75,7 @@ public class LoginPageNew extends CSBasePage {
     public String getErrorMessage() {
         try {
             // Wait for error message to be visible first
-            errorMessage.waitForVisible(5);
+            errorMessage.waitForVisible(config.getIntProperty("cs.wait.long", 5000) / 1000);
             return errorMessage.getText();
         } catch (Exception e) {
             logger.error("Failed to get error message: {}", e.getMessage());

@@ -43,7 +43,7 @@ public class DashboardPageNew extends CSBasePage {
         userDropdown.click();
         // Wait for dropdown menu to appear
         try {
-            Thread.sleep(500);
+            Thread.sleep(config.getIntProperty("cs.wait.short", 1000) / 2);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -68,7 +68,7 @@ public class DashboardPageNew extends CSBasePage {
     public boolean isDisplayed() {
         try {
             // Wait a bit for page to load after login
-            Thread.sleep(2000);
+            Thread.sleep(config.getIntProperty("cs.wait.medium", 2000));
             
             // Check if URL contains dashboard
             String currentUrl = driver.getCurrentUrl();
@@ -82,7 +82,7 @@ public class DashboardPageNew extends CSBasePage {
             
             // Also try to check if header element exists
             try {
-                boolean headerVisible = headerTitle.isDisplayed(3);
+                boolean headerVisible = headerTitle.isDisplayed(config.getIntProperty("cs.wait.long", 5000) / 1000);
                 logger.info("Dashboard header visible: {}", headerVisible);
                 return headerVisible;
             } catch (Exception ex) {

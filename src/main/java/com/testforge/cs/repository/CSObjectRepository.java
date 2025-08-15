@@ -65,10 +65,10 @@ public class CSObjectRepository {
             CSConfigManager config = CSConfigManager.getInstance();
             
             // Load configuration
-            repositoryBasePath = config.getProperty("repository.base.path", "src/test/resources/repository");
-            autoReloadEnabled = Boolean.parseBoolean(config.getProperty("repository.auto.reload.enabled", "true"));
-            cacheTimeoutMinutes = Integer.parseInt(config.getProperty("repository.cache.timeout.minutes", "30"));
-            strictModeEnabled = Boolean.parseBoolean(config.getProperty("repository.strict.mode.enabled", "true"));
+            repositoryBasePath = config.getProperty("cs.repository.base.path", "src/test/resources/repository");
+            autoReloadEnabled = Boolean.parseBoolean(config.getProperty("cs.repository.auto.reload.enabled", "true"));
+            cacheTimeoutMinutes = Integer.parseInt(config.getProperty("cs.repository.cache.timeout.minutes", "30"));
+            strictModeEnabled = Boolean.parseBoolean(config.getProperty("cs.repository.strict.mode.enabled", "true"));
             
             // Create repository directories if they don't exist
             createRepositoryStructure();

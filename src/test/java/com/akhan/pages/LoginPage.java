@@ -27,7 +27,7 @@ public class LoginPage extends CSBasePage {
     
     public void navigateTo() {
         CSReportManager.info("Navigate to Akhan login page");
-        String url = config.getProperty("akhan.url", "https://akhan-ui-sit.myshare.net/");
+        String url = config.getProperty("cs.akhan.url", "https://akhan-ui-sit.myshare.net/");
         navigateTo(url);
         waitForPageLoad();
         CSReportManager.pass("Login page loaded");
@@ -37,7 +37,7 @@ public class LoginPage extends CSBasePage {
         logger.info("Entering username: {}", username);
         CSReportManager.info("Step 1: Enter username: " + username);
         
-        usernameField.waitForVisible(10);
+        usernameField.waitForVisible(config.getIntProperty("cs.wait.long", 5000) / 500);
         usernameField.highlight(); // Visual highlight
         usernameField.clearAndType(username);
         
@@ -57,13 +57,13 @@ public class LoginPage extends CSBasePage {
     public void clickLogOn() {
         CSReportManager.info("Step 3: Click Log On button");
         
-        logOnButton.waitForClickable(10);
+        logOnButton.waitForClickable(config.getIntProperty("cs.wait.long", 5000) / 500);
         logOnButton.highlight();
         captureScreenshot("before_login");
         logOnButton.click();
         
         // Wait for page transition
-        CSWaitUtils.waitForSeconds(2);
+        CSWaitUtils.waitForSeconds(config.getIntProperty("cs.wait.medium", 2000) / 1000);
     }
     
     public void login(String username, String password) {

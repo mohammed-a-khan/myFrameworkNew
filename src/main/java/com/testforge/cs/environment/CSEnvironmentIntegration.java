@@ -75,8 +75,8 @@ public class CSEnvironmentIntegration {
             config = CSConfigManager.getInstance();
             
             // Load configuration
-            autoCollectOnSuiteStart = Boolean.parseBoolean(config.getProperty("environment.auto.collect.suite.start", "true"));
-            autoCollectOnTestFailure = Boolean.parseBoolean(config.getProperty("environment.auto.collect.test.failure", "false"));
+            autoCollectOnSuiteStart = Boolean.parseBoolean(config.getProperty("cs.environment.auto.collect.suite.start", "true"));
+            autoCollectOnTestFailure = Boolean.parseBoolean(config.getProperty("cs.environment.auto.collect.test.failure", "false"));
             includeInReports = Boolean.parseBoolean(config.getProperty("environment.include.in.reports", "true"));
             enablePeriodicCollection = Boolean.parseBoolean(config.getProperty("environment.periodic.collection.enabled", "false"));
             periodicCollectionIntervalMinutes = Integer.parseInt(config.getProperty("environment.periodic.collection.interval.minutes", "30"));

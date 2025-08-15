@@ -131,7 +131,7 @@ public class AkhanEnhancedSteps extends CSStepDefinitions {
         navigateToLoginPage();
         
         CSReportManager.info("── Sub-step 2: Enter credentials");
-        enterCredentials(username, config.getProperty("akhan.password.default", "testpass"));
+        enterCredentials(username, config.getProperty("cs.akhan.password.default", "testpass"));
         
         CSReportManager.info("── Sub-step 3: Submit login");
         clickLogOn();

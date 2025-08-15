@@ -1,12 +1,15 @@
 package com.testforge.cs.tests;
 
 import com.testforge.cs.core.CSBaseTest;
+import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.driver.CSDriver;
 import com.testforge.cs.driver.CSWebDriverManager;
 import org.testng.annotations.Test;
 import org.testng.Assert;
 
 public class DebugTest extends CSBaseTest {
+    
+    private static final CSConfigManager config = CSConfigManager.getInstance();
     
     @Test
     public void testDriverInitialization() {
@@ -25,7 +28,7 @@ public class DebugTest extends CSBaseTest {
         Assert.assertNotNull(csDriver, "CSDriver should not be null");
         
         // Navigate to a page
-        String url = "https://opensource-demo.orangehrmlive.com";
+        String url = config.getProperty("cs.orangehrm.url", "https://opensource-demo.orangehrmlive.com");
         logger.info("Navigating to: {}", url);
         driver.get(url);
         

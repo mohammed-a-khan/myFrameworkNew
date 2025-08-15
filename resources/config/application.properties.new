@@ -2,6 +2,7 @@
 # =====================================
 # This file contains all configuration properties for the CS TestForge framework
 # Properties can be overridden via system properties: -Dproperty.name=value
+# All properties follow the cs.* prefix convention for standardization
 
 # ================================
 # Application Settings
@@ -14,7 +15,7 @@ cs.app.base.url=https://opensource-demo.orangehrmlive.com
 # Browser Configuration
 # ================================
 # Browser to use for testing (chrome, firefox, edge, safari)
-browser.name=chrome
+cs.browser.name=chrome
 cs.browser.headless=false
 cs.browser.maximize=true
 cs.browser.delete.cookies=true
@@ -24,6 +25,10 @@ cs.browser.page.load.timeout=60
 cs.browser.window.width=1920
 cs.browser.window.height=1080
 cs.browser.download.directory=target/downloads
+
+# Browser Instance Management
+# true = reuse same browser instance for all tests in a thread (faster, default)
+# false = create new browser instance for each test (cleaner state, slower)
 cs.browser.reuse.instance=true
 
 # Chrome Options
@@ -41,6 +46,7 @@ cs.edge.disable.notifications=true
 cs.edge.start.maximized=true
 
 # Internet Explorer Options
+# IMPORTANT: IE requires specific Windows configuration
 cs.ie.ignore.security.domains=true
 cs.ie.ignore.zoom=true
 cs.ie.ignore.protected.mode=true
@@ -54,6 +60,7 @@ cs.ie.page.load.strategy=normal
 # ================================
 # Proxy Configuration
 # ================================
+# Enable proxy for WebDriverManager (for downloading drivers)
 cs.proxy.enabled=false
 cs.proxy.host=
 cs.proxy.port=
@@ -76,7 +83,7 @@ cs.wait.script.timeout=30
 # ================================
 # Environment Configuration
 # ================================
-environment.name=qa
+cs.environment.name=qa
 cs.env.qa.url=https://qa.example.com
 cs.env.staging.url=https://staging.example.com
 cs.env.prod.url=https://prod.example.com
@@ -116,8 +123,13 @@ cs.azure.devops.enabled=true
 cs.azure.devops.organization=mdakhan
 cs.azure.devops.organization.url=https://dev.azure.com/mdakhan
 cs.azure.devops.project=myproject
+
+# Authentication
 cs.azure.devops.auth.type=pat
+# Personal Access Token - ENCRYPTED with internal master key
 cs.azure.devops.token=ENC(IZBF1jVLD39bR2GoOv1b4dwGdoCl4csPH2BNQAwjEkAE/lsYqA1CBic2+S1CuS56lZv3Yl1SNjUAh1Cu5Nt2yg5dECpq0CCPJegAqfpNbVPBLdT3/q4cCzKtiNFAYM9o/fVHhplMuIITwQm3rxjhLQ==)
+
+# Test Configuration
 cs.azure.devops.test.plan.id=417
 cs.azure.devops.test.suite.id=418
 cs.azure.devops.build.id=
@@ -125,12 +137,16 @@ cs.azure.devops.release.id=
 cs.azure.devops.environment=
 cs.azure.devops.run.name=
 cs.azure.devops.automated=true
+
+# Upload Settings
 cs.azure.devops.upload.attachments=true
 cs.azure.devops.upload.screenshots=true
 cs.azure.devops.upload.videos=false
 cs.azure.devops.upload.logs=true
 cs.azure.devops.update.testcases=false
 cs.azure.devops.create.bugs.on.failure=false
+
+# Bug Template
 cs.azure.devops.bug.title.template=Test Failed: {testName}
 cs.azure.devops.bug.assigned.to=
 cs.azure.devops.bug.area.path=${cs.azure.devops.project}
@@ -138,16 +154,22 @@ cs.azure.devops.bug.iteration.path=${cs.azure.devops.project}
 cs.azure.devops.bug.priority=2
 cs.azure.devops.bug.severity=3 - Medium
 cs.azure.devops.bug.tags=automation,regression
+
+# API Configuration
 cs.azure.devops.api.version=7.1
 cs.azure.devops.timeout=30000
 cs.azure.devops.retry.count=3
 cs.azure.devops.retry.delay=1000
+
+# Proxy for Azure DevOps
 cs.azure.devops.proxy.enabled=false
 cs.azure.devops.proxy.server=
 cs.azure.devops.proxy.port=8080
 cs.azure.devops.proxy.username=
 cs.azure.devops.proxy.password=
 cs.azure.devops.proxy.bypass=
+
+# Custom Fields (JSON format)
 cs.azure.devops.custom.fields=
 
 # ================================
@@ -176,13 +198,14 @@ cs.report.include.videos=false
 cs.report.include.logs=true
 cs.report.archive.old=true
 cs.report.retention.days=30
+# Embed screenshots in HTML (true) or keep as separate files (false)
 cs.report.screenshots.embed=false
 
 # ================================
 # BDD/Cucumber Configuration
 # ================================
 cs.bdd.features.path=features
-cs.bdd.stepdefs.packages=com.orangehrm.stepdefs,com.akhan.stepdefs
+cs.bdd.stepdefs.packages=com.orangehrm.stepdefs
 cs.bdd.cucumber.plugin=json, html
 cs.bdd.reports.path=target/bdd-reports
 cs.bdd.screenshots.on.failure=true
@@ -198,18 +221,22 @@ cs.parallel.core.threads=2
 cs.parallel.max.threads=4
 cs.parallel.keepalive.seconds=60
 cs.parallel.monitoring.enabled=true
+
 cs.test.thread.count=4
 cs.test.parallel.enabled=true
 cs.test.retry.count=2
 cs.test.retry.delay=1000
 cs.test.timeout.default=300000
 cs.test.cleanup.data=true
+
+# Suite XML file
 cs.suite.xml.file=testng.xml
 
 # ================================
 # Element Configuration
 # ================================
-cs.element.max.retries=1
+# Maximum retry attempts for element interactions
+cs.element.max.retries=3
 cs.element.retry.delay=500
 cs.element.highlight=false
 cs.element.visibility.timeout=10
@@ -262,6 +289,8 @@ cs.repository.base.path=src/test/resources/repository
 cs.repository.auto.reload.enabled=true
 cs.repository.cache.timeout.minutes=5
 cs.repository.strict.mode.enabled=false
+
+# Object Repository
 cs.object.repository.file=config/object-repository.properties
 cs.object.repository.reload=true
 
@@ -307,3 +336,15 @@ cs.api.log.responses=true
 # Test Users
 # ================================
 cs.test.user.standard.password=Password123!
+
+# ================================
+# DEPRECATED PROPERTIES - FOR BACKWARD COMPATIBILITY ONLY
+# These properties are mapped internally to their cs.* equivalents
+# They will be removed in future versions
+# ================================
+# browser.name -> cs.browser.name
+# app.base.url -> cs.app.base.url
+# environment.name -> cs.environment.name
+# azure.devops.* -> cs.azure.devops.*
+# ado.* -> cs.azure.devops.*
+# See property-standardization-mapping.md for full mapping

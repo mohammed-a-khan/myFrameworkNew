@@ -1,6 +1,7 @@
 package com.testforge.cs.tests;
 
 import com.testforge.cs.core.CSBaseTest;
+import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.azuredevops.CSAzureDevOpsPublisher;
 import com.testforge.cs.azuredevops.extractors.CSADOTagExtractor;
 import com.testforge.cs.reporting.CSTestResult;
@@ -24,6 +25,7 @@ import java.util.Map;
  */
 public class CSADOTaggedTest extends CSBaseTest {
     
+    private static final CSConfigManager config = CSConfigManager.getInstance();
     private CSAzureDevOpsPublisher adoPublisher;
     
     @BeforeClass
@@ -49,7 +51,7 @@ public class CSADOTaggedTest extends CSBaseTest {
     @Test(description = "@TestCaseId:421 @TestPlanId:417 @TestSuiteId:418 - User Profile Update Test")
     public void testUserProfileUpdate() {
         // Navigate to login page
-        driver.get("https://opensource-demo.orangehrmlive.com/");
+        driver.get(config.getProperty("cs.orangehrm.url", "https://opensource-demo.orangehrmlive.com"));
         
         // Wait for page to load
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
@@ -79,7 +81,7 @@ public class CSADOTaggedTest extends CSBaseTest {
     @Test(description = "@TestPlanId:417 @TestSuiteId:418 - Leave Request Test")
     public void testCase422_LeaveRequest() {
         // Navigate to login page
-        driver.get("https://opensource-demo.orangehrmlive.com/");
+        driver.get(config.getProperty("cs.orangehrm.url", "https://opensource-demo.orangehrmlive.com"));
         
         // Wait for page to load
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
@@ -113,8 +115,8 @@ public class CSADOTaggedTest extends CSBaseTest {
         wait.until(ExpectedConditions.visibilityOfElementLocated(usernameField));
         
         // Enter credentials
-        driver.findElement(usernameField).sendKeys("Admin");
-        driver.findElement(passwordField).sendKeys("admin123");
+        driver.findElement(usernameField).sendKeys(config.getProperty("cs.orangehrm.username", "Admin"));
+        driver.findElement(passwordField).sendKeys(config.getProperty("cs.orangehrm.password", "admin123"));
         driver.findElement(loginButton).click();
         
         // Wait for dashboard

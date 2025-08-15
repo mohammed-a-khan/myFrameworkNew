@@ -39,8 +39,8 @@ public class AkhanTestNGExample extends CSBaseTest {
         
         // Perform login
         CSReportManager.info("Step 2: Enter credentials and login");
-        String username = config.getProperty("akhan.user.default", "testuser");
-        String password = config.getProperty("akhan.password.default", "testpass");
+        String username = config.getProperty("cs.akhan.user.default", "testuser");
+        String password = config.getProperty("cs.akhan.password.default", "testpass");
         
         loginPage.login(username, password);
         
@@ -100,7 +100,7 @@ public class AkhanTestNGExample extends CSBaseTest {
         // Click menu item
         CSReportManager.info("Click on " + menuItem);
         homePage.clickMenuItem(menuItem);
-        CSWaitUtils.waitForSeconds(2);
+        CSWaitUtils.waitForSeconds(config.getIntProperty("cs.wait.medium", 2000) / 1000);
         
         // Verify page header
         String xpath = "//h1[text()='" + expectedHeader + "']";
@@ -123,7 +123,8 @@ public class AkhanTestNGExample extends CSBaseTest {
         performQuickLogin();
         
         CSReportManager.info("Starting ESSS Search Test");
-        CSReportManager.info("Searching for ESSS with key: MESA 2001-5");
+        String searchKey = config.getProperty("cs.test.esss.key", "MESA 2001-5");
+        CSReportManager.info("Searching for ESSS with key: " + searchKey);
         
         // Navigate to ESSS/Series
         homePage.clickMenuItem("ESSS/Series");
@@ -143,14 +144,14 @@ public class AkhanTestNGExample extends CSBaseTest {
         Assert.assertEquals(essSeriesPage.getSelectedAttributeText(), "Key", "Key should be selected");
         
         // Enter search value
-        CSReportManager.info("Step 3: Enter search value: MESA 2001-5");
-        essSeriesPage.enterSearchValue("Key", "MESA 2001-5");
+        CSReportManager.info("Step 3: Enter search value: " + searchKey);
+        essSeriesPage.enterSearchValue("Key", searchKey);
         takeScreenshot("esss_search_input");
         
         // Execute search
         CSReportManager.info("Step 4: Execute search");
         essSeriesPage.clickSearch();
-        CSWaitUtils.waitForSeconds(3);
+        CSWaitUtils.waitForSeconds(config.getIntProperty("cs.wait.long", 5000) / 1000);
         
         // Verify results
         CSReportManager.info("Step 5: Verify search results");
@@ -162,15 +163,15 @@ public class AkhanTestNGExample extends CSBaseTest {
             String type = essSeriesPage.getCellText(i, 2);
             if ("ESSS".equals(type)) {
                 String key = essSeriesPage.getSpanTextInCell(i, 4);
-                if ("MESA 2001-5".equals(key)) {
+                if (searchKey.equals(key)) {
                     found = true;
-                    CSReportManager.pass("Found ESSS with key 'MESA 2001-5' at row " + i);
+                    CSReportManager.pass("Found ESSS with key '" + searchKey + "' at row " + i);
                     break;
                 }
             }
         }
         
-        Assert.assertTrue(found, "ESSS with key 'MESA 2001-5' should be found in results");
+        Assert.assertTrue(found, "ESSS with key '" + searchKey + "' should be found in results");
         takeScreenshot("esss_search_results");
         
         CSReportManager.pass("ESSS Search Test completed successfully");
@@ -192,7 +193,8 @@ public class AkhanTestNGExample extends CSBaseTest {
         
         // Perform login
         long loginStartTime = System.currentTimeMillis();
-        loginPage.login("testuser", "testpass");
+        loginPage.login(config.getProperty("cs.akhan.user.default", "testuser"), 
+                       config.getProperty("cs.akhan.password.default", "testpass"));
         
         long loginTime = System.currentTimeMillis() - loginStartTime;
         CSReportManager.info("Login execution: " + loginTime + "ms");
@@ -202,10 +204,8 @@ public class AkhanTestNGExample extends CSBaseTest {
         CSReportManager.info("Total operation: " + totalTime + "ms");
         
         // Performance assertions
-        int pageLoadThreshold = Integer.parseInt(
-            config.getProperty("akhan.performance.pageload", "2000"));
-        int totalThreshold = Integer.parseInt(
-            config.getProperty("akhan.performance.total", "5000"));
+        int pageLoadThreshold = config.getIntProperty("cs.akhan.performance.pageload", 2000);
+        int totalThreshold = config.getIntProperty("cs.akhan.performance.total", 5000);
         
         if (navigationTime <= pageLoadThreshold) {
             CSReportManager.pass("Page load within threshold: " + 
@@ -238,10 +238,11 @@ public class AkhanTestNGExample extends CSBaseTest {
     private void performQuickLogin() {
         loginPage = new LoginPage();
         loginPage.navigateTo();
-        loginPage.login("testuser", "testpass");
+        loginPage.login(config.getProperty("cs.akhan.user.default", "testuser"), 
+                       config.getProperty("cs.akhan.password.default", "testpass"));
         
         homePage = new HomePage();
-        CSWaitUtils.waitForElementVisible(driver, org.openqa.selenium.By.xpath("//h1[text()='Home']"), 10);
+        CSWaitUtils.waitForElementVisible(driver, org.openqa.selenium.By.xpath("//h1[text()='Home']"), config.getIntProperty("cs.wait.long", 5000) * 2 / 1000);
     }
     
     private boolean isElementDisplayed(String xpath) {

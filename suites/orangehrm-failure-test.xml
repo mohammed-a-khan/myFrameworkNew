@@ -1,14 +1,19 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
 <suite name="OrangeHRM Failure Test Suite" parallel="methods" thread-count="2">
     
+    <!-- Browser Configuration -->
     <parameter name="browser.name" value="chrome"/>
-    <parameter name="browser.headless" value="false"/>
+    <parameter name="cs.browser.headless" value="false"/>
+    
+    <!-- Environment Configuration -->
     <parameter name="environment.name" value="qa"/>
     
-    <!-- Configure to run only the failing scenario -->
-    <parameter name="featuresPath" value="features/orangehrm-simple-tests.feature"/>
-    <parameter name="stepDefPackages" value="com.orangehrm.stepdefs"/>
-    <parameter name="cucumberOptions" value="--tags @simple"/>
+    <!-- BDD Configuration - Configure to run only the failing scenario -->
+    <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature"/>
+    <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
+    <parameter name="cs.bdd.cucumber.options" value="--tags @simple"/>
+    <parameter name="cs.bdd.tags" value="@simple"/>
+    <parameter name="cs.bdd.exclude.tags" value=""/>
     
     <test name="OrangeHRM Failure Test">
         <classes>

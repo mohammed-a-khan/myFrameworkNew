@@ -79,11 +79,11 @@ public class CSQueryManager {
             config = CSConfigManager.getInstance();
             
             // Load configuration
-            queryFilesDirectory = config.getProperty("queries.directory", "src/main/resources/queries");
-            cacheEnabled = Boolean.parseBoolean(config.getProperty("queries.cache.enabled", "true"));
-            maxCacheSize = Integer.parseInt(config.getProperty("queries.cache.max.size", "100"));
-            cacheExpirationMs = Long.parseLong(config.getProperty("queries.cache.expiration.ms", "300000")); // 5 minutes
-            performanceMonitoringEnabled = Boolean.parseBoolean(config.getProperty("queries.performance.monitoring", "true"));
+            queryFilesDirectory = config.getProperty("cs.queries.directory", "src/main/resources/queries");
+            cacheEnabled = Boolean.parseBoolean(config.getProperty("cs.queries.cache.enabled", "true"));
+            maxCacheSize = Integer.parseInt(config.getProperty("cs.queries.cache.max.size", "100"));
+            cacheExpirationMs = Long.parseLong(config.getProperty("cs.queries.cache.expiration.ms", "300000")); // 5 minutes
+            performanceMonitoringEnabled = Boolean.parseBoolean(config.getProperty("cs.queries.performance.monitoring", "true"));
             
             // Load query definitions
             loadQueryDefinitions();

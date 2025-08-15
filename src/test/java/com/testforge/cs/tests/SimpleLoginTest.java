@@ -1,12 +1,15 @@
 package com.testforge.cs.tests;
 
 import com.testforge.cs.core.CSBaseTest;
+import com.testforge.cs.config.CSConfigManager;
 import com.orangehrm.pages.LoginPageNew;
 import com.orangehrm.pages.DashboardPageNew;
 import org.testng.annotations.Test;
 import org.testng.Assert;
 
 public class SimpleLoginTest extends CSBaseTest {
+    
+    private static final CSConfigManager config = CSConfigManager.getInstance();
     
     @Test
     public void testSimpleLogin() {
@@ -18,7 +21,7 @@ public class SimpleLoginTest extends CSBaseTest {
         
         // Wait a bit for page to load
         try {
-            Thread.sleep(2000);
+            Thread.sleep(config.getIntProperty("cs.wait.medium", 2000));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -32,7 +35,7 @@ public class SimpleLoginTest extends CSBaseTest {
             try {
                 isLoginPageDisplayed = loginPage.isDisplayed();
                 if (isLoginPageDisplayed) break;
-                Thread.sleep(1000);
+                Thread.sleep(config.getIntProperty("cs.wait.short", 1000));
             } catch (Exception e) {
                 logger.warn("Attempt {} failed: {}", i+1, e.getMessage());
             }
@@ -42,15 +45,15 @@ public class SimpleLoginTest extends CSBaseTest {
         logger.info("Login page is displayed");
         
         // Perform login
-        loginPage.enterUsername("Admin");
-        loginPage.enterPassword("admin123");
+        loginPage.enterUsername(config.getProperty("cs.orangehrm.username", "Admin"));
+        loginPage.enterPassword(config.getProperty("cs.orangehrm.password", "admin123"));
         loginPage.clickLogin();
         
         logger.info("Login submitted, waiting for dashboard");
         
         // Wait a bit for page to load
         try {
-            Thread.sleep(3000);
+            Thread.sleep(config.getIntProperty("cs.wait.long", 5000));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

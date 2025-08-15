@@ -72,11 +72,11 @@ public class CSTimelineVisualization {
             config = CSConfigManager.getInstance();
             
             // Load configuration
-            visualizationEnabled = Boolean.parseBoolean(config.getProperty("timeline.visualization.enabled", "true"));
-            realTimeVisualization = Boolean.parseBoolean(config.getProperty("timeline.real.time.enabled", "false"));
-            outputDirectory = config.getProperty("timeline.output.directory", "target/timeline");
-            maxTimelineEvents = Integer.parseInt(config.getProperty("timeline.max.events", "10000"));
-            timelineTheme = config.getProperty("timeline.theme", "modern");
+            visualizationEnabled = Boolean.parseBoolean(config.getProperty("cs.timeline.visualization.enabled", "true"));
+            realTimeVisualization = Boolean.parseBoolean(config.getProperty("cs.timeline.real.time.enabled", "false"));
+            outputDirectory = config.getProperty("cs.timeline.output.directory", "target/timeline");
+            maxTimelineEvents = Integer.parseInt(config.getProperty("cs.timeline.max.events", "10000"));
+            timelineTheme = config.getProperty("cs.timeline.theme", "modern");
             
             // Create output directory
             Path timelineDir = Paths.get(outputDirectory);

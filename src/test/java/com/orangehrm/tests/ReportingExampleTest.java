@@ -2,6 +2,7 @@ package com.orangehrm.tests;
 
 import com.testforge.cs.core.CSBaseTest;
 import com.testforge.cs.reporting.CSReportManager;
+import com.testforge.cs.config.CSConfigManager;
 import com.orangehrm.pages.LoginPageNew;
 import com.orangehrm.pages.DashboardPageNew;
 import org.testng.annotations.Test;
@@ -12,6 +13,8 @@ import java.time.LocalDateTime;
  * Example test demonstrating custom reporting capabilities
  */
 public class ReportingExampleTest extends CSBaseTest {
+    
+    private static final CSConfigManager config = CSConfigManager.getInstance();
     
     @Test(description = "Demo test showing various reporting features")
     public void testWithCustomReporting() {
@@ -37,8 +40,8 @@ public class ReportingExampleTest extends CSBaseTest {
         
         // Step 2: Enter credentials
         reportManager.logInfo("STEP 2: Enter user credentials");
-        String username = "Admin";
-        String password = "admin123";
+        String username = config.getProperty("cs.orangehrm.username", "Admin");
+        String password = config.getProperty("cs.orangehrm.password", "admin123");
         
         reportManager.logInfo("  Username: " + username);
         reportManager.logInfo("  Password: " + "*".repeat(password.length()));
@@ -53,7 +56,7 @@ public class ReportingExampleTest extends CSBaseTest {
         
         // Add wait for demo
         try {
-            Thread.sleep(2000);
+            Thread.sleep(config.getIntProperty("cs.wait.medium", 2000));
         } catch (InterruptedException e) {
             // ignore
         }
@@ -132,7 +135,7 @@ public class ReportingExampleTest extends CSBaseTest {
         // Use structured format for easy parsing
         reportManager.logInfo("[TEST_START] testWithStructuredLogging");
         reportManager.logInfo("[CONFIG] browser=" + config.getProperty("browser.name"));
-        reportManager.logInfo("[CONFIG] headless=" + config.getProperty("browser.headless"));
+        reportManager.logInfo("[CONFIG] headless=" + config.getProperty("cs.browser.headless"));
         
         // Action logging
         reportManager.logInfo("[ACTION] Navigate to login page");

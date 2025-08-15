@@ -39,16 +39,16 @@ public class CSAzureDevOpsClient {
         
         // Check for proxy configuration
         CSConfigManager config = CSConfigManager.getInstance();
-        boolean proxyEnabled = config.getBooleanProperty("azure.devops.proxy.enabled", false);
+        boolean proxyEnabled = config.getBooleanProperty("cs.azure.devops.proxy.enabled", false);
         
         if (proxyEnabled) {
-            String proxyHost = config.getProperty("azure.devops.proxy.server");
-            int proxyPort = config.getIntProperty("azure.devops.proxy.port", 8080);
+            String proxyHost = config.getProperty("cs.azure.devops.proxy.server");
+            int proxyPort = config.getIntProperty("cs.azure.devops.proxy.port", 8080);
             
             if (proxyHost != null && !proxyHost.isEmpty()) {
                 // Check for proxy authentication
-                String proxyUsername = config.getProperty("azure.devops.proxy.username");
-                String proxyPassword = config.getProperty("azure.devops.proxy.password");
+                String proxyUsername = config.getProperty("cs.azure.devops.proxy.username");
+                String proxyPassword = config.getProperty("cs.azure.devops.proxy.password");
                 
                 if (proxyUsername != null && !proxyUsername.isEmpty() && 
                     proxyPassword != null && !proxyPassword.isEmpty()) {

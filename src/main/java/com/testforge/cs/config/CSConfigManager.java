@@ -25,6 +25,7 @@ public class CSConfigManager {
     
     private final Map<String, Properties> propertiesCache = new ConcurrentHashMap<>();
     private final Properties mergedProperties = new Properties();
+    private final Set<String> deprecationWarningsLogged = Collections.synchronizedSet(new HashSet<>());
     private String currentEnvironment;
     
     private static final String DEFAULT_CONFIG_PATH = "resources/config/";
@@ -80,6 +81,11 @@ public class CSConfigManager {
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + APPLICATION_PROPERTIES);
         loadPropertiesFromFile(DEFAULT_CONFIG_PATH + SQL_QUERIES_PROPERTIES);
         
+        // Apply property mappings for backward compatibility
+        Properties mappedProps = CSPropertyMapper.applyMappings(mergedProperties);
+        mergedProperties.clear();
+        mergedProperties.putAll(mappedProps);
+        
         // Load object repositories from object-repositories folder
         loadObjectRepositories();
     }
@@ -106,9 +112,18 @@ public class CSConfigManager {
      * Load environment-specific configurations
      */
     private void loadEnvironmentConfigurations() {
-        String envFile = String.format("application-%s.properties", currentEnvironment);
-        // Load only from project root resources/config folder
-        loadPropertiesFromFile(DEFAULT_CONFIG_PATH + envFile);
+        // First try to load from env folder
+        String envFile = String.format("env/%s.properties", currentEnvironment);
+        File envPropertiesFile = new File(DEFAULT_CONFIG_PATH + envFile);
+        
+        if (envPropertiesFile.exists()) {
+            loadPropertiesFromFile(DEFAULT_CONFIG_PATH + envFile);
+            logger.info("Loaded environment-specific properties: {}", envFile);
+        } else {
+            // Fallback to old format
+            String oldEnvFile = String.format("application-%s.properties", currentEnvironment);
+            loadPropertiesFromFile(DEFAULT_CONFIG_PATH + oldEnvFile);
+        }
     }
     
     /**
@@ -149,12 +164,33 @@ public class CSConfigManager {
     /**
      * Get property value
      * Automatically decrypts values that are encrypted (wrapped in ENC())
+     * Applies property mapping for backward compatibility
      */
     public String getProperty(String key) {
+        // First check with the original key
         String value = System.getProperty(key);
         if (value == null) {
             value = mergedProperties.getProperty(key);
         }
+        
+        // If not found, try the standardized property name
+        if (value == null) {
+            String standardizedKey = CSPropertyMapper.getStandardizedProperty(key);
+            if (!standardizedKey.equals(key)) {
+                value = System.getProperty(standardizedKey);
+                if (value == null) {
+                    value = mergedProperties.getProperty(standardizedKey);
+                }
+                if (value != null && !CSPropertyMapper.isAllowedException(key)) {
+                    // Log warning for non-exception properties without cs. prefix
+                    if (!deprecationWarningsLogged.contains(key)) {
+                        CSPropertyMapper.logInvalidPropertyWarning(key);
+                        deprecationWarningsLogged.add(key);
+                    }
+                }
+            }
+        }
+        
         if (value == null) {
             logger.warn("Property not found: {}", key);
             return null;
@@ -332,11 +368,11 @@ public class CSConfigManager {
     public BrowserConfig getBrowserConfig() {
         return new BrowserConfig(
             getProperty("browser.name", "chrome"),
-            getBooleanProperty("browser.headless", false),
-            getBooleanProperty("browser.maximize", true),
-            getIntProperty("browser.implicit.wait", 10),
-            getIntProperty("browser.explicit.wait", 30),
-            getIntProperty("browser.page.load.timeout", 60),
+            getBooleanProperty("cs.browser.headless", false),
+            getBooleanProperty("cs.browser.maximize", true),
+            getIntProperty("cs.browser.implicit.wait", 10),
+            getIntProperty("cs.browser.explicit.wait", 30),
+            getIntProperty("cs.browser.page.load.timeout", 60),
             getProperty("browser.download.directory", "target/downloads"),
             getIntProperty("browser.window.width", 1920),
             getIntProperty("browser.window.height", 1080)

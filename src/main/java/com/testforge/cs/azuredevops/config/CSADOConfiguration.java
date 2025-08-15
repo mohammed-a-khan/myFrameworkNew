@@ -202,7 +202,7 @@ public class CSADOConfiguration {
             CSConfigManager config = CSConfigManager.getInstance();
             
             // Check if enabled
-            enabled = Boolean.parseBoolean(config.getProperty("azure.devops.enabled", "false"));
+            enabled = Boolean.parseBoolean(config.getProperty("cs.azure.devops.enabled", "false"));
             
             if (!enabled) {
                 logger.info("Azure DevOps integration is disabled");
@@ -249,27 +249,27 @@ public class CSADOConfiguration {
     }
     
     private void loadCoreConfiguration(CSConfigManager config) {
-        String orgUrl = config.getProperty("azure.devops.organization.url", "");
+        String orgUrl = config.getProperty("cs.azure.devops.organization.url", "");
         if (orgUrl.isEmpty()) {
             // Fallback to old property name for backward compatibility
-            String org = config.getProperty("azure.devops.organization", "");
+            String org = config.getProperty("cs.azure.devops.organization", "");
             if (!org.isEmpty()) {
                 orgUrl = "https://dev.azure.com/" + org;
             }
         }
         this.organizationUrl = orgUrl.replaceAll("/$", "");
         
-        this.projectName = config.getProperty("azure.devops.project", "");
-        this.authType = AuthType.fromString(config.getProperty("azure.devops.auth.type", "pat"));
-        this.apiVersion = config.getProperty("azure.devops.api.version", "7.1");
+        this.projectName = config.getProperty("cs.azure.devops.project", "");
+        this.authType = AuthType.fromString(config.getProperty("cs.azure.devops.auth.type", "pat"));
+        this.apiVersion = config.getProperty("cs.azure.devops.api.version", "7.1");
         
         switch (authType) {
             case PAT:
-                this.personalAccessToken = config.getProperty("azure.devops.token", "");
+                this.personalAccessToken = config.getProperty("cs.azure.devops.token", "");
                 break;
             case BASIC:
-                this.username = config.getProperty("azure.devops.username", "");
-                this.password = config.getProperty("azure.devops.password", "");
+                this.username = config.getProperty("cs.azure.devops.username", "");
+                this.password = config.getProperty("cs.azure.devops.password", "");
                 break;
             case OAUTH:
                 // OAuth implementation would go here
@@ -278,58 +278,58 @@ public class CSADOConfiguration {
     }
     
     private void loadConnectionSettings(CSConfigManager config) {
-        this.timeout = Integer.parseInt(config.getProperty("azure.devops.timeout", "60000"));
-        this.retryCount = Integer.parseInt(config.getProperty("azure.devops.retry.count", "3"));
-        this.retryDelay = Integer.parseInt(config.getProperty("azure.devops.retry.delay", "1000"));
+        this.timeout = Integer.parseInt(config.getProperty("cs.azure.devops.timeout", "60000"));
+        this.retryCount = Integer.parseInt(config.getProperty("cs.azure.devops.retry.count", "3"));
+        this.retryDelay = Integer.parseInt(config.getProperty("cs.azure.devops.retry.delay", "1000"));
     }
     
     private void loadTestConfiguration(CSConfigManager config) {
-        String planId = config.getProperty("azure.devops.test.plan.id", "");
+        String planId = config.getProperty("cs.azure.devops.test.plan.id", "");
         if (!planId.isEmpty()) {
             this.testPlanId = Integer.parseInt(planId);
         }
         
-        String suiteId = config.getProperty("azure.devops.test.suite.id", "");
+        String suiteId = config.getProperty("cs.azure.devops.test.suite.id", "");
         if (!suiteId.isEmpty()) {
             this.testSuiteId = Integer.parseInt(suiteId);
         }
         
-        this.buildId = config.getProperty("azure.devops.build.id", "");
-        this.releaseId = config.getProperty("azure.devops.release.id", "");
-        this.environment = config.getProperty("azure.devops.environment", "");
-        this.runName = config.getProperty("azure.devops.run.name", 
+        this.buildId = config.getProperty("cs.azure.devops.build.id", "");
+        this.releaseId = config.getProperty("cs.azure.devops.release.id", "");
+        this.environment = config.getProperty("cs.azure.devops.environment", "");
+        this.runName = config.getProperty("cs.azure.devops.run.name", 
             "CS TestForge Automated Run - " + new java.util.Date());
-        this.automated = Boolean.parseBoolean(config.getProperty("azure.devops.automated", "true"));
+        this.automated = Boolean.parseBoolean(config.getProperty("cs.azure.devops.automated", "true"));
     }
     
     private void loadUploadSettings(CSConfigManager config) {
         this.uploadAttachments = Boolean.parseBoolean(
-            config.getProperty("azure.devops.upload.attachments", "true"));
+            config.getProperty("cs.azure.devops.upload.attachments", "true"));
         this.uploadScreenshots = Boolean.parseBoolean(
-            config.getProperty("azure.devops.upload.screenshots", "true"));
+            config.getProperty("cs.azure.devops.upload.screenshots", "true"));
         this.uploadVideos = Boolean.parseBoolean(
-            config.getProperty("azure.devops.upload.videos", "true"));
+            config.getProperty("cs.azure.devops.upload.videos", "true"));
         this.uploadLogs = Boolean.parseBoolean(
-            config.getProperty("azure.devops.upload.logs", "true"));
+            config.getProperty("cs.azure.devops.upload.logs", "true"));
         this.updateTestCases = Boolean.parseBoolean(
-            config.getProperty("azure.devops.update.testcases", "false"));
+            config.getProperty("cs.azure.devops.update.testcases", "false"));
         this.createBugsOnFailure = Boolean.parseBoolean(
-            config.getProperty("azure.devops.create.bugs", "false"));
+            config.getProperty("cs.azure.devops.create.bugs", "false"));
     }
     
     private void loadProxyConfiguration(CSConfigManager config) {
         boolean proxyEnabled = Boolean.parseBoolean(
-            config.getProperty("azure.devops.proxy.enabled", "false"));
+            config.getProperty("cs.azure.devops.proxy.enabled", "false"));
         
         if (proxyEnabled) {
             proxy = new ProxyConfig();
             proxy.setEnabled(true);
-            proxy.setServer(config.getProperty("azure.devops.proxy.server", ""));
-            proxy.setPort(Integer.parseInt(config.getProperty("azure.devops.proxy.port", "8080")));
-            proxy.setUsername(config.getProperty("azure.devops.proxy.username", ""));
-            proxy.setPassword(config.getProperty("azure.devops.proxy.password", ""));
+            proxy.setServer(config.getProperty("cs.azure.devops.proxy.server", ""));
+            proxy.setPort(Integer.parseInt(config.getProperty("cs.azure.devops.proxy.port", "8080")));
+            proxy.setUsername(config.getProperty("cs.azure.devops.proxy.username", ""));
+            proxy.setPassword(config.getProperty("cs.azure.devops.proxy.password", ""));
             
-            String bypassList = config.getProperty("azure.devops.proxy.bypass", "");
+            String bypassList = config.getProperty("cs.azure.devops.proxy.bypass", "");
             if (!bypassList.isEmpty()) {
                 proxy.setBypass(bypassList.split(","));
             }
@@ -339,16 +339,16 @@ public class CSADOConfiguration {
     private void loadBugTemplate(CSConfigManager config) {
         if (createBugsOnFailure) {
             bugTemplate = new BugTemplate();
-            bugTemplate.setTitle(config.getProperty("azure.devops.bug.title.template", 
+            bugTemplate.setTitle(config.getProperty("cs.azure.devops.bug.title.template", 
                 "Test Failed: {testName}"));
-            bugTemplate.setAssignedTo(config.getProperty("azure.devops.bug.assigned.to", ""));
-            bugTemplate.setAreaPath(config.getProperty("azure.devops.bug.area.path", ""));
-            bugTemplate.setIterationPath(config.getProperty("azure.devops.bug.iteration.path", ""));
+            bugTemplate.setAssignedTo(config.getProperty("cs.azure.devops.bug.assigned.to", ""));
+            bugTemplate.setAreaPath(config.getProperty("cs.azure.devops.bug.area.path", ""));
+            bugTemplate.setIterationPath(config.getProperty("cs.azure.devops.bug.iteration.path", ""));
             bugTemplate.setPriority(Integer.parseInt(
-                config.getProperty("azure.devops.bug.priority", "2")));
-            bugTemplate.setSeverity(config.getProperty("azure.devops.bug.severity", "Medium"));
+                config.getProperty("cs.azure.devops.bug.priority", "2")));
+            bugTemplate.setSeverity(config.getProperty("cs.azure.devops.bug.severity", "Medium"));
             
-            String tags = config.getProperty("azure.devops.bug.tags", "");
+            String tags = config.getProperty("cs.azure.devops.bug.tags", "");
             if (!tags.isEmpty()) {
                 bugTemplate.setTags(tags.split(","));
             }
@@ -356,7 +356,7 @@ public class CSADOConfiguration {
     }
     
     private void loadCustomFields(CSConfigManager config) {
-        String customFieldsJson = config.getProperty("azure.devops.custom.fields", "");
+        String customFieldsJson = config.getProperty("cs.azure.devops.custom.fields", "");
         if (!customFieldsJson.isEmpty()) {
             try {
                 // Parse JSON custom fields - would need JSON parser

@@ -49,12 +49,12 @@ public class CSDbUtils {
             HikariConfig hikariConfig = new HikariConfig();
             
             // Get database configuration
-            String dbType = config.getProperty("db." + dbName + ".type", "postgresql");
-            String host = config.getProperty("db." + dbName + ".host", "localhost");
-            String port = config.getProperty("db." + dbName + ".port", getDefaultPort(dbType));
-            String database = config.getProperty("db." + dbName + ".name", "testdb");
-            String username = config.getProperty("db." + dbName + ".username", "testuser");
-            String password = config.getProperty("db." + dbName + ".password", "testpass");
+            String dbType = config.getProperty("cs.db." + dbName + ".type", "postgresql");
+            String host = config.getProperty("cs.db." + dbName + ".host", "localhost");
+            String port = config.getProperty("cs.db." + dbName + ".port", getDefaultPort(dbType));
+            String database = config.getProperty("cs.db." + dbName + ".name", "testdb");
+            String username = config.getProperty("cs.db." + dbName + ".username", "testuser");
+            String password = config.getProperty("cs.db." + dbName + ".password", "testpass");
             
             // Build JDBC URL
             String jdbcUrl = buildJdbcUrl(dbType, host, port, database);
@@ -67,8 +67,8 @@ public class CSDbUtils {
             
             // Connection pool settings
             hikariConfig.setPoolName("CS-Pool-" + dbName);
-            hikariConfig.setMaximumPoolSize(config.getIntProperty("db.connection.pool.size", 10));
-            hikariConfig.setConnectionTimeout(config.getLongProperty("db.connection.timeout", 30000));
+            hikariConfig.setMaximumPoolSize(config.getIntProperty("cs.db.connection.pool.size", 10));
+            hikariConfig.setConnectionTimeout(config.getLongProperty("cs.db.connection.timeout", 30000));
             hikariConfig.setIdleTimeout(600000);
             hikariConfig.setMaxLifetime(1800000);
             hikariConfig.setAutoCommit(true);

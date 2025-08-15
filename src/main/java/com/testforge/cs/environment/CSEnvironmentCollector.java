@@ -663,7 +663,7 @@ public class CSEnvironmentCollector {
             // Custom properties from configuration
             Properties configProps = config.getAllProperties();
             for (String key : configProps.stringPropertyNames()) {
-                if (key.startsWith("custom.")) {
+                if (key.startsWith("cs.element.")) {
                     customInfo.put(key, configProps.getProperty(key));
                 }
             }

@@ -60,7 +60,7 @@ public class CSReportManager {
         
         // this.reportName = suiteName; // Store for later use if needed
         this.startTime = LocalDateTime.now();
-        this.reportDirectory = config.getProperty("report.directory", "target/test-reports");
+        this.reportDirectory = config.getProperty("cs.report.directory", "target/test-reports");
         
         // Create report directory
         File reportDir = new File(reportDirectory);
@@ -73,7 +73,7 @@ public class CSReportManager {
         reportMetadata.put("startTime", startTime.toString());
         reportMetadata.put("environment", config.getProperty("environment.name", "qa"));
         reportMetadata.put("browser", config.getProperty("browser.name", "chrome"));
-        reportMetadata.put("executionMode", config.getProperty("execution.mode", "sequential"));
+        reportMetadata.put("executionMode", config.getProperty("cs.execution.mode", "sequential"));
         reportMetadata.put("operatingSystem", System.getProperty("os.name"));
         reportMetadata.put("javaVersion", System.getProperty("java.version"));
         
@@ -348,8 +348,8 @@ public class CSReportManager {
         logger.info("[PASS] {}", message);
         
         // Take screenshot if configured
-        if (config.getBooleanProperty("screenshot.on.pass", false) || 
-            config.getBooleanProperty("screenshot.on.all", false)) {
+        if (config.getBooleanProperty("cs.screenshot.on.pass", false) || 
+            config.getBooleanProperty("cs.screenshot.on.all", false)) {
             captureScreenshot("pass_" + System.currentTimeMillis());
         }
     }
@@ -362,8 +362,8 @@ public class CSReportManager {
         logger.error("[FAIL] {}", message);
         
         // Take screenshot if configured (default true for failures)
-        if (config.getBooleanProperty("screenshot.on.fail", true) || 
-            config.getBooleanProperty("screenshot.on.all", false)) {
+        if (config.getBooleanProperty("cs.screenshot.on.failure", true) || 
+            config.getBooleanProperty("cs.screenshot.on.all", false)) {
             captureScreenshot("fail_" + System.currentTimeMillis());
         }
     }
@@ -527,7 +527,7 @@ public class CSReportManager {
      * Add custom data
      */
     public void addCustomData(String key, Object value) {
-        addMetadata("custom." + key, value);
+        addMetadata("cs.element." + key, value);
     }
     
     /**

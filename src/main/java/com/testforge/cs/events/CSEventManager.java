@@ -87,11 +87,11 @@ public class CSEventManager {
             
             // Load configuration
             asyncProcessing = Boolean.parseBoolean(
-                config.getProperty("events.async.enabled", "true")
+                config.getProperty("cs.events.async.enabled", "true")
             );
             
             // Load enabled event types
-            String enabledTypes = config.getProperty("events.enabled.types", "*");
+            String enabledTypes = config.getProperty("cs.events.enabled.types", "*");
             if ("*".equals(enabledTypes)) {
                 enabledEventTypes.add("*"); // All types enabled
             } else {
@@ -103,7 +103,7 @@ public class CSEventManager {
             
             // Schedule metrics reporting
             int metricsInterval = Integer.parseInt(
-                config.getProperty("events.metrics.interval.seconds", "300")
+                config.getProperty("cs.events.metrics.interval.seconds", "300")
             );
             metricsScheduler.scheduleAtFixedRate(
                 this::reportMetrics, 

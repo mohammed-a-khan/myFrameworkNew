@@ -45,7 +45,7 @@ public abstract class CSBasePage {
             throw new RuntimeException("WebDriver is not initialized. Ensure test setup is complete before creating page objects.");
         }
         
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(config.getIntProperty("browser.explicit.wait", 30)));
+        this.wait = new WebDriverWait(driver, Duration.ofSeconds(config.getIntProperty("cs.browser.explicit.wait", 30)));
         this.jsExecutor = (JavascriptExecutor) driver;
         this.actions = new Actions(driver);
         
@@ -204,7 +204,7 @@ public abstract class CSBasePage {
     // ===== Element Finding Methods =====
     
     public WebElement findElement(By by) {
-        return findElement(by, config.getIntProperty("browser.explicit.wait", 30));
+        return findElement(by, config.getIntProperty("cs.browser.explicit.wait", 30));
     }
     
     /**
@@ -241,7 +241,7 @@ public abstract class CSBasePage {
     public void waitForPageLoad() {
         CSReportManager.info("[INFO] Waiting for page to load");
         CSReportManager.addAction("wait", "Wait for page load");
-        waitForPageLoad(config.getIntProperty("browser.page.load.timeout", 60));
+        waitForPageLoad(config.getIntProperty("cs.browser.page.load.timeout", 60));
         CSReportManager.pass("[PASS] Page loaded successfully");
     }
     
@@ -251,7 +251,7 @@ public abstract class CSBasePage {
     }
     
     public void waitForAjax() {
-        waitForAjax(config.getIntProperty("browser.explicit.wait", 30));
+        waitForAjax(config.getIntProperty("cs.browser.explicit.wait", 30));
     }
     
     public void waitForAjax(int timeoutSeconds) {
@@ -421,16 +421,16 @@ public abstract class CSBasePage {
     }
     
     public void highlightElement(WebElement element) {
-        if (config.getBooleanProperty("custom.highlight.elements", true)) {
+        if (config.getBooleanProperty("cs.element.highlight.elements", true)) {
             String originalStyle = element.getAttribute("style");
             jsExecutor.executeScript(
                 "arguments[0].setAttribute('style', arguments[1]);",
                 element,
-                "border: 2px solid " + config.getProperty("custom.highlight.color", "red") + "; " + originalStyle
+                "border: 2px solid " + config.getProperty("cs.element.highlight.color", "red") + "; " + originalStyle
             );
             
             try {
-                Thread.sleep(config.getIntProperty("custom.wait.animation", 500));
+                Thread.sleep(config.getIntProperty("cs.element.wait.animation", 500));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -577,7 +577,7 @@ public abstract class CSBasePage {
     
     public File takeScreenshot() {
         String timestamp = String.valueOf(System.currentTimeMillis());
-        String filePath = config.getProperty("report.directory", "target/screenshots") + "/screenshot_" + timestamp + ".png";
+        String filePath = config.getProperty("cs.report.directory", "target/screenshots") + "/screenshot_" + timestamp + ".png";
         return CSWebDriverManager.takeScreenshot(filePath);
     }
     
@@ -591,7 +591,7 @@ public abstract class CSBasePage {
     public void captureScreenshot(String name) {
         CSReportManager.info("Capturing screenshot: " + name);
         String timestamp = String.valueOf(System.currentTimeMillis());
-        String filePath = config.getProperty("report.directory", "target/screenshots") + "/" + name + "_" + timestamp + ".png";
+        String filePath = config.getProperty("cs.report.directory", "target/screenshots") + "/" + name + "_" + timestamp + ".png";
         File screenshot = CSWebDriverManager.takeScreenshot(filePath);
         if (screenshot != null && screenshot.exists()) {
             CSReportManager.pass("Screenshot captured: " + name);

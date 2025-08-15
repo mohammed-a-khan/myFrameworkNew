@@ -2503,7 +2503,7 @@ public class CSHtmlReportGenerator {
         section.append("            </div>\n");
         
         // Get actual thread count from config
-        String threadCount = config.getProperty("thread.count", "1");
+        String threadCount = config.getProperty("cs.test.thread.count", "1");
         section.append("            <div class=\"execution-stat\">\n");
         section.append("                <div class=\"execution-stat-value\">").append(threadCount).append("</div>\n");
         section.append("                <div class=\"execution-stat-label\">Parallel Threads</div>\n");
@@ -2591,7 +2591,7 @@ public class CSHtmlReportGenerator {
         section.append("                </div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Headless Mode</span>\n");
-        section.append("                    <span class=\"env-value\">").append(config.getProperty("browser.headless", "false")).append("</span>\n");
+        section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.browser.headless", "false")).append("</span>\n");
         section.append("                </div>\n");
         section.append("            </div>\n");
         
@@ -2601,11 +2601,11 @@ public class CSHtmlReportGenerator {
             section.append("                <div class=\"env-card-title\">Cucumber Configuration</div>\n");
             section.append("                <div class=\"env-item\">\n");
             section.append("                    <span class=\"env-label\">Feature Path</span>\n");
-            section.append("                    <span class=\"env-value\">").append(config.getProperty("cucumber.features.path", "src/test/resources/features")).append("</span>\n");
+            section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.bdd.features.path", "src/test/resources/features")).append("</span>\n");
             section.append("                </div>\n");
             section.append("                <div class=\"env-item\">\n");
             section.append("                    <span class=\"env-label\">Glue Path</span>\n");
-            section.append("                    <span class=\"env-value\">").append(config.getProperty("cucumber.glue.path", "com.orangehrm.stepdefs")).append("</span>\n");
+            section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.bdd.stepdefs.packages", "com.orangehrm.stepdefs")).append("</span>\n");
             section.append("                </div>\n");
             
             // Get tags from first cucumber test
@@ -2631,19 +2631,19 @@ public class CSHtmlReportGenerator {
         section.append("                <div class=\"env-card-title\">Execution Parameters</div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Base URL</span>\n");
-        section.append("                    <span class=\"env-value\">").append(config.getProperty("base.url", "https://opensource-demo.orangehrmlive.com")).append("</span>\n");
+        section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.app.base.url", "https://opensource-demo.orangehrmlive.com")).append("</span>\n");
         section.append("                </div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Timeout</span>\n");
-        section.append("                    <span class=\"env-value\">").append(config.getProperty("wait.timeout", "30")).append(" seconds</span>\n");
+        section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.wait.timeout", "30")).append(" seconds</span>\n");
         section.append("                </div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Retry Count</span>\n");
-        section.append("                    <span class=\"env-value\">").append(config.getProperty("retry.count", "0")).append("</span>\n");
+        section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.test.retry.count", "0")).append("</span>\n");
         section.append("                </div>\n");
         section.append("                <div class=\"env-item\">\n");
         section.append("                    <span class=\"env-label\">Screenshot on Failure</span>\n");
-        section.append("                    <span class=\"env-value\">").append(config.getProperty("screenshot.on.failure", "true")).append("</span>\n");
+        section.append("                    <span class=\"env-value\">").append(config.getProperty("cs.screenshot.on.failure", "true")).append("</span>\n");
         section.append("                </div>\n");
         section.append("            </div>\n");
         
@@ -2674,7 +2674,7 @@ public class CSHtmlReportGenerator {
         
         // Add thread count if parallel
         if (!"none".equals(config.getProperty("parallel.mode", "none"))) {
-            command.append(" -Dthread.count=").append(threadCount);
+            command.append(" -Dcs.test.thread.count=").append(threadCount);
         }
         
         section.append("            ").append(command.toString()).append("\n");

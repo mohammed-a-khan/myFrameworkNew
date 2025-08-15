@@ -64,7 +64,7 @@ public class CSADOMappedTest extends CSBaseTest {
     public void testADOCase419_ValidLogin() {
         
         // Navigate to login page
-        driver.get("https://opensource-demo.orangehrmlive.com/");
+        driver.get(config.getProperty("cs.orangehrm.url", "https://opensource-demo.orangehrmlive.com"));
         
         // Wait for page to load
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
@@ -79,12 +79,12 @@ public class CSADOMappedTest extends CSBaseTest {
         // Enter username
         WebElement username = driver.findElement(usernameField);
         username.clear();
-        username.sendKeys("Admin");
+        username.sendKeys(config.getProperty("cs.orangehrm.username", "Admin"));
         
         // Enter password
         WebElement password = driver.findElement(passwordField);
         password.clear();
-        password.sendKeys("admin123");
+        password.sendKeys(config.getProperty("cs.orangehrm.password", "admin123"));
         
         // Take screenshot before login
         takeScreenshot("ado_419_before_login");
@@ -107,7 +107,7 @@ public class CSADOMappedTest extends CSBaseTest {
     public void testADOCase420_InvalidLogin() {
         
         // Navigate to login page
-        driver.get("https://opensource-demo.orangehrmlive.com/");
+        driver.get(config.getProperty("cs.orangehrm.url", "https://opensource-demo.orangehrmlive.com"));
         
         // Wait for page to load
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));

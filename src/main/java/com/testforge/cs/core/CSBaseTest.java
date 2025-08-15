@@ -207,7 +207,7 @@ public abstract class CSBaseTest {
                         threadName, threadId, parallelMode);
                     
                     // Check if browser should be reused
-                    boolean reuseBrowser = config.getBooleanProperty("browser.reuse.instance", true);
+                    boolean reuseBrowser = config.getBooleanProperty("cs.browser.reuse.instance", true);
                     
                     // Check ThreadLocal for existing driver only if reuse is enabled
                     driver = reuseBrowser ? CSWebDriverManager.getDriver() : null;
@@ -217,7 +217,7 @@ public abstract class CSBaseTest {
                             reuseBrowser ? "No existing driver in ThreadLocal" : "Browser reuse disabled");
                         // No driver for this thread yet, create a new one
                         String browserType = getBrowserType(method);
-                        boolean headless = config.getBooleanProperty("browser.headless", false);
+                        boolean headless = config.getBooleanProperty("cs.browser.headless", false);
                         logger.info("[{}] Thread ID {} - Creating NEW {} driver (headless: {})", 
                             threadName, threadId, browserType, headless);
                         driver = CSWebDriverManager.createDriver(browserType, headless, null);
@@ -240,11 +240,11 @@ public abstract class CSBaseTest {
                     }
                 } else {
                     // Non-parallel mode - check for existing driver
-                    boolean reuseBrowser = config.getBooleanProperty("browser.reuse.instance", true);
+                    boolean reuseBrowser = config.getBooleanProperty("cs.browser.reuse.instance", true);
                     driver = reuseBrowser ? CSWebDriverManager.getDriver() : null;
                     if (driver == null) {
                         String browserType = getBrowserType(method);
-                        boolean headless = config.getBooleanProperty("browser.headless", false);
+                        boolean headless = config.getBooleanProperty("cs.browser.headless", false);
                         logger.info("[{}] Creating NEW {} driver (headless: {})", threadName, browserType, headless);
                         driver = CSWebDriverManager.createDriver(browserType, headless, null);
                         logger.info("[{}] Driver created: {}", threadName, driver);
@@ -328,7 +328,7 @@ public abstract class CSBaseTest {
             boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
             
             // Check if browser should be reused or closed after each test
-            boolean reuseBrowser = config.getBooleanProperty("browser.reuse.instance", true);
+            boolean reuseBrowser = config.getBooleanProperty("cs.browser.reuse.instance", true);
             
             if (!reuseBrowser) {
                 // Close browser after each test when reuse is disabled
@@ -576,7 +576,7 @@ public abstract class CSBaseTest {
     private void captureFailureArtifacts() {
         try {
             // Take screenshot
-            if (config.getBooleanProperty("test.screenshot.on.failure", true)) {
+            if (config.getBooleanProperty("cs.screenshot.on.failure", true)) {
                 takeScreenshot("failure_screenshot");
             }
             

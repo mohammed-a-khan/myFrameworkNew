@@ -66,14 +66,14 @@ public class CSVideoRecorder {
             config = CSConfigManager.getInstance();
             
             // Load configuration
-            recordingEnabled = Boolean.parseBoolean(config.getProperty("video.recording.enabled", "false"));
-            captureIntervalMs = Integer.parseInt(config.getProperty("video.capture.interval.ms", "500"));
-            videoOutputDir = config.getProperty("video.output.directory", "target/videos");
-            maxVideoSizeMB = Integer.parseInt(config.getProperty("video.max.size.mb", "100"));
-            recordOnFailureOnly = Boolean.parseBoolean(config.getProperty("video.record.failure.only", "true"));
+            recordingEnabled = Boolean.parseBoolean(config.getProperty("cs.video.recording.enabled", "false"));
+            captureIntervalMs = Integer.parseInt(config.getProperty("cs.video.capture.interval.ms", "500"));
+            videoOutputDir = config.getProperty("cs.video.output.directory", "target/videos");
+            maxVideoSizeMB = Integer.parseInt(config.getProperty("cs.video.max.size.mb", "100"));
+            recordOnFailureOnly = Boolean.parseBoolean(config.getProperty("cs.video.record.failure.only", "true"));
             
             // Setup capture area (default: full screen)
-            String captureAreaConfig = config.getProperty("video.capture.area", "fullscreen");
+            String captureAreaConfig = config.getProperty("cs.video.capture.area", "fullscreen");
             setupCaptureArea(captureAreaConfig);
             
             // Create output directory

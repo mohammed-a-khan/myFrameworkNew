@@ -82,8 +82,8 @@ public class CSBDDRunner extends CSBaseTest {
     private static volatile int totalExpectedTests = 0; // Will be set dynamically
     
     @BeforeClass
-    @Parameters({"featuresPath", "tags", "excludeTags", "stepDefPackages", 
-                 "azure.devops.test.plan.id", "azure.devops.test.suite.id", "ado.enabled"})
+    @Parameters({"cs.bdd.features.path", "cs.bdd.tags", "cs.bdd.exclude.tags", "cs.bdd.stepdefs.packages", 
+                 "cs.azure.devops.test.plan.id", "cs.azure.devops.test.suite.id", "cs.azure.devops.enabled"})
     public void setupBDDRunner(
             @org.testng.annotations.Optional("features") String featuresPath,
             @org.testng.annotations.Optional("") String tags,
@@ -377,13 +377,13 @@ public class CSBDDRunner extends CSBaseTest {
         
         // Third priority: Fall back to application.properties
         if (dataProviderThreadCount <= 0 || dataProviderThreadCount == 10) {
-            String propertyThreadCount = config.getProperty("thread.count", "1");
+            String propertyThreadCount = config.getProperty("cs.test.thread.count", "1");
             try {
                 dataProviderThreadCount = Integer.parseInt(propertyThreadCount);
-                threadCountSource = "thread.count from application.properties";
-                logger.info("No thread count specified in suite XML, using thread.count={} from application.properties", dataProviderThreadCount);
+                threadCountSource = "cs.test.thread.count from application.properties";
+                logger.info("No thread count specified in suite XML, using cs.test.thread.count={} from application.properties", dataProviderThreadCount);
             } catch (NumberFormatException e) {
-                logger.warn("Invalid thread.count in application.properties: {}, using default of 1", propertyThreadCount);
+                logger.warn("Invalid cs.test.thread.count in application.properties: {}, using default of 1", propertyThreadCount);
                 dataProviderThreadCount = 1;
                 threadCountSource = "default fallback";
             }
@@ -1107,12 +1107,12 @@ public class CSBDDRunner extends CSBaseTest {
     private void initializeADOIfEnabled() {
         try {
             // Check if ADO is enabled in configuration or suite parameters
-            String adoEnabled = config.getProperty("ado.enabled", "false");
+            String adoEnabled = config.getProperty("cs.azure.devops.enabled", "false");
             
             // Suite parameter takes priority over application.properties
             if (suiteAdoEnabled != null && !suiteAdoEnabled.isEmpty()) {
                 adoEnabled = suiteAdoEnabled;
-                logger.debug("Using ado.enabled from suite parameter: {}", adoEnabled);
+                logger.debug("Using cs.azure.devops.enabled from suite parameter: {}", adoEnabled);
             }
             
             if ("true".equalsIgnoreCase(adoEnabled)) {
@@ -1246,7 +1246,7 @@ public class CSBDDRunner extends CSBaseTest {
         
         // 4. Fourth priority: Properties file
         if (metadata.getTestPlanId() == null) {
-            String planId = config.getProperty("ado.test.plan.id");
+            String planId = config.getProperty("cs.azure.devops.test.plan.id");
             if (planId != null && !planId.isEmpty()) {
                 try {
                     metadata.setTestPlanId(Integer.parseInt(planId));
@@ -1292,7 +1292,7 @@ public class CSBDDRunner extends CSBaseTest {
         
         // 4. Fourth priority: Properties file
         if (metadata.getTestSuiteId() == null) {
-            String suiteId = config.getProperty("ado.test.suite.id");
+            String suiteId = config.getProperty("cs.azure.devops.test.suite.id");
             if (suiteId != null && !suiteId.isEmpty()) {
                 try {
                     metadata.setTestSuiteId(Integer.parseInt(suiteId));

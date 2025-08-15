@@ -5,6 +5,7 @@ import com.testforge.cs.annotations.CSFeature;
 import com.testforge.cs.annotations.CSDataRow;
 import com.testforge.cs.bdd.CSStepDefinitions;
 import com.testforge.cs.bdd.CSScenarioRunner;
+import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.reporting.CSReportManager;
 import com.testforge.cs.elements.CSElement;
 import com.testforge.cs.waits.CSWaitUtils;
@@ -23,6 +24,7 @@ import java.util.HashMap;
           description = "Comprehensive step definitions demonstrating all framework features")
 public class AkhanComprehensiveSteps extends CSStepDefinitions {
     
+    private static final CSConfigManager config = CSConfigManager.getInstance();
     private LoginPage loginPage;
     private HomePage homePage;
     private ESSSeriesPage essSeriesPage;
@@ -33,7 +35,7 @@ public class AkhanComprehensiveSteps extends CSStepDefinitions {
     
     @CSStep(description = "I wait for page to load")
     public void waitForPageLoad() {
-        CSWaitUtils.waitForPageLoad(getDriver().getWebDriver(), 30);
+        CSWaitUtils.waitForPageLoad(getDriver().getWebDriver(), config.getIntProperty("cs.wait.long", 5000) * 6 / 1000);
         CSReportManager.pass("Page load completed");
     }
     
@@ -46,7 +48,7 @@ public class AkhanComprehensiveSteps extends CSStepDefinitions {
     @CSStep(description = "I wait for search results")
     public void waitForSearchResults() {
         CSReportManager.info("Waiting for search results to load");
-        CSWaitUtils.waitForElementVisible(getDriver().getWebDriver(), org.openqa.selenium.By.xpath("//table//tbody/tr"), 10);
+        CSWaitUtils.waitForElementVisible(getDriver().getWebDriver(), org.openqa.selenium.By.xpath("//table//tbody/tr"), config.getIntProperty("cs.wait.long", 5000) * 2 / 1000);
         CSReportManager.pass("Search results loaded");
     }
     
@@ -69,7 +71,7 @@ public class AkhanComprehensiveSteps extends CSStepDefinitions {
         homePage = getPage(HomePage.class);
         homePage.clickMenuItem("ESSS/Series");
         
-        CSWaitUtils.waitForElementVisible(getDriver().getWebDriver(), org.openqa.selenium.By.xpath("//h1[text()='ESSSs/Series']"), 10);
+        CSWaitUtils.waitForElementVisible(getDriver().getWebDriver(), org.openqa.selenium.By.xpath("//h1[text()='ESSSs/Series']"), config.getIntProperty("cs.wait.long", 5000) * 2 / 1000);
         
         long loadTime = System.currentTimeMillis() - startTime;
         CSReportManager.info("ESSS/Series page load time: " + loadTime + "ms");
@@ -90,7 +92,7 @@ public class AkhanComprehensiveSteps extends CSStepDefinitions {
         essSeriesPage.selectAttributeOption("Key");
         
         // Enter search value
-        essSeriesPage.enterSearchValue("Key", "MESA 2001-5");
+        essSeriesPage.enterSearchValue("Key", config.getProperty("cs.test.esss.key", "MESA 2001-5"));
         
         // Execute search
         essSeriesPage.clickSearch();
@@ -108,10 +110,11 @@ public class AkhanComprehensiveSteps extends CSStepDefinitions {
             if (startTime != null) {
                 long totalTime = System.currentTimeMillis() - startTime;
                 
-                if (totalTime < 5000) {
+                long performanceThreshold = config.getIntProperty("cs.performance.threshold", 5000);
+                if (totalTime < performanceThreshold) {
                     CSReportManager.pass("Performance within acceptable limits: " + totalTime + "ms");
                 } else {
-                    CSReportManager.warn("Performance exceeds target: " + totalTime + "ms (target: 5000ms)");
+                    CSReportManager.warn("Performance exceeds target: " + totalTime + "ms (target: " + performanceThreshold + "ms)");
                 }
             }
         }
