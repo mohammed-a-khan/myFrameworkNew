@@ -79,7 +79,7 @@ public class CSHtmlReportGenerator {
                 updateScreenshotPaths(reportData, runPath, screenshotsPath);
             }
             
-            String fileName = "index.html";
+            String fileName = "cs_test_run_report.html";
             String filePath = runPath + File.separator + fileName;
             
             String reportContent = generateReportContent(reportData);
@@ -96,7 +96,7 @@ public class CSHtmlReportGenerator {
             saveTrendData(reportData);
             
             // Update latest report link to point to the new run folder
-            updateLatestReportLink(reportDir, runFolder + "/index.html");
+            updateLatestReportLink(reportDir, runFolder + "/cs_test_run_report.html");
             
             // Clean up temp screenshots directory after report generation
             cleanupTempScreenshots();
@@ -3736,6 +3736,7 @@ public class CSHtmlReportGenerator {
             }
             js.append("],\n");
             
+            
             // TODO: Add consoleLogs and errorDetails when available in CSTestResult
             js.append("        consoleLogs: [],\n");
             js.append("        errorDetails: null,\n");
@@ -5326,6 +5327,7 @@ public class CSHtmlReportGenerator {
                     }
                 }
             }
+            
         }
         
         // Clean up old page source files from cs-reports

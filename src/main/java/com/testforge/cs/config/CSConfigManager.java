@@ -203,6 +203,15 @@ public class CSConfigManager {
             return decrypted;
         }
         
+        // Resolve property placeholders like ${property.name}
+        if (value.contains("${")) {
+            String resolved = resolveValue(value);
+            if (!resolved.equals(value)) {
+                logger.debug("Resolved property placeholder for key '{}': {} -> {}", key, value, resolved);
+            }
+            return resolved;
+        }
+        
         return value;
     }
     

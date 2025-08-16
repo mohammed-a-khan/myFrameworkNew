@@ -96,11 +96,16 @@ public class CSEvidenceUploader {
             return CompletableFuture.completedFuture(null);
         }
         
-        String fileName = String.format("video_%s_%s.mp4",
-            testName.replaceAll("[^a-zA-Z0-9]", "_"),
-            System.currentTimeMillis());
+        // Get actual file extension
+        String fileExtension = videoPath.substring(videoPath.lastIndexOf('.'));
+        String mimeType = fileExtension.equals(".mjpeg") ? "video/x-motion-jpeg" : "video/mp4";
         
-        return uploadFile(runId, resultId, file, fileName, "video/mp4", "Video");
+        String fileName = String.format("video_%s_%s%s",
+            testName.replaceAll("[^a-zA-Z0-9]", "_"),
+            System.currentTimeMillis(),
+            fileExtension);
+        
+        return uploadFile(runId, resultId, file, fileName, mimeType, "Video");
     }
     
     /**
@@ -363,6 +368,7 @@ public class CSEvidenceUploader {
         
         return futures;
     }
+    
     
     /**
      * Upload entire test report folder as a zip attachment to test run

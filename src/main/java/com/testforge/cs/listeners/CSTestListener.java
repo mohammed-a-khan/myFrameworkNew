@@ -94,6 +94,7 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
         
         // Update test result
         CSTestResult testResult = testResultMap.get(getTestId(result));
+        
         if (testResult != null) {
             testResult.setStatus(CSTestResult.Status.FAILED);
             testResult.setEndTime(LocalDateTime.now());

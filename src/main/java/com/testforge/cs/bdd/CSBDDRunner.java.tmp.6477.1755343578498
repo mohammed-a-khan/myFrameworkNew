@@ -102,10 +102,6 @@ public class CSBDDRunner extends CSBaseTest {
         // Call parent setupClass to initialize base test components
         super.setupClass(context);
         
-        // Store suite name for ADO test run naming
-        this.suiteName = context.getSuite().getName();
-        logger.info("Test Suite Name: {}", this.suiteName);
-        
         this.featuresPath = featuresPath;
         this.tagsToRun = tags;
         this.tagsToExclude = excludeTags;
@@ -1175,13 +1171,7 @@ public class CSBDDRunner extends CSBaseTest {
         // Create test run with collected test points
         if (!testPointIds.isEmpty()) {
             try {
-                // Use suite name if available, otherwise default to "CS BDD Test Run"
-                String baseName = (suiteName != null && !suiteName.trim().isEmpty()) 
-                    ? suiteName 
-                    : "CS BDD Test Run";
-                String runName = baseName + " - Test Run - " + 
-                    LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                
+                String runName = "BDD Test Run - " + LocalDateTime.now();
                 List<Integer> pointIdList = new ArrayList<>(testPointIds);
                 adoPublisher.startTestRunWithPoints(runName, pointIdList);
                 logger.info("Started Azure DevOps test run with {} test points: {}", pointIdList.size(), pointIdList);
