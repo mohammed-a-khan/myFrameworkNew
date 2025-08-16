@@ -5869,7 +5869,6 @@ public class CSHtmlReportGenerator {
         }
     }
     
-    // Removed unused method addMetricDetailCSS - can be restored if needed for future enhancements
     
     /**
      * Extract error type from error message
@@ -5923,34 +5922,6 @@ public class CSHtmlReportGenerator {
         return "General Failure";
     }
     
-    // Removed unused method isFlakyCauseError - functionality is now handled by CSFailureAnalyzer
-    /*
-    private boolean isFlakyCauseError(String errorMessage) {
-        if (errorMessage == null || errorMessage.isEmpty()) return false;
-        
-        String lowerMessage = errorMessage.toLowerCase();
-        
-        // Flaky causes: DOM-related, timing issues, sync issues that benefit from retry
-        return lowerMessage.contains("nosuchelementexception") ||
-               lowerMessage.contains("elementnotinteractableexception") ||
-               lowerMessage.contains("elementnotvisibleexception") ||
-               lowerMessage.contains("staleelementreferenceexception") ||
-               lowerMessage.contains("element not found") ||
-               lowerMessage.contains("no such element") ||
-               lowerMessage.contains("unable to locate element") ||
-               lowerMessage.contains("element is not clickable") ||
-               lowerMessage.contains("element click intercepted") ||
-               lowerMessage.contains("timeout") ||
-               lowerMessage.contains("wait") ||
-               lowerMessage.contains("still loading") ||
-               lowerMessage.contains("not ready") ||
-               lowerMessage.contains("stale") ||
-               lowerMessage.contains("detached") ||
-               lowerMessage.contains("dom") ||
-               lowerMessage.contains("synchronization");
-    }
-    */
-    
     /**
      * Get root cause suggestion based on failure category
      */
@@ -5995,49 +5966,6 @@ public class CSHtmlReportGenerator {
                 return "danger"; // Red - likely real failure
         }
     }
-    
-    // Removed unused method extractTestDataFromSteps - can be restored if needed for displaying test data
-    /*
-    private Map<String, String> extractTestDataFromSteps(CSTestResult test) {
-        Map<String, String> testData = new HashMap<>();
-        
-        if (test.getExecutedSteps() != null) {
-            for (Map<String, Object> step : test.getExecutedSteps()) {
-                    String stepText = String.valueOf(step.get("text"));
-                    
-                    // Extract username and password from login steps
-                    if (stepText.contains("enter username") && stepText.contains("password")) {
-                        String[] parts = stepText.split("\"");
-                        if (parts.length >= 4) {
-                            testData.put("username", parts[1]);
-                            testData.put("password", parts[3]);
-                        }
-                    }
-                    
-                    // Extract URL
-                    if (stepText.contains("login page") || stepText.contains("OrangeHRM")) {
-                        testData.put("url", "https://opensource-demo.orangehrmlive.com/");
-                    }
-                    
-                    // Extract expected values
-                    if (stepText.contains("see") && stepText.contains("\"")) {
-                        String[] parts = stepText.split("\"");
-                        if (parts.length >= 2) {
-                            testData.put("expectedValue", parts[1]);
-                        }
-                    }
-            }
-        }
-        
-        // Get test parameters from test name if available
-        String testName = test.getTestName();
-        if (testName != null && testName.contains(" - ")) {
-            testData.put("scenario", testName.substring(testName.lastIndexOf(" - ") + 3));
-        }
-        
-        return testData;
-    }
-    */
     
     /**
      * Detects if tests were run in parallel by analyzing start times
