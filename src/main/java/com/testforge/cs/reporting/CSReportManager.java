@@ -62,18 +62,23 @@ public class CSReportManager {
         this.startTime = LocalDateTime.now();
         this.reportDirectory = config.getProperty("cs.report.directory", "target/test-reports");
         
+        // Store suite name in metadata
+        reportMetadata.put("suiteName", suiteName);
+        
         // Create report directory
         File reportDir = new File(reportDirectory);
         if (!reportDir.exists()) {
             reportDir.mkdirs();
         }
         
-        // Initialize metadata
+        // Initialize metadata with defaults (will be overridden by setExecutionContext if called)
         reportMetadata.put("suiteName", suiteName);
         reportMetadata.put("startTime", startTime.toString());
         reportMetadata.put("environment", config.getProperty("environment.name", "qa"));
         reportMetadata.put("browser", config.getProperty("browser.name", "chrome"));
-        reportMetadata.put("executionMode", config.getProperty("cs.execution.mode", "sequential"));
+        reportMetadata.put("executionMode", "sequential"); // Default, will be updated by setExecutionContext
+        reportMetadata.put("parallelMode", "none"); // Default
+        reportMetadata.put("threadCount", "1"); // Default
         reportMetadata.put("operatingSystem", System.getProperty("os.name"));
         reportMetadata.put("javaVersion", System.getProperty("java.version"));
         
@@ -81,6 +86,108 @@ public class CSReportManager {
         String stepPackages = System.getProperty("suite.cs.step.packages");
         if (stepPackages != null && !stepPackages.isEmpty()) {
             reportMetadata.put("cs.step.packages", stepPackages);
+        }
+    }
+    
+    /**
+     * Set the actual execution context from TestNG suite
+     */
+    public void setExecutionContext(String suiteName, String parallelMode, int threadCount, 
+                                   String browser, String environment) {
+        logger.info("Setting execution context - Suite: {}, Parallel: {}, Threads: {}, Browser: {}, Env: {}", 
+                   suiteName, parallelMode, threadCount, browser, environment);
+        
+        // Update suite name if provided
+        if (suiteName != null && !suiteName.trim().isEmpty()) {
+            reportMetadata.put("suiteName", suiteName);
+        }
+        
+        // Determine execution mode based on parallel settings
+        boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
+        reportMetadata.put("executionMode", isParallel ? "parallel" : "sequential");
+        reportMetadata.put("parallelMode", parallelMode != null ? parallelMode : "none");
+        reportMetadata.put("threadCount", String.valueOf(threadCount));
+        reportMetadata.put("parallelExecution", isParallel ? "Yes" : "No");
+        
+        // Update browser if provided
+        if (browser != null && !browser.trim().isEmpty()) {
+            reportMetadata.put("browser", browser);
+        }
+        
+        // Update environment if provided
+        if (environment != null && !environment.trim().isEmpty()) {
+            reportMetadata.put("environment", environment);
+        }
+        
+        // Capture execution command (Java command line)
+        String executionCommand = getExecutionCommand();
+        reportMetadata.put("executionCommand", executionCommand);
+    }
+    
+    /**
+     * Get the execution command used to run the tests
+     */
+    private String getExecutionCommand() {
+        try {
+            // Check if we're running through Maven (surefire)
+            String mainClass = System.getProperty("sun.java.command", "");
+            if (mainClass.contains("surefire")) {
+                // We're running through Maven, build a clean Maven command
+                StringBuilder cmd = new StringBuilder("mvn test");
+                
+                // Add suite file if specified
+                String suiteFile = System.getProperty("surefire.suiteXmlFiles");
+                if (suiteFile != null && !suiteFile.isEmpty()) {
+                    cmd.append(" -Dsurefire.suiteXmlFiles=").append(suiteFile);
+                }
+                
+                // Add test class if specified
+                String testClass = System.getProperty("test");
+                if (testClass != null && !testClass.isEmpty()) {
+                    cmd.append(" -Dtest=").append(testClass);
+                }
+                
+                // Add browser
+                String browser = System.getProperty("browser.name");
+                if (browser != null && !browser.isEmpty()) {
+                    cmd.append(" -Dbrowser.name=").append(browser);
+                }
+                
+                // Add environment
+                String environment = System.getProperty("environment.name");
+                if (environment != null && !environment.isEmpty()) {
+                    cmd.append(" -Denvironment.name=").append(environment);
+                }
+                
+                // Add thread count if specified
+                String threadCount = System.getProperty("cs.test.thread.count");
+                if (threadCount != null && !threadCount.isEmpty() && !"1".equals(threadCount)) {
+                    cmd.append(" -Dcs.test.thread.count=").append(threadCount);
+                }
+                
+                return cmd.toString();
+            } else {
+                // Not running through Maven, try to build a reasonable command
+                StringBuilder cmd = new StringBuilder("java");
+                
+                // Add key JVM arguments (skip verbose ones)
+                List<String> jvmArgs = java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments();
+                for (String arg : jvmArgs) {
+                    if (arg.startsWith("-D") && !arg.contains("surefire") && !arg.contains("basedir")) {
+                        cmd.append(" ").append(arg);
+                    }
+                }
+                
+                // Add main class if it's not a surefire booter
+                if (!mainClass.contains("surefirebooter")) {
+                    cmd.append(" ").append(mainClass);
+                }
+                
+                return cmd.toString();
+            }
+        } catch (Exception e) {
+            logger.warn("Could not determine execution command: {}", e.getMessage());
+            return "mvn test"; // Default fallback
         }
     }
     
@@ -242,7 +349,27 @@ public class CSReportManager {
         csReportData.setEndTime(endTime);
         csReportData.setDuration(java.time.Duration.between(startTime, endTime));
         csReportData.buildFrom(new ArrayList<>(testResults.values()));
-        csReportData.setEnvironment(CSEnvironmentCollector.getInstance().collectEnvironmentInfo().toMap());
+        
+        // Get environment info and add dynamic execution details
+        Map<String, String> envMap = CSEnvironmentCollector.getInstance().collectEnvironmentInfo().toMap();
+        
+        // Add/override with actual execution values from reportMetadata
+        envMap.put("browser", reportMetadata.getOrDefault("browser", 
+            System.getProperty("browser.name", CSConfigManager.getInstance().getProperty("browser.name", "chrome"))).toString());
+        envMap.put("environment", reportMetadata.getOrDefault("environment",
+            System.getProperty("environment.name", CSConfigManager.getInstance().getProperty("environment.name", "qa"))).toString());
+        envMap.put("suiteName", reportMetadata.getOrDefault("suiteName", "Test Suite").toString());
+        envMap.put("executionMode", reportMetadata.getOrDefault("executionMode", "sequential").toString());
+        envMap.put("parallelMode", reportMetadata.getOrDefault("parallelMode", "none").toString());
+        envMap.put("threadCount", reportMetadata.getOrDefault("threadCount", "1").toString());
+        envMap.put("parallelExecution", reportMetadata.getOrDefault("parallelExecution", "No").toString());
+        envMap.put("executionCommand", reportMetadata.getOrDefault("executionCommand", "mvn test").toString());
+        
+        csReportData.setEnvironment(envMap);
+        
+        // Set execution mode separately
+        String executionMode = reportMetadata.getOrDefault("executionMode", "sequential").toString();
+        csReportData.setExecutionMode(executionMode);
         
         // Use the comprehensive HTML report generator
         CSHtmlReportGenerator generator = new CSHtmlReportGenerator();

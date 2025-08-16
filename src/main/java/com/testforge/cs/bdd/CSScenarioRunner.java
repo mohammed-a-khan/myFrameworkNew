@@ -132,7 +132,7 @@ public class CSScenarioRunner {
         currentTestResult.setStatus(CSTestResult.Status.RUNNING);
         
         // Set proper suite name and feature name
-        currentTestResult.setSuiteName("Simple Sequential Test Suite");
+        // Suite name will be set by the test runner
         if (feature != null) {
             currentTestResult.setFeatureFile(feature.name());
         }

@@ -1,5 +1,6 @@
 package com.testforge.cs.reporting;
 
+import com.testforge.cs.analysis.CSFailureAnalyzer;
 import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.*;
@@ -38,6 +39,7 @@ public class CSTestResult {
     private List<Screenshot> screenshots;
     private String threadName;
     private String scenarioName;
+    private CSFailureAnalyzer.FailureAnalysis failureAnalysis;
     
     public CSTestResult() {
         this.steps = new ArrayList<>();
@@ -309,6 +311,18 @@ public class CSTestResult {
     
     public void setScenarioName(String scenarioName) {
         this.scenarioName = scenarioName;
+    }
+    
+    public CSFailureAnalyzer.FailureAnalysis getFailureAnalysis() {
+        return failureAnalysis;
+    }
+    
+    public void setFailureAnalysis(CSFailureAnalyzer.FailureAnalysis failureAnalysis) {
+        this.failureAnalysis = failureAnalysis;
+    }
+    
+    public boolean isFlaky() {
+        return failureAnalysis != null && failureAnalysis.isFlaky();
     }
     
     @Override

@@ -96,6 +96,21 @@ public abstract class CSBaseTest {
         String parallelMode = context.getSuite().getParallel();
         int threadCount = context.getSuite().getXmlSuite().getThreadCount();
         
+        // Update report manager with actual execution context
+        String suiteName = context.getSuite().getName();
+        String browser = context.getCurrentXmlTest() != null ? 
+            context.getCurrentXmlTest().getParameter("browser.name") : null;
+        if (browser == null) {
+            browser = System.getProperty("browser.name", config.getProperty("browser.name", "chrome"));
+        }
+        String environment = context.getCurrentXmlTest() != null ?
+            context.getCurrentXmlTest().getParameter("environment.name") : null;
+        if (environment == null) {
+            environment = System.getProperty("environment.name", config.getProperty("environment.name", "qa"));
+        }
+        
+        CSReportManager.getInstance().setExecutionContext(suiteName, parallelMode, threadCount, browser, environment);
+        
         // Check if IE is being used - IE doesn't handle parallel execution well
         String browserName = context.getCurrentXmlTest() != null ? 
             context.getCurrentXmlTest().getParameter("browser.name") : 

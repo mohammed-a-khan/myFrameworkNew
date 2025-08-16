@@ -1,5 +1,6 @@
 package com.testforge.cs.listeners;
 
+import com.testforge.cs.analysis.CSFailureAnalyzer;
 import com.testforge.cs.annotations.CSRetry;
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.driver.CSWebDriverManager;
@@ -102,6 +103,22 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
             testResult.setErrorMessage(result.getThrowable().getMessage());
             testResult.setStackTrace(getStackTrace(result.getThrowable()));
             
+            // Analyze the failure and categorize it
+            CSFailureAnalyzer.FailureAnalysis analysis = CSFailureAnalyzer.analyzeFailure(
+                result.getThrowable(), 
+                testName, 
+                result.getTestClass().getName()
+            );
+            testResult.setFailureAnalysis(analysis);
+            
+            // Log the analysis results
+            logger.info("Failure Analysis for {}: Category={}, Flaky={}, Score={}", 
+                testName, 
+                analysis.getCategory().getDisplayName(),
+                analysis.isFlaky(),
+                String.format("%.2f", analysis.getFlakinessScore())
+            );
+            
             // Capture failure artifacts
             captureFailureArtifacts(result, testResult);
         }
@@ -144,6 +161,15 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
         CSTestResult testResult = testResultMap.get(getTestId(result));
         if (testResult != null) {
             testResult.setErrorMessage("Test execution timed out");
+            
+            // Timeout failures are usually flaky
+            CSFailureAnalyzer.FailureAnalysis analysis = new CSFailureAnalyzer.FailureAnalysis();
+            analysis.setCategory(CSFailureAnalyzer.FailureCategory.FLAKY_TIMEOUT);
+            analysis.setRootCause("Test execution exceeded the configured timeout limit");
+            analysis.addRecommendation("Increase test timeout in configuration");
+            analysis.addRecommendation("Investigate if application performance has degraded");
+            analysis.setFlakinessScore(0.8);
+            testResult.setFailureAnalysis(analysis);
         }
         
         onTestFailure(result);

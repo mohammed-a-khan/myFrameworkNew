@@ -1,5 +1,6 @@
 package com.testforge.cs.reporting;
 
+import com.testforge.cs.analysis.CSFailureAnalyzer;
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.environment.CSEnvironmentCollector;
 import com.testforge.cs.environment.EnvironmentInfo;
@@ -2037,20 +2038,24 @@ public class CSHtmlReportGenerator {
         section.append("            <div class=\"metrics-grid\">\n");
         
         // Analyze test reliability based on current execution
-        Map<String, Integer> testExecutionCounts = analyzeTestExecutionPatterns(reportData);
-        Map<String, Double> flakinessScores = calculateFlakinessScores(reportData, historicalData);
+        // Note: These analyses could be used for enhanced reporting in the future
+        // Map<String, Integer> testExecutionCounts = analyzeTestExecutionPatterns(reportData);
+        // Map<String, Double> flakinessScores = calculateFlakinessScores(reportData, historicalData);
         
-        // Categorize failed tests as flaky or broken based on error types
+        // Categorize failed tests as flaky or broken based on intelligent failure analysis
         int flakyTestCount = 0;
         int brokenTestCount = 0;
+        List<CSTestResult> flakyTestsList = new ArrayList<>();
+        List<CSTestResult> brokenTestsList = new ArrayList<>();
         
         for (CSTestResult test : reportData.getTestResults()) {
             if (test.getStatus() == CSTestResult.Status.FAILED) {
-                String errorMsg = test.getErrorMessage() != null ? test.getErrorMessage() : "";
-                if (isFlakyCauseError(errorMsg)) {
+                if (test.isFlaky()) {
                     flakyTestCount++;
+                    flakyTestsList.add(test);
                 } else {
                     brokenTestCount++;
+                    brokenTestsList.add(test);
                 }
             }
         }
@@ -2116,22 +2121,30 @@ public class CSHtmlReportGenerator {
         
         section.append("            </div>\n");
         
-        // Flaky Test Details
+        // Flaky Test Details with intelligent analysis
         if (flakyTests > 0) {
             section.append("            <div class=\"flaky-tests-section\" style=\"margin-top: 1.5rem;\">\n");
             section.append("                <h4 style=\"margin-bottom: 1rem; color: var(--warning-color);\">⚠️ Flaky Tests Detected</h4>\n");
             section.append("                <div class=\"flaky-tests-list\">\n");
             
-            flakinessScores.entrySet().stream()
-                .filter(entry -> entry.getValue() >= 0.1 && entry.getValue() < 0.5)
+            flakyTestsList.stream()
                 .limit(5)
-                .forEach(entry -> {
-                    String testName = entry.getKey();
-                    double score = entry.getValue();
-                    section.append("                    <div class=\"flaky-test-item\" style=\"display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background-color: #fef3c7; border-radius: 0.25rem; margin-bottom: 0.5rem;\">\n");
-                    section.append("                        <span style=\"font-weight: 500;\">").append(testName).append("</span>\n");
-                    section.append("                        <span style=\"color: var(--warning-color); font-size: 0.875rem;\">Flakiness: ").append(String.format("%.1f%%", score * 100)).append("</span>\n");
-                    section.append("                    </div>\n");
+                .forEach(test -> {
+                    String testName = test.getTestName();
+                    if (test.getFailureAnalysis() != null) {
+                        double score = test.getFailureAnalysis().getFlakinessScore();
+                        String category = test.getFailureAnalysis().getCategory().getDisplayName();
+                        section.append("                    <div class=\"flaky-test-item\" style=\"padding: 0.75rem; background-color: #fef3c7; border-radius: 0.25rem; margin-bottom: 0.5rem; border-left: 3px solid var(--warning-color);\">\n");
+                        section.append("                        <div style=\"display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;\">\n");
+                        section.append("                            <span style=\"font-weight: 600;\">").append(testName).append("</span>\n");
+                        section.append("                            <span class=\"badge\" style=\"background-color: var(--warning-color); color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;\">")
+                            .append(String.format("%.0f%% Flaky", score * 100)).append("</span>\n");
+                        section.append("                        </div>\n");
+                        section.append("                        <div style=\"font-size: 0.875rem; color: #666;\">\n");
+                        section.append("                            <span style=\"font-weight: 500;\">Category:</span> ").append(category).append("\n");
+                        section.append("                        </div>\n");
+                        section.append("                    </div>\n");
+                    }
                 });
                 
             section.append("                </div>\n");
@@ -2502,8 +2515,10 @@ public class CSHtmlReportGenerator {
         section.append("                <div class=\"execution-stat-label\">Scenarios</div>\n");
         section.append("            </div>\n");
         
-        // Get actual thread count from config
-        String threadCount = config.getProperty("cs.test.thread.count", "1");
+        // Get actual thread count from environment data or config
+        Map<String, String> envDataForThreads = reportData.getEnvironment();
+        String threadCount = envDataForThreads != null && envDataForThreads.get("threadCount") != null ?
+            envDataForThreads.get("threadCount") : config.getProperty("cs.test.thread.count", "1");
         section.append("            <div class=\"execution-stat\">\n");
         section.append("                <div class=\"execution-stat-value\">").append(threadCount).append("</div>\n");
         section.append("                <div class=\"execution-stat-label\">Parallel Threads</div>\n");
@@ -2657,27 +2672,48 @@ public class CSHtmlReportGenerator {
         section.append("        </div>\n");
         section.append("        <div style=\"background: #1f2937; color: #10b981; padding: 1rem; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto;\">\n");
         
-        // Build command based on actual configuration
-        StringBuilder command = new StringBuilder("mvn test");
-        
-        // Add suite file if specified
-        String suiteFile = config.getProperty("suite.xml.file");
-        if (suiteFile != null && !suiteFile.isEmpty()) {
-            command.append(" -DsuiteXmlFile=").append(suiteFile);
+        // Use actual execution command from environment data if available
+        String executionCommand = null;
+        Map<String, String> envDataForCmd = reportData.getEnvironment();
+        if (envDataForCmd != null && envDataForCmd.get("executionCommand") != null) {
+            executionCommand = envDataForCmd.get("executionCommand");
         }
         
-        // Add browser
-        command.append(" -Dbrowser.name=").append(System.getProperty("browser.name", config.getProperty("browser.name", "chrome")));
-        
-        // Add environment
-        command.append(" -Denvironment.name=").append(System.getProperty("environment.name", config.getProperty("environment.name", "qa")));
-        
-        // Add thread count if parallel
-        if (!"none".equals(config.getProperty("parallel.mode", "none"))) {
-            command.append(" -Dcs.test.thread.count=").append(threadCount);
+        if (executionCommand == null || executionCommand.isEmpty()) {
+            // Build command based on actual configuration as fallback
+            StringBuilder command = new StringBuilder("mvn test");
+            
+            // Add suite file if specified
+            String suiteFile = config.getProperty("suite.xml.file");
+            if (suiteFile != null && !suiteFile.isEmpty()) {
+                command.append(" -DsuiteXmlFile=").append(suiteFile);
+            }
+            
+            // Add browser from environment data or config
+            String browser = envDataForCmd != null && envDataForCmd.get("browser") != null ? 
+                envDataForCmd.get("browser") : 
+                System.getProperty("browser.name", config.getProperty("browser.name", "chrome"));
+            command.append(" -Dbrowser.name=").append(browser);
+            
+            // Add environment from environment data or config
+            String environment = envDataForCmd != null && envDataForCmd.get("environment") != null ?
+                envDataForCmd.get("environment") :
+                System.getProperty("environment.name", config.getProperty("environment.name", "qa"));
+            command.append(" -Denvironment.name=").append(environment);
+            
+            // Add thread count if parallel
+            String parallelMode = envDataForCmd != null && envDataForCmd.get("parallelMode") != null ?
+                envDataForCmd.get("parallelMode") : "none";
+            if (!"none".equals(parallelMode)) {
+                String threadCountStr = envDataForCmd != null && envDataForCmd.get("threadCount") != null ?
+                    envDataForCmd.get("threadCount") : "1";
+                command.append(" -Dcs.test.thread.count=").append(threadCountStr);
+            }
+            
+            executionCommand = command.toString();
         }
         
-        section.append("            ").append(command.toString()).append("\n");
+        section.append("            ").append(executionCommand).append("\n");
         section.append("        </div>\n");
         section.append("    </div>\n");
         
@@ -2867,18 +2903,62 @@ public class CSHtmlReportGenerator {
                 section.append("                                <pre style=\"background: #fee2e2; border: 1px solid #fecaca; padding: 0.75rem; border-radius: 0.375rem; font-size: 0.75rem; overflow-x: auto;\">").append(escapeHtml(errorMessage)).append("</pre>\n");
                 section.append("                            </div>\n");
                 
-                // Root Cause Analysis section
-                section.append("                            <div class=\"failure-section\" style=\"margin-top: 1rem;\">\n");
-                section.append("                                <h4 style=\"font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;\"><i class=\"fas fa-lightbulb\"></i> Root Cause Analysis</h4>\n");
-                section.append("                                <div style=\"background: #eff6ff; border: 1px solid #dbeafe; padding: 0.75rem; border-radius: 0.375rem;\">\n");
-                section.append("                                    <div style=\"margin-bottom: 0.5rem;\">\n");
-                section.append("                                        <strong style=\"color: var(--info-color);\">Failure Type:</strong> ").append(failureCategory).append("\n");
-                section.append("                                    </div>\n");
-                section.append("                                    <div style=\"color: #1f2937; font-size: 0.875rem;\">\n");
-                section.append("                                        <strong>Suggested Resolution:</strong> ").append(getRootCauseSuggestion(failureCategory)).append("\n");
-                section.append("                                    </div>\n");
-                section.append("                                </div>\n");
-                section.append("                            </div>\n");
+                // Intelligent Failure Analysis section
+                if (test.getFailureAnalysis() != null) {
+                    CSFailureAnalyzer.FailureAnalysis analysis = test.getFailureAnalysis();
+                    
+                    section.append("                            <div class=\"failure-section\" style=\"margin-top: 1rem;\">\n");
+                    section.append("                                <h4 style=\"font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;\"><i class=\"fas fa-brain\"></i> Intelligent Failure Analysis</h4>\n");
+                    
+                    // Category and Flakiness Score
+                    String bgColor = analysis.isFlaky() ? "#fef3c7" : "#fee2e2";
+                    String borderColor = analysis.isFlaky() ? "#fbbf24" : "#f87171";
+                    section.append("                                <div style=\"background: ").append(bgColor).append("; border: 1px solid ").append(borderColor).append("; padding: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;\">\n");
+                    section.append("                                    <div style=\"display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;\">\n");
+                    section.append("                                        <div>\n");
+                    section.append("                                            <strong style=\"color: #1f2937;\">Category:</strong> ").append(analysis.getCategory().getDisplayName()).append("\n");
+                    section.append("                                        </div>\n");
+                    section.append("                                        <div>\n");
+                    if (analysis.isFlaky()) {
+                        section.append("                                            <span class=\"badge\" style=\"background-color: var(--warning-color); color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem;\">")
+                            .append(String.format("%.0f%% Flaky", analysis.getFlakinessScore() * 100)).append("</span>\n");
+                    } else {
+                        section.append("                                            <span class=\"badge\" style=\"background-color: var(--danger-color); color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem;\">Genuine Failure</span>\n");
+                    }
+                    section.append("                                        </div>\n");
+                    section.append("                                    </div>\n");
+                    section.append("                                    <div style=\"color: #1f2937; font-size: 0.875rem;\">\n");
+                    section.append("                                        <strong>Root Cause:</strong> ").append(escapeHtml(analysis.getRootCause())).append("\n");
+                    section.append("                                    </div>\n");
+                    section.append("                                </div>\n");
+                    
+                    // Recommendations
+                    if (!analysis.getRecommendations().isEmpty()) {
+                        section.append("                                <div style=\"background: #eff6ff; border: 1px solid #dbeafe; padding: 0.75rem; border-radius: 0.375rem;\">\n");
+                        section.append("                                    <h5 style=\"font-size: 0.813rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--info-color);\"><i class=\"fas fa-tools\"></i> Recommended Actions</h5>\n");
+                        section.append("                                    <ul style=\"margin: 0; padding-left: 1.25rem; font-size: 0.813rem; color: #1f2937;\">\n");
+                        for (String recommendation : analysis.getRecommendations()) {
+                            section.append("                                        <li style=\"margin-bottom: 0.25rem;\">").append(escapeHtml(recommendation)).append("</li>\n");
+                        }
+                        section.append("                                    </ul>\n");
+                        section.append("                                </div>\n");
+                    }
+                    
+                    section.append("                            </div>\n");
+                } else {
+                    // Fallback to basic analysis if intelligent analysis not available
+                    section.append("                            <div class=\"failure-section\" style=\"margin-top: 1rem;\">\n");
+                    section.append("                                <h4 style=\"font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;\"><i class=\"fas fa-lightbulb\"></i> Root Cause Analysis</h4>\n");
+                    section.append("                                <div style=\"background: #eff6ff; border: 1px solid #dbeafe; padding: 0.75rem; border-radius: 0.375rem;\">\n");
+                    section.append("                                    <div style=\"margin-bottom: 0.5rem;\">\n");
+                    section.append("                                        <strong style=\"color: var(--info-color);\">Failure Type:</strong> ").append(failureCategory).append("\n");
+                    section.append("                                    </div>\n");
+                    section.append("                                    <div style=\"color: #1f2937; font-size: 0.875rem;\">\n");
+                    section.append("                                        <strong>Suggested Resolution:</strong> ").append(getRootCauseSuggestion(failureCategory)).append("\n");
+                    section.append("                                    </div>\n");
+                    section.append("                                </div>\n");
+                    section.append("                            </div>\n");
+                }
                 
                 // Stack trace section
                 if (test.getStackTrace() != null && !test.getStackTrace().isEmpty()) {
@@ -3031,7 +3111,6 @@ public class CSHtmlReportGenerator {
         section.append("            <div class=\"thread-timeline-container\">\n");
         
         // Render timeline for each thread
-        int threadIndex = 0;
         for (Map.Entry<String, List<CSTestResult>> entry : testsByThread.entrySet()) {
             String threadName = entry.getKey();
             List<CSTestResult> threadTests = entry.getValue();
@@ -3072,8 +3151,6 @@ public class CSHtmlReportGenerator {
             
             section.append("                    </div>\n");
             section.append("                </div>\n");
-            
-            threadIndex++;
         }
         
         section.append("            </div>\n");
@@ -3195,7 +3272,7 @@ public class CSHtmlReportGenerator {
             List<CSTestResult> tests = entry.getValue();
             
             int passed = (int) tests.stream().filter(t -> t.getStatus() == CSTestResult.Status.PASSED).count();
-            int failed = (int) tests.stream().filter(t -> t.getStatus() == CSTestResult.Status.FAILED).count();
+            // Count failed tests for pass rate calculation
             double passRate = tests.size() > 0 ? (passed * 100.0 / tests.size()) : 0;
             
             section.append("        <div class=\"card\">\n");
@@ -3512,11 +3589,20 @@ public class CSHtmlReportGenerator {
         
         // Extract test configuration from report data
         Map<String, Object> metadata = reportData.getMetadata();
+        Map<String, String> envData = reportData.getEnvironment();
         CSConfigManager configManager = CSConfigManager.getInstance();
+        
+        // Use environment data which contains the actual execution context
+        String browser = envData != null && envData.get("browser") != null ? envData.get("browser") :
+            System.getProperty("browser.name", configManager.getProperty("browser.name", "chrome"));
+        String environment = envData != null && envData.get("environment") != null ? envData.get("environment") :
+            System.getProperty("environment.name", configManager.getProperty("environment.name", "qa"));
+        String executionMode = envData != null && envData.get("executionMode") != null ? envData.get("executionMode") : "sequential";
+        
         String[][] testConfig = {
-            {"Browser", System.getProperty("browser.name", configManager.getProperty("browser.name", "chrome"))},
-            {"Environment", System.getProperty("environment.name", configManager.getProperty("environment.name", "qa"))},
-            {"Execution Mode", metadata.get("executionMode") != null ? metadata.get("executionMode").toString() : "sequential"},
+            {"Browser", browser},
+            {"Environment", environment},
+            {"Execution Mode", executionMode},
             {"Suite Name", getActualSuiteName(reportData, metadata)},
             {"Start Time", reportData.getStartTime() != null ? reportData.getStartTime().format(TIMESTAMP_FORMAT) : "Unknown"},
             {"Duration", reportData.getDuration() != null ? formatDuration(reportData.getDuration().toMillis()) : "Unknown"}
@@ -3564,7 +3650,7 @@ public class CSHtmlReportGenerator {
             {"TestNG Version", testNgVersion},
             {"Selenium Version", seleniumVersion},
             {"WebDriver Manager", "Enabled"},
-            {"Parallel Execution", (metadata.get("executionMode") != null ? metadata.get("executionMode").toString() : "sequential").contains("parallel") ? "Yes" : "No"}
+            {"Parallel Execution", envData != null && envData.get("parallelExecution") != null ? envData.get("parallelExecution") : "No"}
         };
         
         for (String[] info : frameworkInfo) {
@@ -3742,6 +3828,24 @@ public class CSHtmlReportGenerator {
             js.append("        errorDetails: null,\n");
             js.append("        executedSteps: ").append(toJsonArray(test.getExecutedSteps())).append(",\n");
             
+            // Add failure analysis if present
+            if (test.getFailureAnalysis() != null) {
+                CSFailureAnalyzer.FailureAnalysis analysis = test.getFailureAnalysis();
+                js.append("        failureAnalysis: {\n");
+                js.append("            category: '").append(escapeJs(analysis.getCategory().getDisplayName())).append("',\n");
+                js.append("            isFlaky: ").append(analysis.isFlaky()).append(",\n");
+                js.append("            flakinessScore: ").append(analysis.getFlakinessScore()).append(",\n");
+                js.append("            rootCause: '").append(escapeJs(analysis.getRootCause())).append("',\n");
+                js.append("            recommendations: [\n");
+                for (String rec : analysis.getRecommendations()) {
+                    js.append("                '").append(escapeJs(rec)).append("',\n");
+                }
+                js.append("            ]\n");
+                js.append("        },\n");
+            } else {
+                js.append("        failureAnalysis: null,\n");
+            }
+            
             // Add test data from CSTestResult
             js.append("        testData: {\n");
             if (test.getTestData() != null && !test.getTestData().isEmpty()) {
@@ -3818,10 +3922,15 @@ public class CSHtmlReportGenerator {
         js.append("    detailsHtml += '<div class=\"test-info-grid\">';\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">Test Method:</span><span>' + test.name + '</span>';\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">Test Class:</span><span>' + (test.className || 'CSBDDRunner') + '</span>';\n");
+        // Get execution mode from metadata
+        Map<String, Object> metadata = reportData.getMetadata();
+        String executionMode = metadata != null && metadata.get("executionMode") != null ?
+            metadata.get("executionMode").toString() : "sequential";
+        
         js.append("    detailsHtml += '<span class=\"test-info-label\">Test Type:</span><span><i class=\"fas fa-cucumber\"></i> BDD/Cucumber</span>';\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">Framework:</span><span><i class=\"fas fa-cog\"></i> TestNG + Selenium</span>';\n");
-        js.append("    detailsHtml += '<span class=\"test-info-label\">Execution Mode:</span><span>Sequential</span>';\n");
-        js.append("    detailsHtml += '<span class=\"test-info-label\">Thread ID:</span><span>main</span>';\n");
+        js.append("    detailsHtml += '<span class=\"test-info-label\">Execution Mode:</span><span>").append(escapeJs(executionMode.substring(0, 1).toUpperCase() + executionMode.substring(1))).append("</span>';\n");
+        js.append("    detailsHtml += '<span class=\"test-info-label\">Thread ID:</span><span>' + (test.metadata && test.metadata.threadId ? test.metadata.threadId : 'main') + '</span>';\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">Priority:</span><span>Normal</span>';\n");
         js.append("    detailsHtml += '<span class=\"test-info-label\">Retry Count:</span><span>0 / 2</span>';\n");
         js.append("    detailsHtml += '</div></div>';\n");
@@ -5137,7 +5246,8 @@ public class CSHtmlReportGenerator {
         sortedTests.sort(Comparator.comparing(CSTestResult::getStartTime));
         
         // Estimate initialization time (time before first test)
-        LocalDateTime firstTestStart = sortedTests.get(0).getStartTime();
+        // Note: Could use firstTestStart for more accurate calculation in the future
+        // LocalDateTime firstTestStart = sortedTests.get(0).getStartTime();
         // Assume 2 seconds for framework init
         metrics.put("initTime", 2000L);
         
@@ -5759,17 +5869,7 @@ public class CSHtmlReportGenerator {
         }
     }
     
-    /**
-     * Add CSS for metric details
-     */
-    private void addMetricDetailCSS(StringBuilder css) {
-        css.append("        .metric-detail {\n");
-        css.append("            font-size: 0.75rem;\n");
-        css.append("            color: var(--text-secondary);\n");
-        css.append("            margin-top: 0.25rem;\n");
-        css.append("            font-style: italic;\n");
-        css.append("        }\n\n");
-    }
+    // Removed unused method addMetricDetailCSS - can be restored if needed for future enhancements
     
     /**
      * Extract error type from error message
@@ -5823,9 +5923,8 @@ public class CSHtmlReportGenerator {
         return "General Failure";
     }
     
-    /**
-     * Determine if error is flaky (DOM/timing related that needs retry)
-     */
+    // Removed unused method isFlakyCauseError - functionality is now handled by CSFailureAnalyzer
+    /*
     private boolean isFlakyCauseError(String errorMessage) {
         if (errorMessage == null || errorMessage.isEmpty()) return false;
         
@@ -5850,6 +5949,7 @@ public class CSHtmlReportGenerator {
                lowerMessage.contains("dom") ||
                lowerMessage.contains("synchronization");
     }
+    */
     
     /**
      * Get root cause suggestion based on failure category
@@ -5896,9 +5996,8 @@ public class CSHtmlReportGenerator {
         }
     }
     
-    /**
-     * Extract test data from executed steps
-     */
+    // Removed unused method extractTestDataFromSteps - can be restored if needed for displaying test data
+    /*
     private Map<String, String> extractTestDataFromSteps(CSTestResult test) {
         Map<String, String> testData = new HashMap<>();
         
@@ -5938,6 +6037,7 @@ public class CSHtmlReportGenerator {
         
         return testData;
     }
+    */
     
     /**
      * Detects if tests were run in parallel by analyzing start times
@@ -6003,9 +6103,21 @@ public class CSHtmlReportGenerator {
      * Gets the actual suite name from test results or configuration
      */
     private String getActualSuiteName(CSReportData reportData, Map<String, Object> metadata) {
-        // First try to get from metadata
-        if (metadata.get("suiteName") != null) {
-            return metadata.get("suiteName").toString();
+        // First check environment data which has the actual runtime suite name
+        Map<String, String> envData = reportData.getEnvironment();
+        if (envData != null && envData.get("suiteName") != null) {
+            String suiteName = envData.get("suiteName");
+            if (!suiteName.isEmpty() && !suiteName.startsWith("TestSuite_")) {
+                return suiteName;
+            }
+        }
+        
+        // Then try metadata
+        if (metadata != null && metadata.get("suiteName") != null) {
+            String suiteName = metadata.get("suiteName").toString();
+            if (!suiteName.isEmpty() && !suiteName.startsWith("TestSuite_")) {
+                return suiteName;
+            }
         }
         
         // Try to get from test results

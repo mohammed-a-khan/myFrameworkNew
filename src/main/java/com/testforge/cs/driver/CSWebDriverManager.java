@@ -188,8 +188,9 @@ public class CSWebDriverManager {
     
     /**
      * Create WebDriver instance
+     * Synchronized to prevent race conditions during parallel browser creation
      */
-    public static WebDriver createDriver(String browserType, boolean headless, Map<String, Object> capabilities) {
+    public static synchronized WebDriver createDriver(String browserType, boolean headless, Map<String, Object> capabilities) {
         String threadName = Thread.currentThread().getName();
         long threadId = Thread.currentThread().getId();
         

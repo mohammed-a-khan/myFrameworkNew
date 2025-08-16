@@ -1,10 +1,8 @@
 package com.testforge.cs.bdd;
 
-import com.testforge.cs.analysis.CSFailureAnalyzer;
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.core.CSBaseTest;
 import com.testforge.cs.driver.CSWebDriverManager;
-import org.openqa.selenium.WebDriver;
 import com.testforge.cs.driver.CSDriver;
 import com.testforge.cs.reporting.CSReportManager;
 import com.testforge.cs.reporting.CSTestResult;
@@ -152,15 +150,8 @@ public class CSBDDRunner extends CSBaseTest {
         String threadName = Thread.currentThread().getName();
         logger.info("[{}] @AfterMethod for test: {}", threadName, method.getName());
         
-        // Call parent teardown - this handles screenshots and cleanup based on configuration
+        // Call parent teardown - this handles screenshots and cleanup
         super.teardownTest(method, result);
-        
-        // Parent teardown already handles browser lifecycle based on cs.browser.reuse.instance
-        // No need for additional browser closing here - let the framework handle it
-        // Browsers will be closed:
-        // - After each test if reuse=false
-        // - At the end of class/suite if reuse=true
-        // - Each thread manages its own browser in parallel mode
     }
     
     @AfterClass(alwaysRun = true)
@@ -168,21 +159,12 @@ public class CSBDDRunner extends CSBaseTest {
         String threadName = Thread.currentThread().getName();
         logger.info("BDD Runner @AfterClass for thread: {}", threadName);
         
-        // Ensure any remaining browser for this thread is closed
-        try {
-            WebDriver existingDriver = CSWebDriverManager.getDriver();
-            if (existingDriver != null) {
-                logger.info("[{}] Closing remaining browser in @AfterClass", threadName);
-                CSWebDriverManager.quitDriver();
-                driver = null;
-            } else if (driver != null) {
-                // Fallback - if driver field is set but not in ThreadLocal
-                logger.info("[{}] Closing driver field in @AfterClass", threadName);
-                driver.quit();
-                driver = null;
-            }
-        } catch (Exception e) {
-            logger.warn("[{}] Error closing browser in @AfterClass: {}", threadName, e.getMessage());
+        // Quit the driver for this thread to ensure cleanup
+        // This is important when browser.reuse.instance=true
+        if (driver != null) {
+            logger.info("[{}] Closing browser in @AfterClass", threadName);
+            CSWebDriverManager.quitDriver();
+            driver = null;
         }
         
         logger.info("Test execution summary for this class instance:");
@@ -345,18 +327,12 @@ public class CSBDDRunner extends CSBaseTest {
             context.getSuite().getXmlSuite().setDataProviderThreadCount(1);
             logger.info("Suite has parallel='{}' - Forcing sequential execution by setting data-provider-thread-count=1", parallelMode);
         } else {
-            // For parallel mode, ensure proper thread pool configuration
+            // For parallel mode, respect the thread-count from suite
             int suiteThreadCount = context.getSuite().getXmlSuite().getThreadCount();
             if (suiteThreadCount > 0) {
-                // Set data provider thread count to match suite thread count
                 System.setProperty("testng.data-provider-thread-count", String.valueOf(suiteThreadCount));
                 context.getSuite().getXmlSuite().setDataProviderThreadCount(suiteThreadCount);
-                
-                // Also set TestNG's default thread pool size to ensure proper distribution
-                System.setProperty("dataproviderthreadcount", String.valueOf(suiteThreadCount));
-                
-                logger.info("Suite has thread-count={}, configured data provider with {} threads", 
-                    suiteThreadCount, suiteThreadCount);
+                logger.info("Suite has thread-count={}, setting data-provider-thread-count to match", suiteThreadCount);
             }
         }
         
@@ -542,16 +518,17 @@ public class CSBDDRunner extends CSBaseTest {
         long threadId = Thread.currentThread().getId();
         logger.info("[{}] @BeforeMethod for: {}", threadName, method.getName());
         
-        // Check configuration for browser reuse
-        boolean reuseBrowser = config.getBooleanProperty("cs.browser.reuse.instance", true);
+        // For BDD parallel execution, we need special handling
+        // Each scenario must get its own browser instance
         String parallelMode = context.getSuite().getParallel();
         boolean isParallel = parallelMode != null && !parallelMode.equals("none") && !parallelMode.equals("false");
         
-        if (isParallel && !reuseBrowser) {
-            // In parallel mode with reuse disabled, ensure clean browser for each test
+        if (isParallel) {
+            // In parallel BDD execution, force creation of new browser for each scenario
+            // First check if there's an existing driver from a previous test in this thread
             WebDriver existingDriver = CSWebDriverManager.getDriver();
             if (existingDriver != null) {
-                logger.info("[{}] Parallel mode with reuse=false - closing existing browser", threadName);
+                logger.info("[{}] Closing existing browser before creating new one for parallel BDD test", threadName);
                 try {
                     CSWebDriverManager.quitDriver();
                     driver = null;
@@ -559,13 +536,9 @@ public class CSBDDRunner extends CSBaseTest {
                     logger.warn("[{}] Error closing existing browser: {}", threadName, e.getMessage());
                 }
             }
-        } else if (isParallel && reuseBrowser) {
-            // In parallel mode with reuse enabled, each thread maintains its own browser
-            // The parent setupTest will handle this correctly - reuse within thread
-            logger.info("[{}] Parallel mode with reuse=true - thread will reuse its browser", threadName);
         }
         
-        // Call parent setup - this handles browser creation/reuse based on configuration
+        // Call parent setup - this creates the driver
         super.setupTest(method, params, context);
         
         logger.info("[{}] After parent setup, driver = {}", threadName, driver);
@@ -596,33 +569,18 @@ public class CSBDDRunner extends CSBaseTest {
     /**
      * Test method that executes each scenario
      */
-    @Test(dataProvider = "featureFiles", description = "Execute BDD Scenario", singleThreaded = false)
+    @Test(dataProvider = "featureFiles", description = "Execute BDD Scenario")
     public void executeBDDScenario(String featureFile, CSFeatureFile feature, CSFeatureFile.Scenario scenario) {
         // Log thread and isolation information
         String threadName = Thread.currentThread().getName();
         long threadId = Thread.currentThread().getId();
-        
-        // Add thread synchronization to prevent race conditions during parallel startup
-        int testNumber;
-        synchronized (CSBDDRunner.class) {
-            testNumber = testCounter.incrementAndGet();
-            logger.info("[{}] Thread ID {} Starting test #{} for scenario: {} with data: {}", 
-                threadName, threadId, testNumber, scenario.getName(), scenario.getDataRow());
-            
-            // Small stagger for thread initialization to prevent browser creation conflicts
-            if (testNumber <= 2) {
-                try {
-                    Thread.sleep(500 * testNumber); // 500ms for first test, 1000ms for second
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
-        
+        logger.info("[{}] Thread ID {} Starting test execution for scenario: {} with data: {}", 
+            threadName, threadId, scenario.getName(), scenario.getDataRow());
         logger.info("[ISOLATION] Feature file: {}, Feature name: {}, Scenario: {}", 
             featureFile, feature.getName(), scenario.getName());
         
         // Track thread distribution
+        int testNumber = testCounter.incrementAndGet();
         threadTestCount.merge(threadName, 1, Integer::sum);
         
         logger.info("Test execution #{} - Thread: {} (total tests on this thread: {}), Scenario: {}, Data Source: {}", 
@@ -784,7 +742,7 @@ public class CSBDDRunner extends CSBaseTest {
         }
         
         // Set proper suite name and feature file
-        testResult.setSuiteName(this.suiteName != null ? this.suiteName : "Test Suite");
+        testResult.setSuiteName("Simple Sequential Test Suite");
         testResult.setFeatureFile(new File(featureFile).getName());
         
         // Extract ADO metadata if ADO is enabled
@@ -867,32 +825,6 @@ public class CSBDDRunner extends CSBaseTest {
             testResult.setStackTrace(getStackTrace(e));
             testResult.setEndTime(LocalDateTime.now());
             testResult.setDuration(testResult.calculateDuration());
-            
-            // Perform intelligent failure analysis
-            // Use root cause if available for better categorization
-            Throwable rootCause = e;
-            while (rootCause.getCause() != null) {
-                rootCause = rootCause.getCause();
-            }
-            
-            // Log the actual exception being analyzed
-            logger.debug("Analyzing exception: {} with message: {}", 
-                rootCause.getClass().getName(), rootCause.getMessage());
-            
-            CSFailureAnalyzer.FailureAnalysis analysis = CSFailureAnalyzer.analyzeFailure(
-                rootCause, 
-                scenarioName, 
-                this.getClass().getName()
-            );
-            testResult.setFailureAnalysis(analysis);
-            
-            // Log the analysis results
-            logger.info("Failure Analysis for {}: Category={}, Flaky={}, Score={}", 
-                scenarioName, 
-                analysis.getCategory().getDisplayName(),
-                analysis.isFlaky(),
-                String.format("%.2f", analysis.getFlakinessScore())
-            );
             
             // Get executed steps even on failure
             Map<String, Object> scenarioContext = threadSafeScenarioRunner.getScenarioContext();
