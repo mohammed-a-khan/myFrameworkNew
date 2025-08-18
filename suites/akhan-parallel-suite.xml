@@ -1,0 +1,34 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Akhan Parallel Test Suite" verbose="1" parallel="methods" thread-count="4">
+    
+    <parameter name="browser" value="chrome"/>
+    <parameter name="environment" value="SIT"/>
+    <parameter name="headless" value="false"/>
+    
+    <!-- Parallel BDD Tests -->
+    <test name="Akhan Parallel BDD Tests">
+        <parameter name="cucumber.features" value="features/akhan-comprehensive-framework-demo.feature"/>
+        <parameter name="cucumber.glue" value="com.akhan.stepdefs"/>
+        <parameter name="cucumber.tags" value="@parallel-execution"/>
+        <parameter name="parallel.execution" value="true"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+    <!-- Parallel Data-Driven Tests -->
+    <test name="Akhan Parallel Data Tests">
+        <groups>
+            <run>
+                <include name="parallel"/>
+                <include name="data-driven"/>
+            </run>
+        </groups>
+        
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest"/>
+        </classes>
+    </test>
+    
+</suite>

@@ -1,0 +1,64 @@
+{
+  "searchData": [
+    {
+      "SearchType": "ESSS",
+      "SearchAttribute": "Key",
+      "SearchValue": "MESA 2001-5",
+      "ExpectedResult": "MESA 2001-5"
+    },
+    {
+      "SearchType": "ESSS",
+      "SearchAttribute": "Name",
+      "SearchValue": "SACO",
+      "ExpectedResult": "SACO 2006-7"
+    },
+    {
+      "SearchType": "Series",
+      "SearchAttribute": "ID",
+      "SearchValue": "12345",
+      "ExpectedResult": "Series-12345"
+    },
+    {
+      "SearchType": "Reference Interest",
+      "SearchAttribute": "Key",
+      "SearchValue": "REF-001",
+      "ExpectedResult": "Reference Interest REF-001"
+    },
+    {
+      "SearchType": "Fallback Interest",
+      "SearchAttribute": "Name",
+      "SearchValue": "FALLBACK-A",
+      "ExpectedResult": "Fallback Interest A"
+    },
+    {
+      "SearchType": "Product Group",
+      "SearchAttribute": "ID",
+      "SearchValue": "PG-100",
+      "ExpectedResult": "Product Group 100"
+    },
+    {
+      "SearchType": "Business Line",
+      "SearchAttribute": "Key",
+      "SearchValue": "BL-MORTGAGE",
+      "ExpectedResult": "Mortgage Business Line"
+    },
+    {
+      "SearchType": "Benchmark",
+      "SearchAttribute": "Name",
+      "SearchValue": "LIBOR",
+      "ExpectedResult": "LIBOR Benchmark"
+    },
+    {
+      "SearchType": "Administrator",
+      "SearchAttribute": "ID",
+      "SearchValue": "ADMIN-001",
+      "ExpectedResult": "Administrator 001"
+    },
+    {
+      "SearchType": "CDI Name",
+      "SearchAttribute": "Key",
+      "SearchValue": "CDI-2024",
+      "ExpectedResult": "CDI 2024 Name"
+    }
+  ]
+}

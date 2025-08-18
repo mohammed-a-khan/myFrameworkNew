@@ -1,0 +1,11 @@
+TestScenario,Username,Password,SearchType,SearchAttribute,SearchValue,ExpectedResult,Environment,Browser,Timeout,ValidationRule,EncryptedToken,PropertyRef
+"Basic Search","testuser","testpass","ESSS","Key","MESA 2001-5","Found","SIT","chrome","30","Contains","ENC(IZBF1jVLD39bR2GoOv1b4dwGdoCl4csPH2BNQAwjEkAE/lsYqA1CBic2+S1CuS56)","${cs.akhan.url}"
+"Admin Search","admin","ENC(7Slaialzf3SKwsNVCYA=)","Series","ID","12345","Series-12345","UAT","firefox","45","Equals","ENC(lZv3Yl1SNjUAh1Cu5Nt2yg5dECpq0CCPJegAqfpNbVPBLdT3/q4cCzKtiNFAYM9o)","${cs.akhan.environment}"
+"Power User","poweruser","${cs.test.user.standard.password}","Reference Interest","Name","REF-001","Reference Found","PROD","edge","60","StartsWith","ENC(/fVHhplMuIITwQm3rxjhLQ==)","${browser.name}"
+"Bulk Search","bulkuser","bulkpass","Product Group","Key","PG-*","Multiple Results","SIT","chrome","120","Count>10","","${cs.wait.timeout}"
+"Performance Test","perfuser","perfpass","Business Line","ID","BL-100","Business Line 100","SIT","chrome","${cs.test.timeout.default}","ResponseTime<3000","","${cs.parallel.core.threads}"
+"Negative Test","invaliduser","wrongpass","INVALID","INVALID","INVALID","Error","SIT","${browser.name}","30","ErrorMessage","","${cs.screenshot.directory}"
+"SQL Injection","hacker","'; DROP TABLE;","ESSS","Key","'; DELETE FROM","Blocked","SIT","chrome","30","SecurityBlock","","${cs.report.directory}"
+"XSS Test","xssuser","<script>alert('XSS')</script>","ESSS","Name","<script>","Sanitized","SIT","chrome","30","NoScript","","${cs.log.file.path}"
+"Unicode Test","unicodeuser","测试密码","ESSS","Key","測試-2024","Unicode Result","SIT","chrome","30","UnicodeSupport","","${cs.data.csv.path}"
+"Special Chars","special!user","p@$$w0rd!","Series","Name","Test & Co.","Escaped Result","SIT","chrome","30","SpecialChars","","${cs.bdd.features.path}"

@@ -4,6 +4,7 @@ import com.testforge.cs.annotations.CSLocator;
 import com.testforge.cs.annotations.CSPage;
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.driver.CSWebDriverManager;
+import com.testforge.cs.elements.CSElement;
 import com.testforge.cs.exceptions.CSElementNotFoundException;
 import com.testforge.cs.exceptions.CSFrameworkException;
 import com.testforge.cs.factory.CSPageFactory;
@@ -210,9 +211,9 @@ public abstract class CSBasePage {
     /**
      * Find element using locator string and description
      */
-    public com.testforge.cs.elements.CSElement findElement(String locatorString, String description) {
+    public CSElement findElement(String locatorString, String description) {
         By by = parseLocatorString(locatorString);
-        return new com.testforge.cs.elements.CSElement(driver, by, description);
+        return new CSElement(driver, by, description);
     }
     
     public WebElement findElement(By by, int timeoutSeconds) {
@@ -597,6 +598,197 @@ public abstract class CSBasePage {
             CSReportManager.pass("Screenshot captured: " + name);
         } else {
             CSReportManager.warn("Failed to capture screenshot: " + name);
+        }
+    }
+    
+    // ===== Dynamic Element Creation Methods =====
+    
+    /**
+     * Find element dynamically using parameterized locator from repository
+     * This method replaces placeholders {0}, {1}, etc. with actual runtime values
+     * Example: findDynamicElement("dynamic.menu.item.xpath", "Settings")
+     * where dynamic.menu.item.xpath=//a[contains(text(),'{0}')]
+     */
+    public CSElement findDynamicElement(String patternKey, Object... params) {
+        CSReportManager.info("Creating dynamic element using pattern: " + patternKey);
+        
+        String locatorPattern = config.getProperty(patternKey);
+        if (locatorPattern == null) {
+            CSReportManager.fail("Pattern not found in repository: " + patternKey);
+            throw new CSFrameworkException("Pattern key not found: " + patternKey);
+        }
+        
+        // Replace placeholders {0}, {1}, etc. with actual values
+        String actualLocator = locatorPattern;
+        for (int i = 0; i < params.length; i++) {
+            actualLocator = actualLocator.replace("{" + i + "}", params[i].toString());
+        }
+        
+        CSReportManager.info("Resolved dynamic locator: " + actualLocator);
+        return findElement(actualLocator, "Dynamic element from " + patternKey);
+    }
+    
+    /**
+     * Find menu item dynamically by text
+     */
+    public CSElement findMenuItemByText(String menuText) {
+        CSReportManager.info("Finding menu item with text: " + menuText);
+        return findDynamicElement("dynamic.menu.item.xpath", menuText);
+    }
+    
+    /**
+     * Find button dynamically by text
+     */
+    public CSElement findButtonByText(String buttonText) {
+        CSReportManager.info("Finding button with text: " + buttonText);
+        String xpath = String.format("//button[contains(text(),'%s')]", buttonText);
+        return findElement(xpath, "Button: " + buttonText);
+    }
+    
+    /**
+     * Find link dynamically by text
+     */
+    public CSElement findLinkByText(String linkText) {
+        CSReportManager.info("Finding link with text: " + linkText);
+        String xpath = String.format("//a[contains(text(),'%s')]", linkText);
+        return findElement(xpath, "Link: " + linkText);
+    }
+    
+    /**
+     * Find table cell dynamically by coordinates
+     */
+    public CSElement findTableCell(String tableId, int row, int column) {
+        CSReportManager.info(String.format("Finding table cell at [%d,%d] in table: %s", row, column, tableId));
+        return findDynamicElement("dynamic.table.cell.xpath", tableId, row, column);
+    }
+    
+    /**
+     * Find input field by associated label
+     */
+    public CSElement findInputByLabel(String labelText) {
+        CSReportManager.info("Finding input field with label: " + labelText);
+        String xpath = String.format("//label[contains(text(),'%s')]/following-sibling::input[1]", labelText);
+        CSElement element = findElement(xpath, "Input for: " + labelText);
+        
+        if (element.isPresent()) {
+            CSReportManager.pass("Found input field for label: " + labelText);
+        } else {
+            CSReportManager.warn("Input field not found for label: " + labelText);
+        }
+        return element;
+    }
+    
+    /**
+     * Find element by data attribute
+     */
+    public CSElement findElementByDataAttribute(String attribute, String value) {
+        CSReportManager.info(String.format("Finding element with data-%s='%s'", attribute, value));
+        String css = String.format("[data-%s='%s']", attribute, value);
+        return findElement("css:" + css, String.format("Element[data-%s='%s']", attribute, value));
+    }
+    
+    /**
+     * Find dropdown option dynamically
+     */
+    public CSElement findDropdownOption(String dropdownId, String optionText) {
+        CSReportManager.info(String.format("Finding option '%s' in dropdown: %s", optionText, dropdownId));
+        return findDynamicElement("dynamic.dropdown.option.xpath", dropdownId, optionText);
+    }
+    
+    /**
+     * Find nth element from a list
+     */
+    public CSElement findNthElement(String baseLocator, int index) {
+        CSReportManager.info(String.format("Finding element at index %d for locator: %s", index, baseLocator));
+        String xpath = String.format("(%s)[%d]", baseLocator, index);
+        return findElement("xpath:" + xpath, String.format("Element[%d]", index));
+    }
+    
+    /**
+     * Find element by multiple attributes
+     */
+    public CSElement findElementByAttributes(String tagName, Map<String, String> attributes) {
+        CSReportManager.info(String.format("Finding <%s> element with attributes: %s", tagName, attributes));
+        
+        StringBuilder xpath = new StringBuilder("//" + tagName);
+        if (!attributes.isEmpty()) {
+            xpath.append("[");
+            int count = 0;
+            for (Map.Entry<String, String> entry : attributes.entrySet()) {
+                if (count > 0) xpath.append(" and ");
+                xpath.append(String.format("@%s='%s'", entry.getKey(), entry.getValue()));
+                count++;
+            }
+            xpath.append("]");
+        }
+        
+        return findElement("xpath:" + xpath.toString(), tagName + " with attributes");
+    }
+    
+    /**
+     * Find element within a container
+     */
+    public CSElement findElementInContainer(String containerId, String elementSelector) {
+        CSReportManager.info(String.format("Finding element '%s' within container: %s", elementSelector, containerId));
+        String css = String.format("#%s %s", containerId, elementSelector);
+        return findElement("css:" + css, "Element in " + containerId);
+    }
+    
+    /**
+     * Check if dynamic element exists and log result
+     */
+    public boolean isDynamicElementPresent(String patternKey, Object... params) {
+        try {
+            CSElement element = findDynamicElement(patternKey, params);
+            boolean present = element.isPresent();
+            
+            if (present) {
+                CSReportManager.pass("Dynamic element is present: " + patternKey);
+            } else {
+                CSReportManager.info("Dynamic element is not present: " + patternKey);
+            }
+            return present;
+        } catch (Exception e) {
+            CSReportManager.warn("Failed to check dynamic element presence: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Get text from dynamic element with validation
+     */
+    public String getDynamicElementText(String patternKey, Object... params) {
+        CSReportManager.info("Getting text from dynamic element: " + patternKey);
+        
+        try {
+            CSElement element = findDynamicElement(patternKey, params);
+            String text = element.getText();
+            
+            if (text != null && !text.isEmpty()) {
+                CSReportManager.pass("Retrieved text: " + text);
+            } else {
+                CSReportManager.warn("Element has no text content");
+            }
+            return text;
+        } catch (Exception e) {
+            CSReportManager.fail("Failed to get text from dynamic element: " + e.getMessage());
+            throw e;
+        }
+    }
+    
+    /**
+     * Click dynamic element with reporting
+     */
+    public void clickDynamicElement(String patternKey, Object... params) {
+        CSReportManager.info("Clicking dynamic element: " + patternKey);
+        
+        try {
+            CSElement element = findDynamicElement(patternKey, params);
+            element.click();
+            CSReportManager.pass("Successfully clicked dynamic element");
+        } catch (Exception e) {
+            CSReportManager.fail("Failed to click dynamic element: " + e.getMessage());
+            throw e;
         }
     }
 }

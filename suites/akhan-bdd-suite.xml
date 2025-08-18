@@ -1,0 +1,23 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Akhan BDD Test Suite" verbose="1" parallel="false">
+    
+    <parameter name="browser" value="chrome"/>
+    <parameter name="environment" value="SIT"/>
+    <parameter name="headless" value="false"/>
+    
+    <!-- BDD Cucumber Test Runner -->
+    <test name="Akhan BDD Tests">
+        <parameter name="cucumber.features" value="features/akhan-comprehensive-framework-demo.feature"/>
+        <parameter name="cucumber.glue" value="com.akhan.stepdefs"/>
+        <parameter name="cucumber.tags" value="@regression and not @ignore"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner">
+                <methods>
+                    <include name="runScenario"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+</suite>

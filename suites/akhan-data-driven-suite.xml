@@ -1,0 +1,87 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Akhan Data-Driven Test Suite" verbose="1" parallel="false">
+    
+    <parameter name="browser" value="chrome"/>
+    <parameter name="environment" value="SIT"/>
+    <parameter name="headless" value="false"/>
+    
+    <!-- CSV Data-Driven Tests -->
+    <test name="CSV Data Tests">
+        <parameter name="data.source" value="csv"/>
+        <parameter name="data.file" value="testdata/akhan-test-data.csv"/>
+        
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest">
+                <methods>
+                    <include name="testLoginWithCsvData"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- JSON Data-Driven Tests -->
+    <test name="JSON Data Tests">
+        <parameter name="data.source" value="json"/>
+        <parameter name="data.file" value="testdata/akhan-search-data.json"/>
+        
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest">
+                <methods>
+                    <include name="testSearchWithJsonData"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- Properties Data Tests -->
+    <test name="Properties Data Tests">
+        <parameter name="data.source" value="properties"/>
+        <parameter name="data.file" value="testdata/akhan-test.properties"/>
+        
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest">
+                <methods>
+                    <include name="testWithPropertiesData"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- DataRow Examples -->
+    <test name="DataRow Tests">
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest">
+                <methods>
+                    <include name="testRoleBasedAccess"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- Excel/CSV Fallback Tests -->
+    <test name="Excel Data Tests">
+        <parameter name="data.source" value="excel"/>
+        <parameter name="data.file" value="testdata/akhan-test-data.xlsx"/>
+        <parameter name="data.fallback" value="testdata/akhan-test-data.csv"/>
+        
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest">
+                <methods>
+                    <include name="testWithExcelData"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- BDD Data-Driven Scenarios -->
+    <test name="BDD Data-Driven Tests">
+        <parameter name="cucumber.features" value="features/akhan-comprehensive-framework-demo.feature"/>
+        <parameter name="cucumber.glue" value="com.akhan.stepdefs"/>
+        <parameter name="cucumber.tags" value="@data-driven-csv or @data-driven-json"/>
+        
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

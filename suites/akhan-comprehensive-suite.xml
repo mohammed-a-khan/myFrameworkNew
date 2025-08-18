@@ -1,60 +1,57 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="Akhan Comprehensive Test Suite" verbose="2" parallel="none">
-    <!-- Global Configuration -->
-    <parameter name="browser.name" value="chrome"/>
-    <parameter name="browser.headless" value="false"/>
-    <parameter name="browser.window.maximize" value="true"/>
-    <parameter name="environment.name" value="sit"/>
+<suite name="Akhan Comprehensive Test Suite" verbose="2" parallel="tests" thread-count="2">
     
-    <!-- Akhan Specific Configuration -->
-    <parameter name="app.base.url" value="https://akhan-ui-sit.myshare.net/"/>
-    <parameter name="implicit.wait" value="10"/>
-    <parameter name="explicit.wait" value="30"/>
-    <parameter name="page.load.timeout" value="30"/>
-    
-    <!-- Screenshot Configuration -->
+    <parameter name="browser" value="chrome"/>
+    <parameter name="environment" value="SIT"/>
+    <parameter name="headless" value="false"/>
     <parameter name="screenshot.on.failure" value="true"/>
-    <parameter name="screenshot.on.pass" value="false"/>
+    <parameter name="azure.devops.enabled" value="true"/>
     
-    <!-- Report Configuration -->
-    <parameter name="report.name" value="Akhan Application Test Report"/>
-    <parameter name="report.title" value="Akhan Comprehensive Test Results"/>
-    
-    <!-- Basic Akhan Tests -->
-    <test name="Akhan Basic Tests" preserve-order="true">
-        <parameter name="cs.feature.path" value="features/akhan-application.feature"/>
-        <parameter name="cs.step.packages" value="com.akhan.stepdefs"/>
-        <parameter name="tags" value="@login,@navigation"/>
+    <!-- Smoke Tests -->
+    <test name="Akhan Smoke Tests">
+        <parameter name="cucumber.features" value="features/akhan-comprehensive-framework-demo.feature"/>
+        <parameter name="cucumber.glue" value="com.akhan.stepdefs"/>
+        <parameter name="cucumber.tags" value="@smoke"/>
+        
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>
     </test>
     
-    <!-- Comprehensive Tests with All Features -->
-    <test name="Akhan Comprehensive Tests">
-        <parameter name="cs.feature.path" value="features/akhan-comprehensive.feature"/>
-        <parameter name="cs.step.packages" value="com.akhan.stepdefs,com.orangehrm.stepdefs"/>
-        <parameter name="tags" value="@comprehensive"/>
+    <!-- Data-Driven Tests -->
+    <test name="Akhan Data-Driven Tests">
+        <groups>
+            <run>
+                <include name="data-driven"/>
+            </run>
+        </groups>
+        
+        <classes>
+            <class name="com.akhan.tests.AkhanDataDrivenTest">
+                <methods>
+                    <include name="testLoginWithCsvData"/>
+                    <include name="testSearchWithJsonData"/>
+                    <include name="testRoleBasedAccess"/>
+                    <include name="testWithPropertiesData"/>
+                    <include name="testPropertySubstitution"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- Navigation Tests -->
+    <test name="Akhan Navigation Tests">
+        <parameter name="cucumber.tags" value="@navigation or @module-navigation"/>
+        
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>
     </test>
     
-    <!-- Parallel Module Navigation Tests -->
-    <test name="Akhan Module Navigation - Parallel" parallel="methods" thread-count="3">
-        <parameter name="cs.feature.path" value="features/akhan-comprehensive.feature"/>
-        <parameter name="cs.step.packages" value="com.akhan.stepdefs,com.orangehrm.stepdefs"/>
-        <parameter name="tags" value="@module-navigation"/>
-        <classes>
-            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
-        </classes>
-    </test>
-    
-    <!-- Data-Driven ESSS Search Tests -->
-    <test name="Akhan ESSS Search - Data Driven">
-        <parameter name="cs.feature.path" value="features/akhan-comprehensive.feature"/>
-        <parameter name="cs.step.packages" value="com.akhan.stepdefs,com.orangehrm.stepdefs"/>
-        <parameter name="tags" value="@esss-search,@data-driven"/>
+    <!-- Search and Validation Tests -->
+    <test name="Akhan Search Tests">
+        <parameter name="cucumber.tags" value="@search-validation or @data-driven-csv or @data-driven-json"/>
+        
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>
@@ -62,21 +59,20 @@
     
     <!-- Performance Tests -->
     <test name="Akhan Performance Tests">
-        <parameter name="cs.feature.path" value="features/akhan-comprehensive.feature"/>
-        <parameter name="cs.step.packages" value="com.akhan.stepdefs,com.orangehrm.stepdefs"/>
-        <parameter name="tags" value="@performance"/>
+        <parameter name="cucumber.tags" value="@performance"/>
+        
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>
     </test>
     
-    <!-- Error Handling Tests -->
-    <test name="Akhan Error Scenarios">
-        <parameter name="cs.feature.path" value="features/akhan-comprehensive.feature"/>
-        <parameter name="cs.step.packages" value="com.akhan.stepdefs,com.orangehrm.stepdefs"/>
-        <parameter name="tags" value="@error-handling"/>
+    <!-- Negative Tests -->
+    <test name="Akhan Negative Tests">
+        <parameter name="cucumber.tags" value="@negative"/>
+        
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>
     </test>
+    
 </suite>

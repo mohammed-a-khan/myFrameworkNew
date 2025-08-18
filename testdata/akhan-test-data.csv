@@ -1,0 +1,11 @@
+Username,Password,SearchType,SearchAttribute,SearchValue,ExpectedResult,Environment
+testuser,testpass,ESSS,Key,MESA 2001-5,MESA 2001-5,SIT
+admin,admin123,ESSS,Name,SACO,SACO 2006-7,SIT
+user1,pass1,Series,ID,12345,Series-12345,UAT
+user2,pass2,Reference Interest,Key,REF-001,Reference Interest REF-001,PROD
+testuser,ENC(IZBF1jVLD39bR2GoOv1b4dwGdoCl4csPH2BNQAwjEkAE/lsYqA1CBic2+S1CuS56),ESSS,Key,JPMC 2017-4,JPMC 2017-4,SIT
+admin,${cs.test.user.standard.password},Product Group,ID,PG-100,Product Group 100,UAT
+poweruser,powerpass,Business Line,Key,BL-MORTGAGE,Mortgage Business Line,SIT
+normaluser,normalpass,Benchmark,Name,LIBOR,LIBOR Benchmark,SIT
+testuser2,testpass2,Administrator,ID,ADMIN-001,Administrator 001,UAT
+enduser,endpass,CDI Name,Key,CDI-2024,CDI 2024 Name,PROD
