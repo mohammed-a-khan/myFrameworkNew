@@ -29,7 +29,9 @@ public class CSConfigManager {
     private String currentEnvironment;
     
     private static final String DEFAULT_CONFIG_PATH = "resources/config/";
+    private static final String OBJECT_REPOSITORIES_PATH = "object-repositories/";
     private static final String APPLICATION_PROPERTIES = "application.properties";
+    private static final String OBJECT_REPOSITORY_PROPERTIES = "object-repository.properties";
     private static final String SQL_QUERIES_PROPERTIES = "SqlQueries.properties";
     
     private CSConfigManager() {
@@ -91,79 +93,63 @@ public class CSConfigManager {
     /**
      * Load all object repository files from configured locations
      * Supports:
-     * 1. Single file path: loads that specific file
-     * 2. Directory path: loads all .properties files from that directory and subdirectories
-     * 3. Multiple paths: comma-separated list of files/directories
-     * 
-     * Configuration property: cs.object.repository.paths
-     * Default value: object-repositories
-     * 
-     * Examples:
-     * - Single file: cs.object.repository.paths=object-repositories/main.properties
-     * - Single folder: cs.object.repository.paths=object-repositories
-     * - Multiple: cs.object.repository.paths=object-repositories,config/locators.properties,external/repos
+     * 1. Default folder: object-repositories/
+     * 2. Custom folders via cs.object.repository.paths property
+     * 3. Specific files via cs.object.repository.files property
      */
     private void loadObjectRepositories() {
-        // Get configured object repository paths (default to "object-repositories" if not specified)
-        String repositoryPaths = mergedProperties.getProperty("cs.object.repository.paths", "object-repositories");
-        
-        // If empty or blank, skip loading
-        if (repositoryPaths == null || repositoryPaths.trim().isEmpty()) {
-            logger.info("Object repository loading disabled (cs.object.repository.paths is empty)");
-            return;
+        // 1. Load from default folder (object-repositories/)
+        File defaultFolder = new File(OBJECT_REPOSITORIES_PATH);
+        if (defaultFolder.exists() && defaultFolder.isDirectory()) {
+            loadRepositoryFilesFromFolder(defaultFolder);
+        } else {
+            logger.warn("Default object repositories folder not found: {}", OBJECT_REPOSITORIES_PATH);
         }
         
-        // Process each path (comma-separated)
-        String[] paths = repositoryPaths.split(",");
-        for (String path : paths) {
-            path = path.trim();
-            if (path.isEmpty()) continue;
-            
-            File pathFile = new File(path);
-            
-            if (!pathFile.exists()) {
-                logger.warn("Object repository path not found: {}", path);
-                continue;
-            }
-            
-            if (pathFile.isFile()) {
-                // It's a file - load it directly
-                if (path.endsWith(".properties")) {
-                    loadPropertiesFromFile(path);
-                    logger.info("Loaded object repository file: {}", path);
+        // 2. Load from custom folders if configured
+        String customPaths = mergedProperties.getProperty("cs.object.repository.paths");
+        if (customPaths != null && !customPaths.trim().isEmpty()) {
+            String[] paths = customPaths.split(",");
+            for (String path : paths) {
+                path = path.trim();
+                File customFolder = new File(path);
+                if (customFolder.exists() && customFolder.isDirectory()) {
+                    loadRepositoryFilesFromFolder(customFolder);
+                    logger.info("Loaded repositories from custom path: {}", path);
                 } else {
-                    logger.warn("Skipping non-properties file: {}", path);
+                    logger.warn("Custom repository path not found or not a directory: {}", path);
                 }
-            } else if (pathFile.isDirectory()) {
-                // It's a directory - load all properties files recursively
-                loadRepositoryFilesFromFolderRecursively(pathFile);
-                logger.info("Loaded all repositories from directory: {}", path);
             }
         }
         
-        // Log summary
-        logger.info("Object repository loading complete. Total properties loaded: {}", mergedProperties.size());
+        // 3. Load specific files if configured
+        String specificFiles = mergedProperties.getProperty("cs.object.repository.files");
+        if (specificFiles != null && !specificFiles.trim().isEmpty()) {
+            String[] files = specificFiles.split(",");
+            for (String file : files) {
+                file = file.trim();
+                loadPropertiesFromFile(file);
+                logger.info("Loaded specific repository file: {}", file);
+            }
+        }
+        
+        // 4. Load from legacy location if configured (backward compatibility)
+        String legacyFile = mergedProperties.getProperty("cs.object.repository.file");
+        if (legacyFile != null && !legacyFile.trim().isEmpty()) {
+            loadPropertiesFromFile(legacyFile);
+            logger.info("Loaded legacy repository file: {}", legacyFile);
+        }
     }
     
     /**
-     * Recursively load all .properties files from a folder and its subfolders
+     * Load all .properties files from a folder
      */
-    private void loadRepositoryFilesFromFolderRecursively(File folder) {
-        if (folder == null || !folder.exists() || !folder.isDirectory()) {
-            return;
-        }
-        
-        File[] files = folder.listFiles();
-        if (files == null) return;
-        
-        for (File file : files) {
-            if (file.isDirectory()) {
-                // Recursively process subdirectories
-                loadRepositoryFilesFromFolderRecursively(file);
-            } else if (file.isFile() && file.getName().endsWith(".properties")) {
-                // Load properties file
+    private void loadRepositoryFilesFromFolder(File folder) {
+        File[] propFiles = folder.listFiles((dir, name) -> name.endsWith(".properties"));
+        if (propFiles != null) {
+            for (File file : propFiles) {
                 loadPropertiesFromFile(file.getPath());
-                logger.debug("Loaded repository from: {}", file.getPath());
+                logger.info("Loaded object repository: {}", file.getName());
             }
         }
     }
