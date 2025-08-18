@@ -1,0 +1,55 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Akhan Framework Test Suite" parallel="tests" thread-count="3">
+    
+    <!-- Configuration for Azure DevOps Integration -->
+    <parameter name="cs.azure.enabled" value="true"/>
+    <parameter name="cs.azure.org.url" value="https://dev.azure.com/yourorg"/>
+    <parameter name="cs.azure.project" value="TestForge"/>
+    <parameter name="cs.azure.pat.token" value="ENC(IZBF1jVLD39bR2GoOv1b4dwGdoCl4csPH2BNQAwjEkAE/lsYqA1CBic2+S1CuS56)"/>
+    <parameter name="cs.azure.test.plan.id" value="TP-2024-AKHAN"/>
+    <parameter name="cs.azure.test.suite.id" value="TS-FRAMEWORK-DEMO"/>
+    
+    <!-- Framework Configuration -->
+    <parameter name="environment.name" value="SIT"/>
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="cs.browser.headless" value="false"/>
+    <parameter name="cs.report.directory" value="target/reports"/>
+    <parameter name="cs.screenshot.on.failure" value="true"/>
+    <parameter name="cs.video.recording" value="true"/>
+    
+    <!-- Application Configuration -->
+    <parameter name="cs.akhan.url" value="https://akhan-ui-sit.myshare.net"/>
+    
+    <!-- Test Listeners -->
+    <listeners>
+        <listener class-name="com.testforge.cs.listeners.CSTestListener"/>
+        <listener class-name="com.testforge.cs.listeners.CSReportListener"/>
+        <listener class-name="com.testforge.cs.listeners.CSRetryListener"/>
+        <listener class-name="com.testforge.cs.listeners.CSAzureDevOpsListener"/>
+        <listener class-name="com.testforge.cs.listeners.CSScreenshotListener"/>
+        <listener class-name="com.testforge.cs.listeners.CSVideoRecordingListener"/>
+    </listeners>
+    
+    <!-- TestNG Test -->
+    <test name="Akhan Framework Test">
+        <classes>
+            <class name="com.akhan.tests.AkhanFrameworkTest">
+                <methods>
+                    <include name="testLoginWithFrameworkFeatures"/>
+                    <include name="testNavigationWithDynamicElements"/>
+                    <include name="testESSSearchWithDataSources"/>
+                    <include name="testCompleteWorkflow"/>
+                </methods>
+            </class>
+        </classes>
+    </test>
+    
+    <!-- BDD Test -->
+    <test name="Akhan BDD Test">
+        <parameter name="cs.feature.path" value="features/akhan.feature"/>
+        <classes>
+            <class name="com.testforge.cs.runner.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

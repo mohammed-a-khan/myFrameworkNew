@@ -1,64 +1,93 @@
 {
+  "testConfiguration": {
+    "environment": "SIT",
+    "url": "https://akhan-ui-sit.myshare.net",
+    "parallel": true,
+    "retryCount": 2,
+    "screenshotOnFailure": true
+  },
+  "credentials": {
+    "standard": {
+      "username": "testuser1",
+      "password": "ENC(lZv3Yl1SNjUAh1Cu5Nt2yg5dECpq0CCPJegAqfpNbVPBLdT3/q4cCzKtiNFAYM9o)",
+      "role": "Standard User"
+    },
+    "admin": {
+      "username": "admin",
+      "password": "ENC(IZBF1jVLD39bR2GoOv1b4dwGdoCl4csPH2BNQAwjEkAE/lsYqA1CBic2+S1CuS56)",
+      "role": "Administrator"
+    }
+  },
+  "navigationMenu": [
+    "Home",
+    "ESSS/Series",
+    "Reference Interests",
+    "Interest History",
+    "External Interests",
+    "System Admin",
+    "Version Information",
+    "File Upload"
+  ],
   "searchData": [
     {
-      "SearchType": "ESSS",
-      "SearchAttribute": "Key",
-      "SearchValue": "MESA 2001-5",
-      "ExpectedResult": "MESA 2001-5"
+      "searchType": "ESSS",
+      "attribute": "Active",
+      "expectedResults": true,
+      "minResultCount": 1,
+      "description": "Search for active ESSS records"
     },
     {
-      "SearchType": "ESSS",
-      "SearchAttribute": "Name",
-      "SearchValue": "SACO",
-      "ExpectedResult": "SACO 2006-7"
+      "searchType": "ESSS",
+      "attribute": "Inactive",
+      "expectedResults": true,
+      "minResultCount": 0,
+      "description": "Search for inactive ESSS records"
     },
     {
-      "SearchType": "Series",
-      "SearchAttribute": "ID",
-      "SearchValue": "12345",
-      "ExpectedResult": "Series-12345"
+      "searchType": "Series",
+      "attribute": "Active",
+      "expectedResults": true,
+      "minResultCount": 1,
+      "description": "Search for active Series records"
     },
     {
-      "SearchType": "Reference Interest",
-      "SearchAttribute": "Key",
-      "SearchValue": "REF-001",
-      "ExpectedResult": "Reference Interest REF-001"
-    },
-    {
-      "SearchType": "Fallback Interest",
-      "SearchAttribute": "Name",
-      "SearchValue": "FALLBACK-A",
-      "ExpectedResult": "Fallback Interest A"
-    },
-    {
-      "SearchType": "Product Group",
-      "SearchAttribute": "ID",
-      "SearchValue": "PG-100",
-      "ExpectedResult": "Product Group 100"
-    },
-    {
-      "SearchType": "Business Line",
-      "SearchAttribute": "Key",
-      "SearchValue": "BL-MORTGAGE",
-      "ExpectedResult": "Mortgage Business Line"
-    },
-    {
-      "SearchType": "Benchmark",
-      "SearchAttribute": "Name",
-      "SearchValue": "LIBOR",
-      "ExpectedResult": "LIBOR Benchmark"
-    },
-    {
-      "SearchType": "Administrator",
-      "SearchAttribute": "ID",
-      "SearchValue": "ADMIN-001",
-      "ExpectedResult": "Administrator 001"
-    },
-    {
-      "SearchType": "CDI Name",
-      "SearchAttribute": "Key",
-      "SearchValue": "CDI-2024",
-      "ExpectedResult": "CDI 2024 Name"
+      "searchType": "Series",
+      "attribute": "Inactive",
+      "expectedResults": true,
+      "minResultCount": 0,
+      "description": "Search for inactive Series records"
     }
-  ]
+  ],
+  "performanceThresholds": {
+    "pageLoad": 3000,
+    "search": 2000,
+    "navigation": 1500,
+    "login": 2500
+  },
+  "validationRules": {
+    "loginPage": {
+      "elements": ["username", "password", "loginButton"],
+      "title": "Akhan Login"
+    },
+    "homePage": {
+      "elements": ["header", "navigationMenu", "logoutButton"],
+      "title": "Akhan Home"
+    },
+    "esssPage": {
+      "elements": ["searchTypeDropdown", "attributeDropdown", "searchButton"],
+      "title": "ESSS/Series"
+    }
+  },
+  "reportConfiguration": {
+    "includeScreenshots": true,
+    "includePerformanceMetrics": true,
+    "includeTestData": true,
+    "includeVideoRecording": true,
+    "customMetrics": {
+      "totalTestsRun": 0,
+      "totalPassed": 0,
+      "totalFailed": 0,
+      "averageExecutionTime": 0
+    }
+  }
 }

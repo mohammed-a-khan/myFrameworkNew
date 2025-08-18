@@ -1,16 +1,9 @@
-ESSKey
-MESA 2001-5
-SACO 2006-7
-JPMC 2017-4
-MLCC 2007-S1
-WAMU 2006-AR1
-BSABS 2007-HE5
-CWALT 2006-35CB
-GSAMP 2007-FM2
-RAMP 2006-RS6
-ARSI 2006-M3
-FFML 2007-FF1
-HEAT 2006-4
-MSAC 2007-NC2
-NHEL 2007-2
-SABR 2006-OP2
+searchType,attribute,expectedResult,description
+ESSS,Active,HAS_RESULTS,Search for active ESSS records
+ESSS,Inactive,HAS_RESULTS,Search for inactive ESSS records
+Series,Active,HAS_RESULTS,Search for active Series records
+Series,Inactive,HAS_RESULTS,Search for inactive Series records
+ESSS,Pending,NO_RESULTS,Search for pending ESSS records (should have no results)
+Series,Deleted,NO_RESULTS,Search for deleted Series records (should have no results)
+ESSS,All,HAS_RESULTS,Search for all ESSS records
+Series,All,HAS_RESULTS,Search for all Series records

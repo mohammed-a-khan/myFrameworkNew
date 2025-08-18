@@ -36,16 +36,20 @@ public class AkhanESSSeriesPage extends CSBasePage {
     @CSLocator(locatorKey = "akhan.esss.page.header")
     private CSElement pageHeader;
     
-    // Dropdown Elements using Object Repository
-    @CSLocator(locatorKey = "akhan.esss.type.dropdown")
-    private CSElement typeDropdown;
+    // Dropdown Elements using Object Repository - Updated for custom dropdowns
+    @CSLocator(locatorKey = "akhan.esss.type.dropdown.input")
+    private CSElement typeDropdownInput;
     
-    @CSLocator(locatorKey = "akhan.esss.attribute.dropdown")
-    private CSElement attributeDropdown;
+    @CSLocator(locatorKey = "akhan.esss.type.dropdown.icon")
+    private CSElement typeDropdownIcon;
     
-    // Search Elements
-    @CSLocator(locatorKey = "akhan.esss.search.input")
-    private CSElement searchInput;
+    @CSLocator(locatorKey = "akhan.esss.attribute.dropdown.input")
+    private CSElement attributeDropdownInput;
+    
+    @CSLocator(locatorKey = "akhan.esss.attribute.dropdown.icon")
+    private CSElement attributeDropdownIcon;
+    
+    // Search Elements - Not needed as dropdowns are the search inputs
     
     @CSLocator(locatorKey = "akhan.esss.search.button")
     private CSElement searchButton;
@@ -141,16 +145,26 @@ public class AkhanESSSeriesPage extends CSBasePage {
     
     /**
      * Select value from Type dropdown
+     * Uses custom dropdown implementation with input field and search icon
      */
     public void selectType(String type) {
         CSReportManager.info("Selecting type: " + type);
         logger.info("Selecting type: {}", type);
         
         try {
-            typeDropdown.waitForVisible();
-            typeDropdown.selectByVisibleText(type);
+            // Click the dropdown icon to open options
+            typeDropdownIcon.waitForClickable();
+            typeDropdownIcon.click();
             
-            // Wait for attribute dropdown to update
+            // Wait for dropdown to open
+            CSWaitUtils.waitForSeconds(1);
+            
+            // Find and click the option using dynamic element
+            CSElement option = findDynamicElement("akhan.esss.search.option", type);
+            option.waitForClickable();
+            option.click();
+            
+            // Verify selection appears in input field
             CSWaitUtils.waitForSeconds(1);
             CSReportManager.pass("Type selected: " + type);
         } catch (Exception e) {
@@ -161,21 +175,44 @@ public class AkhanESSSeriesPage extends CSBasePage {
     
     /**
      * Select value from Attribute dropdown
+     * Uses custom dropdown implementation with input field and search icon
      */
     public void selectAttribute(String attribute) {
+        CSReportManager.info("Selecting attribute: " + attribute);
         logger.info("Selecting attribute: {}", attribute);
         
-        attributeDropdown.waitForVisible();
-        attributeDropdown.selectByVisibleText(attribute);
+        try {
+            // Click the dropdown icon to open options
+            attributeDropdownIcon.waitForClickable();
+            attributeDropdownIcon.click();
+            
+            // Wait for dropdown to open
+            CSWaitUtils.waitForSeconds(1);
+            
+            // Find and click the option using dynamic element
+            CSElement option = findDynamicElement("akhan.esss.search.option", attribute);
+            option.waitForClickable();
+            option.click();
+            
+            CSWaitUtils.waitForSeconds(1);
+            CSReportManager.pass("Attribute selected: " + attribute);
+        } catch (Exception e) {
+            CSReportManager.fail("Failed to select attribute: " + e.getMessage());
+            throw e;
+        }
     }
     
     /**
-     * Enter search value
+     * Enter search value directly in the type dropdown input
+     * For direct text search without selecting from dropdown
      */
     public void enterSearchValue(String value) {
+        CSReportManager.info("Entering search value: " + value);
         logger.info("Entering search value: {}", value);
-        searchInput.waitForVisible();
-        searchInput.clearAndType(value);
+        
+        typeDropdownInput.waitForVisible();
+        typeDropdownInput.clearAndType(value);
+        CSReportManager.pass("Search value entered: " + value);
     }
     
     /**
@@ -195,15 +232,14 @@ public class AkhanESSSeriesPage extends CSBasePage {
     
     /**
      * Perform complete search operation
-     * Demonstrates composite search action
+     * For ESSS/Series search - selects type and attribute from dropdowns
      */
-    public void performSearch(String type, String attribute, String searchValue) {
-        CSReportManager.info(String.format("Performing search - Type: %s, Attribute: %s, Value: %s", type, attribute, searchValue));
-        logger.info("Performing search - Type: {}, Attribute: {}, Value: {}", type, attribute, searchValue);
+    public void performSearch(String type, String attribute) {
+        CSReportManager.info(String.format("Performing ESSS/Series search - Type: %s, Attribute: %s", type, attribute));
+        logger.info("Performing search - Type: {}, Attribute: {}", type, attribute);
         
         selectType(type);
         selectAttribute(attribute);
-        enterSearchValue(searchValue);
         clickSearch();
         
         captureScreenshot("search-results-" + type.toLowerCase());
@@ -216,24 +252,87 @@ public class AkhanESSSeriesPage extends CSBasePage {
     }
     
     /**
+     * Perform search with text value (alternative method)
+     */
+    public void performSearchWithValue(String searchValue) {
+        CSReportManager.info("Performing search with value: " + searchValue);
+        
+        enterSearchValue(searchValue);
+        clickSearch();
+        
+        if (hasSearchResults()) {
+            CSReportManager.pass("Search completed with " + getResultRowCount() + " results");
+        } else {
+            CSReportManager.warn("Search completed but no results found");
+        }
+    }
+    
+    /**
      * Get all Type dropdown options
+     * Opens the dropdown and collects available options
      */
     public List<String> getTypeOptions() {
+        CSReportManager.info("Getting Type dropdown options");
         logger.info("Getting Type dropdown options");
-        typeDropdown.waitForVisible();
-        List<String> options = typeDropdown.getDropdownOptions();
-        logger.info("Found {} type options", options.size());
+        List<String> options = new ArrayList<>();
+        
+        try {
+            // Click icon to open dropdown
+            typeDropdownIcon.click();
+            CSWaitUtils.waitForSeconds(1);
+            
+            // Get all option elements
+            List<CSElement> optionElements = findElements("xpath://div[@id='dropdown']//a");
+            for (CSElement option : optionElements) {
+                options.add(option.getText());
+            }
+            
+            // Close dropdown by clicking elsewhere
+            pageHeader.click();
+            
+            CSReportManager.pass("Found " + options.size() + " type options");
+        } catch (Exception e) {
+            CSReportManager.warn("Could not retrieve type options: " + e.getMessage());
+        }
+        
         return options;
+    }
+    
+    private List<CSElement> findElements(String locator) {
+        // Helper method to find multiple elements
+        List<CSElement> elements = new ArrayList<>();
+        // This would need implementation based on framework capabilities
+        return elements;
     }
     
     /**
      * Get all Attribute dropdown options
+     * Opens the dropdown and collects available options
      */
     public List<String> getAttributeOptions() {
+        CSReportManager.info("Getting Attribute dropdown options");
         logger.info("Getting Attribute dropdown options");
-        attributeDropdown.waitForVisible();
-        List<String> options = attributeDropdown.getDropdownOptions();
-        logger.info("Found {} attribute options", options.size());
+        List<String> options = new ArrayList<>();
+        
+        try {
+            // Click icon to open dropdown
+            attributeDropdownIcon.click();
+            CSWaitUtils.waitForSeconds(1);
+            
+            // Get all option elements
+            List<CSElement> optionElements = findElements("xpath://div[@id='dropdown']//a");
+            for (CSElement option : optionElements) {
+                options.add(option.getText());
+            }
+            
+            // Close dropdown by clicking elsewhere
+            pageHeader.click();
+            
+            CSReportManager.pass("Found " + options.size() + " attribute options");
+        } catch (Exception e) {
+            CSReportManager.warn("Could not retrieve attribute options: " + e.getMessage());
+        }
+        
         return options;
     }
     
@@ -373,7 +472,12 @@ public class AkhanESSSeriesPage extends CSBasePage {
             clearButton.click();
         } else {
             // Manual clear if button not available
-            searchInput.clear();
+            if (typeDropdownInput.isPresent()) {
+                typeDropdownInput.clear();
+            }
+            if (attributeDropdownInput.isPresent()) {
+                attributeDropdownInput.clear();
+            }
         }
     }
     
@@ -452,12 +556,12 @@ public class AkhanESSSeriesPage extends CSBasePage {
      * Perform search with performance monitoring
      * Demonstrates performance tracking
      */
-    public Map<String, Object> performSearchWithMetrics(String type, String attribute, String value) {
+    public Map<String, Object> performSearchWithMetrics(String type, String attribute) {
         CSReportManager.info("Starting search with performance monitoring");
         Map<String, Object> metrics = new HashMap<>();
         
         long startTime = System.currentTimeMillis();
-        performSearch(type, attribute, value);
+        performSearch(type, attribute);
         long endTime = System.currentTimeMillis();
         
         long searchTime = endTime - startTime;

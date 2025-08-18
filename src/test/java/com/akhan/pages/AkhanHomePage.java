@@ -154,26 +154,37 @@ public class AkhanHomePage extends CSBasePage {
     }
     
     /**
-     * Click on a menu item
+     * Click on a menu item using dynamic element pattern
+     * This uses the exact XPath: //div[@id='abcdNavigatorBody']//a[text()='<Menu_Item_Name>']
      */
     public void clickMenuItem(String menuName) {
         CSReportManager.info("Clicking menu item: " + menuName);
         logger.info("Clicking menu item: {}", menuName);
         
-        CSElement menuElement = getMenuElement(menuName);
-        if (menuElement != null) {
-            try {
-                menuElement.waitForClickable();
-                menuElement.click();
-                waitForPageLoad();
-                CSReportManager.pass("Successfully clicked menu item: " + menuName);
-            } catch (Exception e) {
-                CSReportManager.fail("Failed to click menu item: " + menuName + " - " + e.getMessage());
-                throw e;
+        try {
+            // Use dynamic element pattern from object repository
+            CSElement menuElement = findDynamicElement("akhan.menu.dynamic", menuName);
+            menuElement.waitForClickable();
+            menuElement.click();
+            waitForPageLoad();
+            CSReportManager.pass("Successfully clicked menu item: " + menuName);
+        } catch (Exception e) {
+            // Fallback to predefined menu elements
+            CSElement menuElement = getMenuElement(menuName);
+            if (menuElement != null) {
+                try {
+                    menuElement.waitForClickable();
+                    menuElement.click();
+                    waitForPageLoad();
+                    CSReportManager.pass("Successfully clicked menu item: " + menuName);
+                } catch (Exception ex) {
+                    CSReportManager.fail("Failed to click menu item: " + menuName + " - " + ex.getMessage());
+                    throw ex;
+                }
+            } else {
+                CSReportManager.fail("Menu item not found: " + menuName);
+                throw new RuntimeException("Menu item not found: " + menuName);
             }
-        } else {
-            CSReportManager.fail("Menu item not found: " + menuName);
-            throw new RuntimeException("Menu item not found: " + menuName);
         }
     }
     
