@@ -12,15 +12,15 @@ Feature: Akhan Application Test
   Background:
     Given I am on the Akhan application
   
-  @login @encryption @ADO-TestCase:TC-001
-  Scenario: Login with encrypted credentials
+  @login @encryption @TestCaseId:{23232,42323}
+  Scenario: Login with encrypted credentials (validates multiple test cases)
     When I enter username "testuser1"
     And I enter password from encrypted source
     And I click the login button
     Then I should be on the home page
     And I take a screenshot named "login-success"
   
-  @navigation @dynamic-xpath @ADO-TestCase:TC-002
+  @navigation @dynamic-xpath @ADO-TestCase:{TC-002,TC-004,TC-005}
   Scenario: Navigate using dynamic menu XPath
     Given I am logged in
     When I navigate to "ESSS/Series"

@@ -799,8 +799,8 @@ public class CSBDDRunner extends CSBaseTest {
                     adoMetadata.getTestPlanId() != null && 
                     adoMetadata.getTestSuiteId() != null) {
                     
-                    logger.info("Found complete ADO mapping for scenario - Test Case: {}, Test Plan: {}, Test Suite: {}", 
-                        adoMetadata.getTestCaseId(), 
+                    logger.info("Found complete ADO mapping for scenario - Test Cases: {}, Test Plan: {}, Test Suite: {}", 
+                        adoMetadata.getTestCaseIds(), 
                         adoMetadata.getTestPlanId(), 
                         adoMetadata.getTestSuiteId());
                     
@@ -939,13 +939,31 @@ public class CSBDDRunner extends CSBaseTest {
                 testResult.getMetadata().containsKey("ado.testcase.id") &&
                 testResult.getMetadata().containsKey("ado.testplan.id") &&
                 testResult.getMetadata().containsKey("ado.testsuite.id")) {
-                try {
-                    adoPublisher.publishTestResult(testResult);
-                    logger.info("Published test result to Azure DevOps for test case: {}", 
-                        testResult.getMetadata().get("ado.testcase.id"));
-                } catch (Exception e) {
-                    logger.error("Failed to publish result to ADO", e);
-                    // Don't fail the test if ADO publishing fails
+                
+                // Check if we have multiple test case IDs to update
+                if (adoMetadata != null && adoMetadata.getTestCaseIds().size() > 1) {
+                    // Multiple test cases - publish the same result for each test case
+                    for (Integer testCaseId : adoMetadata.getTestCaseIds()) {
+                        try {
+                            // Update metadata for this specific test case
+                            testResult.getMetadata().put("ado.testcase.id", testCaseId.toString());
+                            adoPublisher.publishTestResult(testResult);
+                            logger.info("Published test result to Azure DevOps for test case: {}", testCaseId);
+                        } catch (Exception e) {
+                            logger.error("Failed to publish result to ADO for test case: " + testCaseId, e);
+                            // Don't fail the test if ADO publishing fails
+                        }
+                    }
+                } else {
+                    // Single test case - publish once
+                    try {
+                        adoPublisher.publishTestResult(testResult);
+                        logger.info("Published test result to Azure DevOps for test case: {}", 
+                            testResult.getMetadata().get("ado.testcase.id"));
+                    } catch (Exception e) {
+                        logger.error("Failed to publish result to ADO", e);
+                        // Don't fail the test if ADO publishing fails
+                    }
                 }
             } else if (adoPublisher != null && adoPublisher.isEnabled() && testResult.getMetadata() != null) {
                 // Log why we're not publishing
@@ -1246,16 +1264,18 @@ public class CSBDDRunner extends CSBaseTest {
                 metadata.getTestPlanId() != null && 
                 metadata.getTestSuiteId() != null) {
                 
-                // Get test point ID for this test case
-                Integer testPointId = adoPublisher.getTestPointId(
-                    metadata.getTestPlanId(),
-                    metadata.getTestSuiteId(),
-                    metadata.getTestCaseId()
-                );
-                
-                if (testPointId != null) {
-                    testPointIds.add(testPointId);
-                    logger.info("Collected test point {} for test case {}", testPointId, metadata.getTestCaseId());
+                // Get test point IDs for all test cases
+                for (Integer testCaseId : metadata.getTestCaseIds()) {
+                    Integer testPointId = adoPublisher.getTestPointId(
+                        metadata.getTestPlanId(),
+                        metadata.getTestSuiteId(),
+                        testCaseId
+                    );
+                    
+                    if (testPointId != null) {
+                        testPointIds.add(testPointId);
+                        logger.info("Collected test point {} for test case {}", testPointId, testCaseId);
+                    }
                 }
             }
         }
@@ -1293,15 +1313,49 @@ public class CSBDDRunner extends CSBaseTest {
         
         CSADOTagExtractor.ADOMetadata metadata = new CSADOTagExtractor.ADOMetadata();
         
-        // FIRST: Extract test case ID from scenario tags (REQUIRED for ADO integration)
+        // FIRST: Extract test case IDs from scenario tags (REQUIRED for ADO integration)
+        // Support multiple formats:
+        // - @ADO-TestCase:419
+        // - @TestCaseId:420
+        // - @ADO-TestCase:419,420,421
+        // - @TestCaseId:{23232,42323}
+        // - @ADO-TestCase:{TC-001,TC-002,TC-003}
         boolean hasTestCaseId = false;
         for (String tag : scenario.getTags()) {
-            Matcher caseMatcher = TEST_CASE_PATTERN.matcher(tag);
-            if (caseMatcher.find()) {
-                metadata.setTestCaseId(Integer.parseInt(caseMatcher.group(1)));
-                hasTestCaseId = true;
-                logger.debug("Found Test Case ID in scenario tag: {}", metadata.getTestCaseId());
-                break;
+            // Check for TestCase patterns
+            if (tag.contains("TestCase") || tag.contains("TestCaseId")) {
+                String idsPart = null;
+                
+                // Extract the IDs part after the colon
+                if (tag.contains(":")) {
+                    idsPart = tag.substring(tag.indexOf(':') + 1);
+                    
+                    // Remove curly braces if present
+                    idsPart = idsPart.replace("{", "").replace("}", "");
+                    
+                    // Remove any prefixes like TC- or TC_
+                    idsPart = idsPart.replaceAll("TC[-_]?", "");
+                    
+                    // Split by comma to get individual IDs
+                    String[] ids = idsPart.split(",");
+                    for (String id : ids) {
+                        try {
+                            metadata.addTestCaseId(Integer.parseInt(id.trim()));
+                            hasTestCaseId = true;
+                        } catch (NumberFormatException e) {
+                            logger.warn("Invalid test case ID in tag '{}': {}", tag, id);
+                        }
+                    }
+                    logger.debug("Found Test Case IDs in scenario tag '{}': {}", tag, metadata.getTestCaseIds());
+                }
+            } else {
+                // Fallback to regex pattern for other formats
+                Matcher caseMatcher = TEST_CASE_PATTERN.matcher(tag);
+                if (caseMatcher.find()) {
+                    metadata.addTestCaseId(Integer.parseInt(caseMatcher.group(1)));
+                    hasTestCaseId = true;
+                    logger.debug("Found Test Case ID in scenario tag: {}", caseMatcher.group(1));
+                }
             }
         }
         

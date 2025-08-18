@@ -24,7 +24,7 @@ public class CSFeatureParser {
     private static final Pattern BACKGROUND_PATTERN = Pattern.compile("^\\s*Background:\\s*(.*)$");
     private static final Pattern EXAMPLES_PATTERN = Pattern.compile("^\\s*Examples:\\s*(.*)$");
     private static final Pattern STEP_PATTERN = Pattern.compile("^\\s*(Given|When|Then|And|But)\\s+(.+)$");
-    private static final Pattern TAG_PATTERN = Pattern.compile("(@[\\w-:]+)");
+    private static final Pattern TAG_PATTERN = Pattern.compile("(@[\\w-:{},.]+)");
     private static final Pattern COMMENT_PATTERN = Pattern.compile("^\\s*#.*$");
     private static final Pattern DOC_STRING_PATTERN = Pattern.compile("^\\s*\"\"\"\\s*$");
     

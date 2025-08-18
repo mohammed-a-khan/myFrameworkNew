@@ -7,10 +7,13 @@ import org.slf4j.LoggerFactory;
 import org.testng.annotations.Test;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Extracts Azure DevOps metadata from test annotations and tags
@@ -36,6 +39,7 @@ public class CSADOTagExtractor {
         private Integer testPlanId;
         private Integer testSuiteId;
         private Integer testCaseId;
+        private List<Integer> testCaseIds = new ArrayList<>();
         
         public Integer getTestPlanId() { return testPlanId; }
         public void setTestPlanId(Integer testPlanId) { this.testPlanId = testPlanId; }
@@ -44,16 +48,46 @@ public class CSADOTagExtractor {
         public void setTestSuiteId(Integer testSuiteId) { this.testSuiteId = testSuiteId; }
         
         public Integer getTestCaseId() { return testCaseId; }
-        public void setTestCaseId(Integer testCaseId) { this.testCaseId = testCaseId; }
+        public void setTestCaseId(Integer testCaseId) { 
+            this.testCaseId = testCaseId;
+            // Also add to list if not already present
+            if (testCaseId != null && !testCaseIds.contains(testCaseId)) {
+                testCaseIds.add(testCaseId);
+            }
+        }
+        
+        public List<Integer> getTestCaseIds() { return testCaseIds; }
+        public void setTestCaseIds(List<Integer> testCaseIds) { 
+            this.testCaseIds = testCaseIds;
+            // Set primary test case ID to first in list
+            if (!testCaseIds.isEmpty()) {
+                this.testCaseId = testCaseIds.get(0);
+            }
+        }
+        
+        public void addTestCaseId(Integer testCaseId) {
+            if (testCaseId != null && !testCaseIds.contains(testCaseId)) {
+                testCaseIds.add(testCaseId);
+                // Set as primary if it's the first one
+                if (this.testCaseId == null) {
+                    this.testCaseId = testCaseId;
+                }
+            }
+        }
         
         public boolean hasTestCaseMapping() {
-            return testCaseId != null;
+            return testCaseId != null || !testCaseIds.isEmpty();
         }
         
         @Override
         public String toString() {
-            return String.format("ADOMetadata[TestPlan=%s, TestSuite=%s, TestCase=%s]", 
-                testPlanId, testSuiteId, testCaseId);
+            if (testCaseIds.size() > 1) {
+                return String.format("ADOMetadata[TestPlan=%s, TestSuite=%s, TestCases=%s]", 
+                    testPlanId, testSuiteId, testCaseIds);
+            } else {
+                return String.format("ADOMetadata[TestPlan=%s, TestSuite=%s, TestCase=%s]", 
+                    testPlanId, testSuiteId, testCaseId);
+            }
         }
     }
     
@@ -68,10 +102,21 @@ public class CSADOTagExtractor {
             method.getName(), testClass.getName());
         
         // 1. First priority: Method-level annotations
+        // Check for multiple test case IDs first
+        TestCaseIds testCaseIdsAnnotation = method.getAnnotation(TestCaseIds.class);
+        if (testCaseIdsAnnotation != null) {
+            for (int id : testCaseIdsAnnotation.value()) {
+                metadata.addTestCaseId(id);
+            }
+            logger.debug("Found @TestCaseIds annotation with {} IDs: {}", 
+                testCaseIdsAnnotation.value().length, metadata.getTestCaseIds());
+        }
+        
+        // Check for single test case ID
         TestCaseId testCaseAnnotation = method.getAnnotation(TestCaseId.class);
         if (testCaseAnnotation != null) {
-            metadata.setTestCaseId(testCaseAnnotation.value());
-            logger.debug("Found @TestCaseId annotation: {}", metadata.getTestCaseId());
+            metadata.addTestCaseId(testCaseAnnotation.value());
+            logger.debug("Found @TestCaseId annotation: {}", testCaseAnnotation.value());
         }
         
         TestPlanId testPlanMethodAnnotation = method.getAnnotation(TestPlanId.class);
@@ -226,6 +271,14 @@ public class CSADOTagExtractor {
         }
         if (metadata.getTestSuiteId() != null) {
             map.put("ado.testsuite.id", metadata.getTestSuiteId().toString());
+        }
+        
+        // Store all test case IDs as comma-separated string
+        if (!metadata.getTestCaseIds().isEmpty()) {
+            String testCaseIds = metadata.getTestCaseIds().stream()
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+            map.put("ado.testcase.ids", testCaseIds);
         }
         
         return map;
