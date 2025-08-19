@@ -1,0 +1,11 @@
+SearchType,Attribute,ExpectedResult
+ESSS,Active,results
+ESSS,Inactive,results
+ESSS,Pending,no results
+Series,Active,results
+Series,Inactive,results
+Series,Pending,no results
+ESSS,All,results
+Series,All,results
+ESSS,Draft,no results
+Series,Closed,results

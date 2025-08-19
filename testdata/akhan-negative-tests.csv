@@ -1,0 +1,11 @@
+TestCase,Username,Password,ExpectedError,ErrorCode
+EmptyUsername,"","testpass","Username is required",ERR001
+EmptyPassword,"testuser","","Password is required",ERR002
+InvalidCredentials,"invalid","wrongpass","Invalid credentials",ERR003
+BlockedAccount,"blocked","testpass","Account is blocked",ERR004
+ExpiredPassword,"testuser1","expired123","Password has expired",ERR005
+SpecialCharsUsername,"test@user!","testpass","Invalid username format",ERR006
+SQLInjection,"admin' OR '1'='1","password","Invalid credentials",ERR003
+LongUsername,"verylongusernamethatexceedsthemaximumallowedcharacterlimit","testpass","Username too long",ERR007
+ShortPassword,"testuser","123","Password must be at least 8 characters",ERR008
+NoSpecialCharPassword,"testuser","password123","Password must contain special characters",ERR009

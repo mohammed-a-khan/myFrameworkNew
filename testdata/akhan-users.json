@@ -1,0 +1,71 @@
+{
+  "users": [
+    {
+      "username": "testuser1",
+      "password": "ENC(IZBF1jVLD39bR2GoOv1b4dwGdoCl4csPH2BNQAwjEkAE/lsYqA1CBic2+S1CuS56)",
+      "role": "admin",
+      "environment": "qa",
+      "department": "IT",
+      "accessLevel": "full",
+      "email": "testuser1@akhan.com",
+      "active": true
+    },
+    {
+      "username": "testuser2",
+      "password": "ENC(lZv3Yl1SNjUAh1Cu5Nt2yg5dECpq0CCPJegAqfpNbVPBLdT3/q4cCzKtiNFAYM9o)",
+      "role": "user",
+      "environment": "qa",
+      "department": "HR",
+      "accessLevel": "read",
+      "email": "testuser2@akhan.com",
+      "active": true
+    },
+    {
+      "username": "testuser3",
+      "password": "ENC(xRt2Zk0RMiTBg0Bt4Ms1xf4cCbNp1BBOIdgBpeoMaUOAKcS2/p3bByJshjMEAXL8n)",
+      "role": "superuser",
+      "environment": "prod",
+      "department": "Admin",
+      "accessLevel": "admin",
+      "email": "testuser3@akhan.com",
+      "active": true
+    },
+    {
+      "username": "testuser4",
+      "password": "ENC(yUs3Al2TOkUCi2Dv6Ot3zh6eDDOq2DDQKfhCqgrOcWQCMeU4/r5dDzLvjlOGBZN9p)",
+      "role": "analyst",
+      "environment": "qa",
+      "department": "Finance",
+      "accessLevel": "read",
+      "email": "testuser4@akhan.com",
+      "active": true
+    },
+    {
+      "username": "testuser5",
+      "password": "ENC(zVu4Bm3UPlVDj3Ew7Pu4ai7fEEPr3EERLgiDrhtPdXRDNfV5/s6eEaMwkmPHCaO0q)",
+      "role": "manager",
+      "environment": "staging",
+      "department": "Operations",
+      "accessLevel": "write",
+      "email": "testuser5@akhan.com",
+      "active": false
+    }
+  ],
+  "testEnvironments": {
+    "qa": {
+      "url": "https://qa.akhan.com",
+      "apiEndpoint": "https://api-qa.akhan.com",
+      "dbConnection": "jdbc:oracle:thin:@qa-db.akhan.com:1521:QADB"
+    },
+    "staging": {
+      "url": "https://staging.akhan.com",
+      "apiEndpoint": "https://api-staging.akhan.com",
+      "dbConnection": "jdbc:oracle:thin:@staging-db.akhan.com:1521:STAGINGDB"
+    },
+    "prod": {
+      "url": "https://www.akhan.com",
+      "apiEndpoint": "https://api.akhan.com",
+      "dbConnection": "jdbc:oracle:thin:@prod-db.akhan.com:1521:PRODDB"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+MenuItem,ExpectedHeader,MaxResponseTime,AccessLevel,RequiredRole
+ESSS/Series,ESSS,3000,full,all
+Reference Interests,Reference,2500,full,admin
+Interest History,History,2500,read,user
+External Interests,External,2500,read,user
+System Admin,System Administration,2500,admin,admin
+Version Information,Version,2000,read,all
+File Upload,Upload,3000,write,user
+Home,Home,1500,read,all
+Reports,Reports,3500,read,manager
+Settings,Settings,2000,write,admin

@@ -1,0 +1,85 @@
+{
+  "environments": {
+    "dev": {
+      "name": "Development",
+      "url": "https://dev.akhan.com",
+      "apiUrl": "https://api-dev.akhan.com",
+      "dbHost": "dev-db.akhan.com",
+      "dbPort": 1521,
+      "dbName": "DEVDB",
+      "features": {
+        "esss": true,
+        "series": true,
+        "referenceInterests": true,
+        "interestHistory": true,
+        "externalInterests": false,
+        "systemAdmin": true,
+        "fileUpload": true,
+        "reports": false
+      },
+      "maxUsers": 10,
+      "sessionTimeout": 3600
+    },
+    "qa": {
+      "name": "Quality Assurance",
+      "url": "https://qa.akhan.com",
+      "apiUrl": "https://api-qa.akhan.com",
+      "dbHost": "qa-db.akhan.com",
+      "dbPort": 1521,
+      "dbName": "QADB",
+      "features": {
+        "esss": true,
+        "series": true,
+        "referenceInterests": true,
+        "interestHistory": true,
+        "externalInterests": true,
+        "systemAdmin": true,
+        "fileUpload": true,
+        "reports": true
+      },
+      "maxUsers": 50,
+      "sessionTimeout": 1800
+    },
+    "staging": {
+      "name": "Staging",
+      "url": "https://staging.akhan.com",
+      "apiUrl": "https://api-staging.akhan.com",
+      "dbHost": "staging-db.akhan.com",
+      "dbPort": 1521,
+      "dbName": "STAGINGDB",
+      "features": {
+        "esss": true,
+        "series": true,
+        "referenceInterests": true,
+        "interestHistory": true,
+        "externalInterests": true,
+        "systemAdmin": true,
+        "fileUpload": true,
+        "reports": true
+      },
+      "maxUsers": 100,
+      "sessionTimeout": 1800
+    },
+    "prod": {
+      "name": "Production",
+      "url": "https://www.akhan.com",
+      "apiUrl": "https://api.akhan.com",
+      "dbHost": "prod-db.akhan.com",
+      "dbPort": 1521,
+      "dbName": "PRODDB",
+      "features": {
+        "esss": true,
+        "series": true,
+        "referenceInterests": true,
+        "interestHistory": true,
+        "externalInterests": true,
+        "systemAdmin": false,
+        "fileUpload": true,
+        "reports": true
+      },
+      "maxUsers": 1000,
+      "sessionTimeout": 900
+    }
+  },
+  "defaultEnvironment": "qa"
+}

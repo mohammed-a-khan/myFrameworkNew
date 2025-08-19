@@ -1,0 +1,13 @@
+SearchType,Attribute,ExpectedResult,MinResultCount,MaxResultCount,ResponseTime
+ESSS,Active,results,1,100,2000
+ESSS,Inactive,results,0,50,2000
+ESSS,Pending,no results,0,0,1500
+Series,Active,results,5,200,2500
+Series,Inactive,results,0,100,2500
+Series,Pending,no results,0,0,1500
+ESSS,All,results,10,500,3000
+Series,All,results,10,500,3000
+ESSS,Draft,no results,0,0,1500
+Series,Closed,results,1,50,2000
+ESSS,Archived,results,0,20,2000
+Series,Cancelled,no results,0,0,1500

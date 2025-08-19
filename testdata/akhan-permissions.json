@@ -1,0 +1,76 @@
+{
+  "permissions": [
+    {
+      "username": "testuser1",
+      "module": "ESSS/Series",
+      "accessLevel": "full",
+      "canCreate": true,
+      "canRead": true,
+      "canUpdate": true,
+      "canDelete": true,
+      "canExport": true
+    },
+    {
+      "username": "testuser2",
+      "module": "ESSS/Series",
+      "accessLevel": "read",
+      "canCreate": false,
+      "canRead": true,
+      "canUpdate": false,
+      "canDelete": false,
+      "canExport": true
+    },
+    {
+      "username": "testuser3",
+      "module": "System Admin",
+      "accessLevel": "admin",
+      "canCreate": true,
+      "canRead": true,
+      "canUpdate": true,
+      "canDelete": true,
+      "canExport": true
+    },
+    {
+      "username": "testuser1",
+      "module": "Reference Interests",
+      "accessLevel": "write",
+      "canCreate": true,
+      "canRead": true,
+      "canUpdate": true,
+      "canDelete": false,
+      "canExport": true
+    },
+    {
+      "username": "testuser2",
+      "module": "Interest History",
+      "accessLevel": "read",
+      "canCreate": false,
+      "canRead": true,
+      "canUpdate": false,
+      "canDelete": false,
+      "canExport": false
+    }
+  ],
+  "roles": {
+    "admin": {
+      "modules": ["ESSS/Series", "Reference Interests", "Interest History", "External Interests", "System Admin", "Version Information", "File Upload"],
+      "defaultAccess": "full"
+    },
+    "user": {
+      "modules": ["ESSS/Series", "Reference Interests", "Interest History", "External Interests", "Version Information"],
+      "defaultAccess": "read"
+    },
+    "superuser": {
+      "modules": ["*"],
+      "defaultAccess": "admin"
+    },
+    "analyst": {
+      "modules": ["ESSS/Series", "Reference Interests", "Interest History", "Reports"],
+      "defaultAccess": "read"
+    },
+    "manager": {
+      "modules": ["ESSS/Series", "Reference Interests", "Interest History", "External Interests", "Reports", "File Upload"],
+      "defaultAccess": "write"
+    }
+  }
+}
