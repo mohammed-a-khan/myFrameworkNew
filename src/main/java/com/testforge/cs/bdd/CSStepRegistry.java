@@ -2,9 +2,11 @@ package com.testforge.cs.bdd;
 
 import com.testforge.cs.annotations.CSStep;
 import com.testforge.cs.exceptions.CSBddException;
+import com.testforge.cs.stepdefs.CSStepDefinitions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -51,9 +53,44 @@ public class CSStepRegistry {
             // Create instance if not exists
             Object instance = stepClassInstances.computeIfAbsent(stepClass, k -> {
                 try {
+                    // First try to check if it extends CSStepDefinitions
+                    if (CSStepDefinitions.class.isAssignableFrom(k)) {
+                        logger.info("Step class {} extends CSStepDefinitions, using specialized instantiation", k.getName());
+                        // For CSStepDefinitions subclasses, try no-arg constructor first
+                        try {
+                            return k.getDeclaredConstructor().newInstance();
+                        } catch (NoSuchMethodException e) {
+                            // If no no-arg constructor, try to find any constructor
+                            Constructor<?>[] constructors = k.getDeclaredConstructors();
+                            if (constructors.length > 0) {
+                                Constructor<?> constructor = constructors[0];
+                                constructor.setAccessible(true);
+                                
+                                // Create default arguments for the constructor
+                                Class<?>[] paramTypes = constructor.getParameterTypes();
+                                Object[] args = new Object[paramTypes.length];
+                                for (int i = 0; i < paramTypes.length; i++) {
+                                    args[i] = getDefaultValue(paramTypes[i]);
+                                }
+                                
+                                logger.info("Using constructor with {} parameters for class {}", paramTypes.length, k.getName());
+                                return constructor.newInstance(args);
+                            }
+                        }
+                    }
+                    
+                    // For other classes, try standard instantiation
                     return k.getDeclaredConstructor().newInstance();
+                    
                 } catch (Exception e) {
-                    throw new CSBddException("Failed to instantiate step class: " + k.getName(), e);
+                    logger.error("Failed to instantiate step class: {} - Error: {}", k.getName(), e.getMessage());
+                    logger.error("Make sure the step definition class has:", e);
+                    logger.error("  1. A public no-argument constructor, OR");
+                    logger.error("  2. Extends CSStepDefinitions (for framework integration)");
+                    logger.error("  3. Is not an abstract class or interface");
+                    logger.error("  4. Is accessible from the classpath");
+                    throw new CSBddException("Failed to instantiate step class: " + k.getName() + ". " +
+                        "Ensure it has a no-argument constructor or extends CSStepDefinitions.", e);
                 }
             });
             
@@ -447,5 +484,22 @@ public class CSStepRegistry {
         }
         
         return classes;
+    }
+    
+    /**
+     * Get default value for a given type
+     */
+    private Object getDefaultValue(Class<?> type) {
+        if (type.isPrimitive()) {
+            if (type == boolean.class) return false;
+            if (type == byte.class) return (byte) 0;
+            if (type == short.class) return (short) 0;
+            if (type == int.class) return 0;
+            if (type == long.class) return 0L;
+            if (type == float.class) return 0.0f;
+            if (type == double.class) return 0.0d;
+            if (type == char.class) return '\0';
+        }
+        return null; // For reference types
     }
 }
