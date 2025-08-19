@@ -2,21 +2,17 @@
 <suite name="Akhan BDD Test Suite" verbose="1" parallel="false">
     
     <parameter name="browser" value="chrome"/>
-    <parameter name="environment" value="SIT"/>
-    <parameter name="headless" value="false"/>
+    <parameter name="environment" value="sit"/>
+    <parameter name="headless" value="true"/>
     
-    <!-- BDD Cucumber Test Runner -->
+    <!-- BDD Test Runner -->
     <test name="Akhan BDD Tests">
-        <parameter name="cucumber.features" value="features/akhan-comprehensive-framework-demo.feature"/>
-        <parameter name="cucumber.glue" value="com.akhan.stepdefs"/>
-        <parameter name="cucumber.tags" value="@regression and not @ignore"/>
+        <parameter name="cs.bdd.features.path" value="features/akhan.feature"/>
+        <parameter name="cs.bdd.stepdefs.packages" value="com.akhan.stepdefs"/>
+        <parameter name="cs.bdd.tags" value="@login"/>
         
         <classes>
-            <class name="com.testforge.cs.bdd.CSBDDRunner">
-                <methods>
-                    <include name="runScenario"/>
-                </methods>
-            </class>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>
     </test>
     

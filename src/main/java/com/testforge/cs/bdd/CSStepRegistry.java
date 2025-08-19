@@ -2,7 +2,6 @@ package com.testforge.cs.bdd;
 
 import com.testforge.cs.annotations.CSStep;
 import com.testforge.cs.exceptions.CSBddException;
-import com.testforge.cs.stepdefs.CSStepDefinitions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +47,12 @@ public class CSStepRegistry {
      */
     public void registerStepClass(Class<?> stepClass) {
         try {
+            // Check if class is already registered
+            if (stepClassInstances.containsKey(stepClass)) {
+                logger.debug("Step class {} is already registered, skipping", stepClass.getName());
+                return;
+            }
+            
             logger.info("Registering step class: {}", stepClass.getName());
             
             // Create instance if not exists

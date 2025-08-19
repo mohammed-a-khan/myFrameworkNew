@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Base class for BDD step definitions
@@ -155,6 +156,42 @@ public abstract class CSStepDefinitions {
             contextThreadLocal.set(context);
         }
         return context;
+    }
+    
+    /**
+     * Page cache for lazy initialization
+     */
+    private final Map<Class<?>, Object> pageCache = new ConcurrentHashMap<>();
+    
+    /**
+     * Get or create a page object with lazy initialization
+     * This method caches page objects to avoid repeated initialization
+     * 
+     * @param pageClass The page class to get or create
+     * @return The page object instance
+     */
+    @SuppressWarnings("unchecked")
+    protected <T> T getOrCreatePage(Class<T> pageClass) {
+        return (T) pageCache.computeIfAbsent(pageClass, clazz -> {
+            try {
+                logger.debug("Creating new instance of page: {}", clazz.getName());
+                // Cast to the correct type for getPage
+                @SuppressWarnings("rawtypes")
+                Class pageClazz = clazz;
+                return getPage(pageClazz);
+            } catch (Exception e) {
+                logger.error("Failed to create page instance: {}", clazz.getName(), e);
+                throw new RuntimeException("Failed to initialize page: " + clazz.getName(), e);
+            }
+        });
+    }
+    
+    /**
+     * Clear the page cache (useful when driver is reset)
+     */
+    protected void clearPageCache() {
+        pageCache.clear();
+        logger.debug("Page cache cleared");
     }
     
     /**
