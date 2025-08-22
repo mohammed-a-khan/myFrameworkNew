@@ -15,7 +15,7 @@
     <parameter name="cs.bdd.exclude.tags" value=""/>
     
     <!-- Azure DevOps Configuration -->
-    <parameter name="cs.azure.devops.enabled" value="true"/>
+    <parameter name="cs.azure.devops.enabled" value="false"/>
     
     <!-- Test configuration for Azure DevOps BDD tests -->
     <!-- CSBDDRunner will automatically detect ADO tags from feature files -->

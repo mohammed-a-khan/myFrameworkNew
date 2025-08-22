@@ -361,8 +361,11 @@ public class CSTestRunManager {
                 
                 logger.info("Updated test result for: {} (ID: {})", testResult.getTestName(), resultId);
                 
-                // IMPORTANT: Update test point outcome in the test plan
-                // This is required to show the correct outcome in the test plan view
+                // COMMENTED OUT: Update test point outcome in the test plan
+                // REASON: ADO automatically updates test point outcomes when test results are added to test runs
+                // This manual update was causing duplicate "Manual" test runs to be created
+                // Test points are automatically updated based on test results - no manual intervention needed
+                /*
                 if (testCaseId != null && planIdStr != null && suiteIdStr != null && testPointId != null) {
                     String outcome = mapTestStatus(testResult.getStatus().toString());
                     logger.debug("Updating test point outcome for test case {} to {}", testCaseId, outcome);
@@ -375,6 +378,7 @@ public class CSTestRunManager {
                         resultId.toString()
                     );
                 }
+                */
             }
             
         } catch (Exception e) {
@@ -542,7 +546,11 @@ public class CSTestRunManager {
                         String planIdStr = testPlanId != null ? testPlanId.toString() : config.getTestPlanId();
                         String suiteIdStr = testSuiteId != null ? testSuiteId.toString() : config.getTestSuiteId();
                         
-                        // Update test point outcome
+                        // COMMENTED OUT: Update test point outcome (BATCH METHOD)
+                        // REASON: ADO automatically updates test point outcomes when test results are added to test runs
+                        // This manual update was causing duplicate "Manual" test runs to be created
+                        // Test points are automatically updated based on test results - no manual intervention needed
+                        /*
                         if (testCaseId != null && planIdStr != null && suiteIdStr != null) {
                             String outcome = mapTestStatus(testResult.getStatus().toString());
                             suiteManager.updateTestPointOutcome(
@@ -555,6 +563,7 @@ public class CSTestRunManager {
                             );
                             logger.debug("Updated test point outcome for test case {} to {}", testCaseId, outcome);
                         }
+                        */
                     }
                 }
             }
