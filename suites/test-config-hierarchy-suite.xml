@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suite name="ConfigHierarchyTestSuite">
+    <parameter name="browser.name" value="firefox"/>
+    <parameter name="cs.browser.headless" value="true"/>
+    <parameter name="test.parameter" value="suite_value"/>
+    <parameter name="environment.name" value="suite_env"/>
+    
+    <!-- Test Listeners -->
+    <listeners>
+        <listener class-name="com.testforge.cs.listeners.CSTestListener"/>
+    </listeners>
+    
+    <test name="ConfigTest">
+        <classes>
+            <class name="com.testforge.cs.tests.ConfigHierarchyTest"/>
+        </classes>
+    </test>
+</suite>

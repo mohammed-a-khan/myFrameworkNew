@@ -222,25 +222,60 @@ public class CSConfigManager {
     }
     
     /**
-     * Get property value
+     * Get property value with enhanced configuration hierarchy
+     * Priority order (highest to lowest):
+     * 1. Command line system properties (-D properties)
+     * 2. XML suite parameters (suite.key)
+     * 3. Environment-specific properties files (env/qa.properties, env/prod.properties, etc.)
+     * 4. General application.properties file
+     * 5. SqlQueries.properties and object repository files
+     * 
      * Automatically decrypts values that are encrypted (wrapped in ENC())
      * Applies property mapping for backward compatibility
      */
     public String getProperty(String key) {
-        // First check with the original key
+        // HIGHEST PRIORITY: Command line system properties (-D key=value)
         String value = System.getProperty(key);
-        if (value == null) {
-            value = mergedProperties.getProperty(key);
+        if (value != null && !isFromSuite(key)) {
+            logger.debug("Found command line system property for key '{}': {}", key, value);
+            return processPropertyValue(key, value);
+        }
+        
+        // SECOND PRIORITY: XML suite parameters (suite.key format)
+        String suiteKey = "suite." + key;
+        String suiteValue = System.getProperty(suiteKey);
+        if (suiteValue != null) {
+            logger.debug("Found XML suite parameter override for key '{}': {}", key, suiteValue);
+            return processPropertyValue(key, suiteValue);
+        }
+        
+        // THIRD PRIORITY: Properties files (merged configuration)
+        value = mergedProperties.getProperty(key);
+        if (value != null) {
+            logger.debug("Found properties file value for key '{}': {}", key, value);
         }
         
         // If not found, try the standardized property name
         if (value == null) {
             String standardizedKey = CSPropertyMapper.getStandardizedProperty(key);
             if (!standardizedKey.equals(key)) {
+                // Check command line properties for standardized key
                 value = System.getProperty(standardizedKey);
-                if (value == null) {
-                    value = mergedProperties.getProperty(standardizedKey);
+                if (value != null && !isFromSuite(standardizedKey)) {
+                    logger.debug("Found command line system property for standardized key '{}': {}", standardizedKey, value);
+                    return processPropertyValue(key, value);
                 }
+                
+                // Check suite parameters for standardized key
+                String suiteStandardizedKey = "suite." + standardizedKey;
+                value = System.getProperty(suiteStandardizedKey);
+                if (value != null) {
+                    logger.debug("Found XML suite parameter override for standardized key '{}': {}", standardizedKey, value);
+                    return processPropertyValue(key, value);
+                }
+                
+                // Check properties files for standardized key
+                value = mergedProperties.getProperty(standardizedKey);
                 if (value != null && !CSPropertyMapper.isAllowedException(key)) {
                     // Log warning for non-exception properties without cs. prefix
                     if (!deprecationWarningsLogged.contains(key)) {
@@ -253,6 +288,17 @@ public class CSConfigManager {
         
         if (value == null) {
             logger.warn("Property not found: {}", key);
+            return null;
+        }
+        
+        return processPropertyValue(key, value);
+    }
+    
+    /**
+     * Process property value - handles decryption and placeholder resolution
+     */
+    private String processPropertyValue(String key, String value) {
+        if (value == null) {
             return null;
         }
         
@@ -273,6 +319,17 @@ public class CSConfigManager {
         }
         
         return value;
+    }
+    
+    /**
+     * Check if a property key is potentially from a suite parameter
+     * This is a simple heuristic - in practice, command line -D properties
+     * should always take precedence over suite parameters
+     */
+    public boolean isFromSuite(String key) {
+        // For now, command line properties always take precedence
+        // This could be enhanced with more sophisticated tracking if needed
+        return false;
     }
     
     /**
@@ -402,6 +459,63 @@ public class CSConfigManager {
      */
     public String getCurrentEnvironment() {
         return currentEnvironment;
+    }
+    
+    /**
+     * Get property value source information for debugging
+     * Returns a map with the property value and its source
+     * Priority order: 1. Command line (-D), 2. XML suite parameters, 3. Properties files
+     */
+    public Map<String, String> getPropertySourceInfo(String key) {
+        Map<String, String> info = new HashMap<>();
+        
+        // Check command line system properties first
+        String value = System.getProperty(key);
+        if (value != null && !isFromSuite(key)) {
+            info.put("value", value);
+            info.put("source", "Command Line System Property (-D" + key + ")");
+            info.put("priority", "1 (Highest)");
+            return info;
+        }
+        
+        // Check XML suite parameters
+        String suiteKey = "suite." + key;
+        String suiteValue = System.getProperty(suiteKey);
+        if (suiteValue != null) {
+            info.put("value", suiteValue);
+            info.put("source", "XML Suite Parameter (suite." + key + ")");
+            info.put("priority", "2 (Medium)");
+            return info;
+        }
+        
+        // Check properties files (merged: env-specific overrides application.properties)
+        value = mergedProperties.getProperty(key);
+        if (value != null) {
+            info.put("value", value);
+            info.put("source", "Properties Files (env/" + currentEnvironment + ".properties or application.properties)");
+            info.put("priority", "3 (Lowest)");
+            return info;
+        }
+        
+        // Check standardized key
+        String standardizedKey = CSPropertyMapper.getStandardizedProperty(key);
+        if (!standardizedKey.equals(key)) {
+            return getPropertySourceInfo(standardizedKey);
+        }
+        
+        info.put("value", null);
+        info.put("source", "Not Found");
+        info.put("priority", "N/A");
+        return info;
+    }
+    
+    /**
+     * Log configuration hierarchy for a given key (useful for debugging)
+     */
+    public void logConfigurationHierarchy(String key) {
+        Map<String, String> sourceInfo = getPropertySourceInfo(key);
+        logger.info("Configuration hierarchy for key '{}': Value='{}', Source='{}', Priority='{}'", 
+            key, sourceInfo.get("value"), sourceInfo.get("source"), sourceInfo.get("priority"));
     }
     
     /**

@@ -32,12 +32,16 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
     public void onStart(ISuite suite) {
         logger.info("Suite started: {}", suite.getName());
         
-        // Set suite parameters as system properties
+        // Set suite parameters as system properties AND update config manager
         Map<String, String> parameters = suite.getXmlSuite().getParameters();
         parameters.forEach((key, value) -> {
             System.setProperty("suite." + key, value);
-            logger.debug("Set suite parameter: {} = {}", key, value);
+            // Also set in config manager for immediate availability
+            config.setProperty(key, value);
+            logger.info("Set suite parameter override: {} = {}", key, value);
         });
+        
+        logger.info("Suite parameters processed: {} parameters set", parameters.size());
     }
     
     @Override
