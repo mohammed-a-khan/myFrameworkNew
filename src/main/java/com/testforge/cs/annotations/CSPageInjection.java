@@ -6,101 +6,67 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Annotation for automatic page object injection in step definition classes.
+ * Annotation for automatic page object injection in step definitions and test classes.
  * 
- * This annotation enables automatic initialization of page objects when they are first accessed,
- * eliminating the need for manual page object creation in step definitions.
+ * Pages marked with this annotation are automatically initialized with proper
+ * WebDriver and configuration when first accessed, eliminating the need for
+ * manual getPage() calls or repetitive getter methods.
  * 
- * Features:
- * - Thread-safe lazy initialization
- * - Automatic caching of page instances
- * - Parallel execution support by default
- * - No timing issues with WebDriver initialization
- * 
- * Usage:
- * <pre>
+ * <h3>Usage Examples:</h3>
+ * <pre>{@code
  * public class MySteps extends CSStepDefinitions {
- *     
- *     {@code @CSPageInjection}
+ *     @CSPageInjection
  *     private LoginPage loginPage;
  *     
- *     {@code @CSPageInjection(lazy = false)}
- *     private HomePage homePage;
- *     
- *     {@code @CSStep("I login")}
- *     public void login() {
- *         loginPage.enterUsername("user");  // Page auto-initialized on first access
+ *     @CSStep("I login with username {username}")
+ *     public void login(String username) {
+ *         loginPage.enterUsername(username);  // Direct field access!
  *         loginPage.clickLogin();
  *     }
  * }
- * </pre>
+ * }</pre>
  * 
- * Configuration Options:
- * - lazy: Controls when page object is initialized (default: true)
- * - cache: Whether to cache the page instance (default: true)
- * - threadSafe: Ensures thread-safe access in parallel execution (default: true)
+ * <h3>Features:</h3>
+ * <ul>
+ *   <li><b>Lazy Initialization:</b> Pages are created only when first accessed</li>
+ *   <li><b>Thread Safe:</b> Each test thread gets its own page instances</li>
+ *   <li><b>Automatic Cleanup:</b> Pages are cleared after each test scenario</li>
+ *   <li><b>Error Resilient:</b> Graceful handling of WebDriver timing issues</li>
+ * </ul>
  * 
+ * <h3>Timing:</h3>
+ * <p>The annotation is processed during step definition instantiation, but actual
+ * page creation is deferred until the first method call on the page object.
+ * This ensures WebDriver is properly initialized before page construction.</p>
+ * 
+ * @see com.testforge.cs.core.CSBasePage
+ * @see com.testforge.cs.bdd.CSStepDefinitions
  * @author CS TestForge Framework
- * @since 1.0
  */
-@Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.FIELD)
 public @interface CSPageInjection {
     
     /**
-     * Controls lazy initialization of the page object.
+     * Indicates whether the page should be cached for reuse within the same test scenario.
      * 
-     * When true (default), the page object is created only when first accessed.
-     * When false, the page object is created during step class initialization.
+     * <p><b>true (default):</b> Page instance is created once and reused for all subsequent calls
+     * within the same test scenario. This is more efficient and maintains state.</p>
      * 
-     * Note: Setting to false may cause initialization issues if WebDriver is not ready.
+     * <p><b>false:</b> A new page instance is created on every access. Use this for pages
+     * that need fresh state or have side effects in constructor.</p>
      * 
-     * @return true for lazy initialization, false for immediate initialization
+     * @return true if page should be cached, false for new instance on each access
      */
-    boolean lazy() default true;
+    boolean cached() default true;
     
     /**
-     * Whether to cache the page instance after creation.
+     * Optional description for documentation and debugging purposes.
      * 
-     * When true (default), the same page instance is reused across multiple accesses.
-     * When false, a new page instance is created each time the field is accessed.
+     * <p>This description appears in framework logs when the page is first created,
+     * helping with debugging and understanding test flow.</p>
      * 
-     * Caching improves performance by avoiding repeated page object creation.
-     * 
-     * @return true to cache the instance, false to create new instances each time
+     * @return human-readable description of the page's purpose
      */
-    boolean cache() default true;
-    
-    /**
-     * Ensures thread-safe access in parallel test execution.
-     * 
-     * When true (default), page objects are stored in thread-local storage to ensure
-     * each thread has its own page instance, preventing conflicts during parallel execution.
-     * 
-     * When false, page objects are shared across threads (not recommended for parallel execution).
-     * 
-     * @return true for thread-safe access, false for shared access
-     */
-    boolean threadSafe() default true;
-    
-    /**
-     * Optional name for the page injection (for debugging/logging purposes).
-     * 
-     * If not specified, the field name is used as the injection name.
-     * 
-     * @return custom name for this page injection
-     */
-    String name() default "";
-    
-    /**
-     * Priority for page initialization when multiple pages are injected.
-     * 
-     * Lower numbers indicate higher priority (initialized first).
-     * Pages with the same priority are initialized in field declaration order.
-     * 
-     * This is mainly useful when pages have dependencies on each other.
-     * 
-     * @return initialization priority (lower = higher priority)
-     */
-    int priority() default 1000;
+    String description() default "";
 }

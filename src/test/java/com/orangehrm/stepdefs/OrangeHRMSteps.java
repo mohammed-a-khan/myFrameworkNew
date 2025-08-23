@@ -3,6 +3,7 @@ package com.orangehrm.stepdefs;
 import com.testforge.cs.annotations.CSStep;
 import com.testforge.cs.annotations.CSDataRow;
 import com.testforge.cs.annotations.CSFeature;
+import com.testforge.cs.annotations.CSPageInjection;
 import com.testforge.cs.bdd.CSStepDefinitions;
 import com.orangehrm.pages.LoginPageNew;
 import com.orangehrm.pages.DashboardPageNew;
@@ -15,7 +16,7 @@ import com.testforge.cs.bdd.CSScenarioRunner;
 /**
  * Comprehensive step definitions for OrangeHRM application
  * Demonstrates all CS TestForge features:
- * - Clean placeholder syntax
+ * - Clean placeholder syntax with @CSPageInjection
  * - Data-driven testing
  * - Data row access
  * - Data tables
@@ -24,7 +25,10 @@ import com.testforge.cs.bdd.CSScenarioRunner;
 @CSFeature(name = "OrangeHRM Steps", tags = {"@orangehrm", "@all"})
 public class OrangeHRMSteps extends CSStepDefinitions {
     
+    @CSPageInjection
     private LoginPageNew loginPage;
+    
+    @CSPageInjection
     private DashboardPageNew dashboardPage;
     
     // ================== NAVIGATION STEPS ==================
@@ -32,22 +36,19 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I am on the OrangeHRM application")
     public void navigateToApplication() {
         logger.info("Navigating to OrangeHRM application");
-        loginPage = getPage(LoginPageNew.class);
-        loginPage.navigateTo();
+        this.loginPage.navigateTo();
     }
     
     @CSStep(description = "I am on the login page")
     public void navigateToLoginPage() {
         logger.info("Navigating to login page");
-        loginPage = getPage(LoginPageNew.class);
-        loginPage.navigateTo();
+        this.loginPage.navigateTo();
     }
     
     @CSStep(description = "I am on the OrangeHRM login page")
     public void navigateToOrangeHRMLoginPage() {
         logger.info("Navigating to OrangeHRM login page");
-        loginPage = getPage(LoginPageNew.class);
-        loginPage.navigateTo();
+        this.loginPage.navigateTo();
     }
     
     @CSStep(description = "I am on the {pageName} page")
@@ -56,11 +57,9 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         switch (pageName.toLowerCase()) {
             case "login":
             case "orangehrm login":
-                loginPage = getPage(LoginPageNew.class);
                 loginPage.navigateTo();
                 break;
             case "dashboard":
-                dashboardPage = getPage(DashboardPageNew.class);
                 assertTrue(dashboardPage.isDisplayed(), "Not on dashboard page");
                 break;
             default:
@@ -73,7 +72,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I enter username {username} and password {password}")
     public void enterCredentials(String username, String password) {
         logger.info("Entering credentials - Username: {}", username);
-        loginPage = getPage(LoginPageNew.class);
         loginPage.enterUsername(username);
         loginPage.enterPassword(password);
     }
@@ -82,14 +80,12 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     public void loginWithCredentials(String username, String password) {
         logger.info("Logging in with username: {} and password: {}", username, password);
         System.out.println("DEBUG: loginWithCredentials called with username=" + username + ", password=" + password);
-        loginPage = getPage(LoginPageNew.class);
         loginPage.login(username, password);
     }
     
     @CSStep(description = "I click the login button")
     public void clickLoginButton() {
         logger.info("Clicking login button");
-        loginPage = getPage(LoginPageNew.class);
         loginPage.clickLogin();
     }
     
@@ -97,14 +93,12 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I am logged in as {username}")
     public void loginAsUser(String username) {
         logger.info("Logging in as user: {}", username);
-        loginPage = getPage(LoginPageNew.class);
         loginPage.navigateTo();
         
         // Default password mapping
         String password = getPasswordForUser(username);
         loginPage.login(username, password);
         
-        dashboardPage = getPage(DashboardPageNew.class);
         dashboardPage.assertOnDashboard();
     }
     
@@ -114,7 +108,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     public void verifyDashboard() {
         logger.info("Verifying dashboard is displayed");
         CSReportManager.addAction("verify", "Verify dashboard is displayed");
-        dashboardPage = getPage(DashboardPageNew.class);
         assertTrue(dashboardPage.isDisplayed(), "Dashboard not displayed");
     }
     
@@ -122,7 +115,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     public void verifyErrorMessage(String errorMessage) {
         logger.info("Verifying error message: {}", errorMessage);
         CSReportManager.addAction("verify", "Verify error message", "error message", errorMessage);
-        loginPage = getPage(LoginPageNew.class);
         String actualMessage = loginPage.getErrorMessage();
         assertEquals(actualMessage, errorMessage, "Error message mismatch");
     }
@@ -152,7 +144,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         String username = dataRow.get("username");
         String password = dataRow.get("password");
         
-        loginPage = getPage(LoginPageNew.class);
         loginPage.login(username, password);
     }
     
@@ -168,7 +159,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         // Example verification
         if (dataRow.containsKey("expectedUser")) {
             String expectedUser = dataRow.get("expectedUser");
-            dashboardPage = getPage(DashboardPageNew.class);
             String actualUser = dashboardPage.getUserName();
             assertEquals(actualUser, expectedUser, "User mismatch");
         }
@@ -186,7 +176,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         // Perform login
         String username = fullDataRow.get("username");
         String password = fullDataRow.get("password");
-        loginPage = getPage(LoginPageNew.class);
         loginPage.login(username, password);
         
         // Verify based on expected result
@@ -210,7 +199,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
             String value = row.get("value");
             logger.info("Setting {} to {}", field, value);
             
-            loginPage = getPage(LoginPageNew.class);
             switch (field.toLowerCase()) {
                 case "username":
                     loginPage.enterUsername(value);
@@ -234,12 +222,10 @@ public class OrangeHRMSteps extends CSStepDefinitions {
             String expectedResult = user.get("expectedResult");
             
             logger.info("Testing login for user: {}", username);
-            loginPage = getPage(LoginPageNew.class);
             loginPage.navigateTo();
             loginPage.login(username, password);
             
             if ("success".equals(expectedResult)) {
-                dashboardPage = getPage(DashboardPageNew.class);
                 assertTrue(dashboardPage.isDisplayed(), 
                     "Login failed for user: " + username);
                 dashboardPage.logout();
@@ -351,17 +337,14 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     
     @CSStep(description = "I wait for dashboard to load")
     public void waitForDashboard() {
-        DashboardPageNew dashboard = getPage(DashboardPageNew.class);
-        assertTrue(dashboard.isDisplayed(), "Dashboard should be displayed");
+        assertTrue(dashboardPage.isDisplayed(), "Dashboard should be displayed");
     }
     
     @CSStep(description = "I verify login result is {expected}")
     public void verifyLoginResult(String expected) {
         if ("success".equals(expected)) {
-            DashboardPageNew dashboard = getPage(DashboardPageNew.class);
-            assertTrue(dashboard.isDisplayed(), "Dashboard should be displayed for successful login");
+            assertTrue(dashboardPage.isDisplayed(), "Dashboard should be displayed for successful login");
         } else if ("failure".equals(expected)) {
-            LoginPageNew loginPage = getPage(LoginPageNew.class);
             assertTrue(loginPage.isErrorMessageDisplayed(), "Error message should be displayed for failed login");
         }
     }
@@ -369,7 +352,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I should see the dashboard page")
     public void shouldSeeDashboardPage() {
         logger.info("Verifying dashboard page is displayed");
-        dashboardPage = getPage(DashboardPageNew.class);
         assertTrue(dashboardPage.isDisplayed(), "Dashboard page should be displayed");
         CSReportManager.getInstance().logInfo("Dashboard page is displayed");
     }
@@ -377,7 +359,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "the dashboard header should display {headerText}")
     public void dashboardHeaderShouldDisplay(String headerText) {
         logger.info("Verifying dashboard header displays: {}", headerText);
-        dashboardPage = getPage(DashboardPageNew.class);
         String actualHeader = dashboardPage.getHeaderText();
         assertTrue(actualHeader.contains(headerText), 
             "Dashboard header should contain '" + headerText + "' but was '" + actualHeader + "'");
@@ -387,7 +368,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I should see an error message containing {errorText}")
     public void shouldSeeErrorMessageContaining(String errorText) {
         logger.info("Verifying error message contains: {}", errorText);
-        loginPage = getPage(LoginPageNew.class);
         String actualMessage = loginPage.getErrorMessage();
         assertTrue(actualMessage.contains(errorText), 
             "Error message should contain '" + errorText + "' but was '" + actualMessage + "'");
@@ -397,7 +377,6 @@ public class OrangeHRMSteps extends CSStepDefinitions {
     @CSStep(description = "I should remain on the login page")
     public void shouldRemainOnLoginPage() {
         logger.info("Verifying user remains on login page");
-        loginPage = getPage(LoginPageNew.class);
         assertTrue(loginPage.isDisplayed(), "Should remain on login page");
         assertTrue(getDriver().getCurrentUrl().contains("login"), 
             "URL should contain 'login' but was: " + getDriver().getCurrentUrl());
@@ -411,11 +390,9 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         logger.info("Clicking {} button", buttonName);
         switch (buttonName.toLowerCase()) {
             case "login":
-                loginPage = getPage(LoginPageNew.class);
                 loginPage.clickLogin();
                 break;
             case "logout":
-                dashboardPage = getPage(DashboardPageNew.class);
                 dashboardPage.logout();
                 break;
             default:
@@ -443,14 +420,13 @@ public class OrangeHRMSteps extends CSStepDefinitions {
         logger.info("Performing complete login test");
         
         // Using inherited helper methods to access data row
-        Map<String, String> dataRow = getDataRow();
-        if (!dataRow.isEmpty()) {
-            String username = getDataValue("username");
-            String password = getDataValue("password");
+        Map<String, String> currentDataRow = getDataRow();
+        if (!currentDataRow.isEmpty()) {
+            String loginUsername = getDataValue("username");
+            String loginPassword = getDataValue("password");
             
-            loginPage = getPage(LoginPageNew.class);
             loginPage.navigateTo();
-            loginPage.login(username, password);
+            loginPage.login(loginUsername, loginPassword);
             
             if (hasDataKey("expectedResult")) {
                 String expectedResult = getDataValue("expectedResult");
@@ -484,6 +460,21 @@ public class OrangeHRMSteps extends CSStepDefinitions {
                 return "test123";
             default:
                 return "password123";
+        }
+    }
+    
+    // ================== MIXED PARAMETER TEST ==================
+    
+    @CSStep(description = "I navigate to {menuItem} with test data")
+    public void navigateToMenuItemWithData(String menuItem, @CSDataRow(includeMetadata = true) Map<String, String> fullDataRow) {
+        logger.info("Navigating to menu: {} with data: {}", menuItem, fullDataRow);
+        logger.info("Menu item parameter: {}", menuItem);
+        logger.info("Data row size: {}", fullDataRow.size());
+        
+        // This step tests the fix for mixed parameters (text + @CSDataRow)
+        // Just log the information for now
+        if (fullDataRow.containsKey("username")) {
+            logger.info("Username from data row: {}", fullDataRow.get("username"));
         }
     }
 }

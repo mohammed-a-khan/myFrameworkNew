@@ -1,5 +1,5 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="OrangeHRM Failure Test Suite" parallel="methods" thread-count="2">
+<suite name="OrangeHRM Failure Test Suite" parallel="methods" thread-count="3">
     
     <!-- Browser Configuration -->
     <parameter name="browser.name" value="chrome"/>
@@ -8,11 +8,11 @@
     <!-- Environment Configuration -->
     <parameter name="environment.name" value="qa"/>
     
-    <!-- BDD Configuration - Configure to run only the failing scenario -->
+    <!-- BDD Configuration - Run multiple scenarios for better parallel distribution -->
     <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature"/>
     <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
-    <parameter name="cs.bdd.cucumber.options" value="--tags @simple"/>
-    <parameter name="cs.bdd.tags" value="@simple"/>
+    <parameter name="cs.bdd.cucumber.options" value=""/>
+    <parameter name="cs.bdd.tags" value=""/>
     <parameter name="cs.bdd.exclude.tags" value=""/>
     
     <test name="OrangeHRM Failure Test">

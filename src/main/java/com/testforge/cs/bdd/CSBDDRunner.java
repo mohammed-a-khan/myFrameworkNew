@@ -587,9 +587,39 @@ public class CSBDDRunner extends CSBaseTest {
             logger.info("[{}] Thread ID {} - Driver properly initialized and set in all ThreadLocals", threadName, threadId);
             logger.info("[{}] CSWebDriverManager.getDriver() = {}", threadName, CSWebDriverManager.getDriver());
             logger.info("[{}] Driver hashCode = {}", threadName, driver.hashCode());
+            
+            // Now that WebDriver is ready, inject @CSPageInjection annotated pages
+            injectPagesIntoStepDefinitions(threadName);
         } else {
             logger.error("[{}] CRITICAL: Driver is null after parent setup! Thread ID: {}", threadName, threadId);
             throw new RuntimeException("Failed to initialize driver for thread: " + threadName);
+        }
+    }
+    
+    /**
+     * Injects @CSPageInjection annotated pages into all step definitions now that WebDriver is ready.
+     */
+    private void injectPagesIntoStepDefinitions(String threadName) {
+        try {
+            logger.info("[{}] Injecting @CSPageInjection pages into step definitions", threadName);
+            
+            // Get all registered step definition instances
+            Map<Class<?>, Object> stepInstances = CSStepRegistry.getStepClassInstances();
+            
+            for (Map.Entry<Class<?>, Object> entry : stepInstances.entrySet()) {
+                Object stepInstance = entry.getValue();
+                if (stepInstance instanceof CSStepDefinitions) {
+                    CSStepDefinitions stepDef = (CSStepDefinitions) stepInstance;
+                    stepDef.injectAnnotatedPages();
+                    logger.debug("[{}] Injected pages for: {}", threadName, entry.getKey().getSimpleName());
+                }
+            }
+            
+            logger.info("[{}] Page injection completed for all step definitions", threadName);
+            
+        } catch (Exception e) {
+            logger.warn("[{}] Failed to inject pages into step definitions: {}", threadName, e.getMessage());
+            // Don't fail the test - just log the warning and continue
         }
     }
     

@@ -1,0 +1,14 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Page Injection Test Suite" verbose="1">
+    
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="browser.headless" value="true"/>
+    <parameter name="environment.name" value="qa"/>
+    
+    <test name="Page Injection Test">
+        <classes>
+            <class name="com.orangehrm.tests.PageInjectionTest"/>
+        </classes>
+    </test>
+    
+</suite>

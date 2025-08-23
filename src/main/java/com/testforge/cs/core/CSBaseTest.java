@@ -3,6 +3,7 @@ package com.testforge.cs.core;
 import com.testforge.cs.annotations.*;
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.exceptions.CSTestExecutionException;
+import com.testforge.cs.injection.CSSmartPageInjector;
 import com.testforge.cs.listeners.CSTestListener;
 import com.testforge.cs.reporting.CSReportManager;
 import com.testforge.cs.reporting.CSTestResult;
@@ -285,6 +286,16 @@ public abstract class CSBaseTest {
             // Initialize report manager
             reportManager = CSReportManager.getInstance();
             
+            // Process page injection annotations (after driver is initialized)
+            try {
+                CSSmartPageInjector.processPageInjections(this);
+                logger.debug("Page injection processing completed for test class: {}", this.getClass().getSimpleName());
+            } catch (Exception e) {
+                logger.warn("Page injection processing failed for test class: {} - Error: {}", 
+                    this.getClass().getSimpleName(), e.getMessage());
+                // Don't fail the test, pages will be created manually if needed
+            }
+            
             // Store test data
             if (params != null && params.length > 0) {
                 testData.put("parameters", params);
@@ -357,6 +368,9 @@ public abstract class CSBaseTest {
                 // In sequential mode, keep browser for next test
                 logger.info("[{}] Sequential mode - keeping browser for next test (browser.reuse.instance=true)", Thread.currentThread().getName());
             }
+            
+            // Clear page cache to prevent memory leaks
+            CSSmartPageInjector.clearPageCache();
             
             // Clear thread local data
             threadLocalData.remove();

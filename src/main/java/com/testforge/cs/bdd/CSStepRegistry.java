@@ -350,6 +350,20 @@ public class CSStepRegistry {
     }
     
     /**
+     * Get all registered step definition instances
+     */
+    public Map<Class<?>, Object> getStepInstances() {
+        return new HashMap<>(stepClassInstances);
+    }
+    
+    /**
+     * Get all registered step definition instances (static access)
+     */
+    public static Map<Class<?>, Object> getStepClassInstances() {
+        return getInstance().getStepInstances();
+    }
+    
+    /**
      * Parse step type from string
      */
     private CSStepDefinition.StepType parseStepType(String type) {

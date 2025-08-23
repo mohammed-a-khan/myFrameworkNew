@@ -175,12 +175,8 @@
                     <suiteXmlFiles>
                         <suiteXmlFile>${suiteXmlFile}</suiteXmlFile>
                     </suiteXmlFiles>
-                    <properties>
-                        <property>
-                            <name>dataproviderthreadcount</name>
-                            <value>3</value>
-                        </property>
-                    </properties>
+                    <!-- DataProvider thread count will be managed by suite XML or framework -->
+                    <!-- Removed hardcoded dataproviderthreadcount to allow dynamic configuration -->
                 </configuration>
             </plugin>
             

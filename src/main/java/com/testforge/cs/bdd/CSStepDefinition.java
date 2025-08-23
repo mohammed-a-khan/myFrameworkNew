@@ -114,7 +114,17 @@ public class CSStepDefinition {
         
         Parameter[] methodParams = method.getParameters();
         List<Object> extractedParams = new ArrayList<>();
-        int textParamIndex = 0;
+        
+        // First, extract all text parameters from regex groups
+        List<String> textParameters = new ArrayList<>();
+        for (int i = 1; i <= matcher.groupCount(); i++) {
+            String value = matcher.group(i);
+            if (value != null) {
+                textParameters.add(value);
+            }
+        }
+        
+        int textParamIndex = 0; // Track position in textParameters list
         
         // Process each method parameter
         for (int i = 0; i < methodParams.length; i++) {
@@ -152,24 +162,34 @@ public class CSStepDefinition {
                 }
             } else {
                 // Regular parameter from step text
-                String value = null;
-                
-                // Get value from regex groups
-                for (int j = textParamIndex + 1; j <= matcher.groupCount(); j++) {
-                    value = matcher.group(j);
-                    if (value != null) {
-                        textParamIndex = j;
-                        break;
-                    }
-                }
-                
-                if (value != null) {
+                if (textParamIndex < textParameters.size()) {
+                    String value = textParameters.get(textParamIndex);
                     extractedParams.add(convertParameter(value, param.getType()));
+                    textParamIndex++;
+                } else {
+                    // This shouldn't happen if step pattern is correct, but handle gracefully
+                    throw new IllegalArgumentException(
+                        "Step pattern mismatch: Expected " + (methodParams.length - countDataRowParams(methodParams)) + 
+                        " text parameters but found " + textParameters.size() + " for step: " + stepText
+                    );
                 }
             }
         }
         
         return extractedParams.toArray();
+    }
+    
+    /**
+     * Count parameters annotated with @CSDataRow
+     */
+    private int countDataRowParams(Parameter[] parameters) {
+        int count = 0;
+        for (Parameter param : parameters) {
+            if (param.isAnnotationPresent(CSDataRow.class)) {
+                count++;
+            }
+        }
+        return count;
     }
     
     /**
