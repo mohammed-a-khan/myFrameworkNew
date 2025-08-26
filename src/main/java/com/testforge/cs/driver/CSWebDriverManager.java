@@ -34,6 +34,7 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ExecutorService;
@@ -987,90 +988,51 @@ public class CSWebDriverManager {
     }
     
     /**
-     * Quit all drivers - more robust cleanup
+     * Quit all drivers - simple and fast cleanup
      */
     public static synchronized void quitAllDrivers() {
-        logger.info("Quitting all {} drivers in pool", driverPool.size());
-        
-        // Track successfully closed drivers
+        logger.info("Starting browser cleanup");
         int closedCount = 0;
-        int alreadyClosedCount = 0;
         
-        // Create a copy to avoid concurrent modification
-        Map<String, WebDriver> driversCopy = new HashMap<>(driverPool);
-        
-        for (Map.Entry<String, WebDriver> entry : driversCopy.entrySet()) {
-            String threadId = entry.getKey();
+        // Close all drivers in the pool
+        for (Map.Entry<String, WebDriver> entry : new HashMap<>(driverPool).entrySet()) {
             WebDriver driver = entry.getValue();
-            
-            try {
-                if (driver != null) {
-                    // Check if driver session is still active
-                    try {
-                        // Try to get window handle to check if browser is still alive
-                        String windowHandle = driver.getWindowHandle();
-                        if (windowHandle != null) {
-                            logger.info("Closing driver for thread {} (window: {})", threadId, windowHandle);
-                            
-                            // Close all windows first
-                            for (String handle : driver.getWindowHandles()) {
-                                driver.switchTo().window(handle);
-                                driver.close();
-                            }
-                            
-                            // Now quit the driver
-                            driver.quit();
-                            closedCount++;
-                            
-                            // Release semaphore permit for each closed driver
-                            browserSemaphore.release();
-                            logger.info("Successfully closed driver for thread {}", threadId);
-                        }
-                    } catch (Exception sessionError) {
-                        // Driver session already closed or not responsive
-                        logger.debug("Driver session already closed or unresponsive for thread {}: {}", 
-                            threadId, sessionError.getMessage());
-                        alreadyClosedCount++;
-                        
-                        // Try force quit anyway
-                        try {
-                            driver.quit();
-                        } catch (Exception e) {
-                            // Ignore - driver was already closed
-                        }
-                        
-                        // Still release the permit
-                        browserSemaphore.release();
-                    }
+            if (driver != null) {
+                try {
+                    driver.quit();
+                    closedCount++;
+                } catch (Exception e) {
+                    logger.debug("Driver already closed: {}", e.getMessage());
                 }
-            } catch (Exception e) {
-                logger.error("Error quitting driver for thread {}: {}", threadId, e.getMessage());
             }
         }
         
-        logger.info("Driver cleanup complete - Closed: {}, Already closed: {}", 
-            closedCount, alreadyClosedCount);
-        
-        // Clear all references
+        // Clear pool and reset counters
         driverPool.clear();
         
-        // Also check and clear ThreadLocal for current thread
+        // Clear thread-local driver for current thread
         WebDriver localDriver = threadLocalDriver.get();
         if (localDriver != null) {
             try {
                 localDriver.quit();
-                logger.debug("Closed thread-local driver for current thread");
+                closedCount++;
             } catch (Exception e) {
                 logger.debug("Thread-local driver already closed: {}", e.getMessage());
             }
             threadLocalDriver.remove();
         }
         
-        // Reset browser count
-        browserCount.set(0);
         
-        logger.info("All test browser instances have been closed");
+        // Reset counters
+        browserCount.set(0);
+        int permitsToRelease = maxBrowsersAllowed - browserSemaphore.availablePermits();
+        if (permitsToRelease > 0) {
+            browserSemaphore.release(permitsToRelease);
+        }
+        
+        logger.info("Browser cleanup complete - {} drivers closed", closedCount);
     }
+    
     
     /**
      * Take screenshot

@@ -25,8 +25,13 @@ public class CSStepAction {
         this.actionType = actionType;
         this.description = description;
         this.timestamp = LocalDateTime.now();
-        this.passed = true;
+        this.passed = !"FAIL".equals(actionType); // FAIL actions should be marked as failed
         this.metadata = new HashMap<>();
+        
+        // If it's a FAIL action, set error message
+        if ("FAIL".equals(actionType)) {
+            this.error = description;
+        }
     }
     
     public CSStepAction(String actionType, String description, String target) {
@@ -130,11 +135,13 @@ public class CSStepAction {
      */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
-        map.put("actionType", actionType);
+        map.put("type", actionType); // For addAction() fallback compatibility
+        map.put("actionType", actionType); // Keep original field name for HTML report
         map.put("description", description);
         map.put("target", target);
         map.put("value", value);
-        map.put("passed", passed);
+        map.put("status", passed ? "passed" : "failed"); // Use "status" with string values
+        map.put("passed", passed); // Keep original boolean field for compatibility
         map.put("error", error);
         map.put("timestamp", timestamp != null ? timestamp.toString() : null);
         map.put("duration", duration);

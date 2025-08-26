@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<suite name="Base64 Comparison Test" parallel="false" thread-count="1">
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="environment.name" value="qa"/>
+    <parameter name="cs.encryption.key" value="LhABO2esT/784OrITVLdNbA+7Slaialzf3SKwsNVCYA="/>
+    
+    <test name="Base64 Comparison">
+        <classes>
+            <class name="Base64ComparisonTest"/>
+        </classes>
+    </test>
+</suite>

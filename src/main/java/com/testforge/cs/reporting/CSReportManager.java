@@ -5,7 +5,10 @@ import com.testforge.cs.environment.CSEnvironmentCollector;
 import com.testforge.cs.exceptions.CSReportingException;
 import com.testforge.cs.utils.CSFileUtils;
 import com.testforge.cs.utils.CSJsonUtils;
+import com.testforge.cs.utils.CSImageUtils;
 import com.testforge.cs.driver.CSWebDriverManager;
+import com.testforge.cs.bdd.CSScenarioRunner;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,6 +17,7 @@ import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.Base64;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -474,6 +478,9 @@ public class CSReportManager {
         getInstance().logStep("[PASS] " + message, true);
         logger.info("[PASS] {}", message);
         
+        // Add to current step as an action
+        addAction("PASS", message);
+        
         // Take screenshot if configured
         if (config.getBooleanProperty("cs.screenshot.on.pass", false) || 
             config.getBooleanProperty("cs.screenshot.on.all", false)) {
@@ -483,15 +490,86 @@ public class CSReportManager {
     
     /**
      * Log a FAIL message - static method for easy access
+     * This is a SOFT FAIL - marks step as failed visually but continues execution
      */
     public static void fail(String message) {
-        getInstance().logStep("[FAIL] " + message, false);
         logger.error("[FAIL] {}", message);
+        getInstance().logError("[FAIL] " + message); // Add this like info() does
         
-        // Take screenshot if configured (default true for failures)
-        if (config.getBooleanProperty("cs.screenshot.on.failure", true) || 
-            config.getBooleanProperty("cs.screenshot.on.all", false)) {
-            captureScreenshot("fail_" + System.currentTimeMillis());
+        // Take screenshot first and get path
+        String screenshotPath = null;
+        // Check configuration before taking screenshot for soft fail
+        String captureScreenshotStr = CSConfigManager.getInstance().getProperty("cs.soft.fail.capture.screenshot", "true");
+        boolean captureScreenshot = Boolean.parseBoolean(captureScreenshotStr);
+        if (captureScreenshot) {
+            screenshotPath = captureScreenshotAndGetPath("SOFT_FAIL_" + System.currentTimeMillis() + "_Thread_" + Thread.currentThread().getId());
+        }
+        
+        // CRITICAL: Directly mark step as failed in scenario context FIRST
+        // This ensures the step is failed even if addAction() doesn't work
+        boolean stepMarkedFailed = false;
+        try {
+            CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+            if (runner != null) {
+                Map<String, Object> scenarioContext = runner.getScenarioContext();
+                if (scenarioContext != null) {
+                    Map<String, Object> currentStepResult = (Map<String, Object>) scenarioContext.get("current_step_result");
+                    if (currentStepResult != null) {
+                        // Mark as soft-failed
+                        currentStepResult.put("softFailed", true);
+                        currentStepResult.put("status", "failed"); // FORCE status to failed
+                        currentStepResult.put("error", message); // Need this for error detection
+                        currentStepResult.put("failureMessage", message); // Keep for compatibility
+                        
+                        // Ensure actions list exists and add FAIL action
+                        List<Map<String, Object>> actions = (List<Map<String, Object>>) currentStepResult.get("actions");
+                        if (actions == null) {
+                            actions = new ArrayList<>();
+                            currentStepResult.put("actions", actions);
+                        }
+                        
+                        // Create comprehensive FAIL action with all fields including screenshot
+                        Map<String, Object> failAction = new HashMap<>();
+                        failAction.put("type", "FAIL");
+                        failAction.put("actionType", "FAIL");
+                        failAction.put("description", message);
+                        failAction.put("status", "failed");
+                        failAction.put("passed", false);
+                        failAction.put("error", message);
+                        failAction.put("timestamp", LocalDateTime.now().toString());
+                        failAction.put("userInitiated", true); // Mark as user action
+                        
+                        // Add screenshot path if available
+                        if (screenshotPath != null) {
+                            failAction.put("screenshot", screenshotPath);
+                        } else {
+                            failAction.put("screenshot", "null");
+                        }
+                        
+                        actions.add(failAction);
+                        
+                        stepMarkedFailed = true;
+                        logger.info("Step forcefully marked as FAILED with message: {}", message);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error marking step as failed: {}", e.getMessage(), e);
+        }
+        
+        // Only add through normal flow if we couldn't add to scenario context
+        if (!stepMarkedFailed) {
+            try {
+                addAction("FAIL", message);
+            } catch (Exception e) {
+                logger.debug("Could not add action through normal flow: {}", e.getMessage());
+            }
+        }
+        
+        // Log warning if we couldn't mark the step as failed, but DON'T throw exception
+        // This is SOFT FAIL - we continue execution
+        if (!stepMarkedFailed) {
+            logger.warn("Could not mark step as failed through normal means, but continuing execution (soft fail)");
         }
     }
     
@@ -501,6 +579,9 @@ public class CSReportManager {
     public static void warn(String message) {
         getInstance().logWarning("[WARN] " + message);
         logger.warn("[WARN] {}", message);
+        
+        // Add to current step as an action
+        addAction("WARN", message);
     }
     
     /**
@@ -509,6 +590,9 @@ public class CSReportManager {
     public static void info(String message) {
         getInstance().logInfo("[INFO] " + message);
         logger.info("[INFO] {}", message);
+        
+        // Add to current step as an action
+        addAction("INFO", message);
     }
     
     /**
@@ -525,10 +609,166 @@ public class CSReportManager {
             if (screenshotFile != null && screenshotFile.exists()) {
                 logger.info("Screenshot captured: {}", screenshotFile.getAbsolutePath());
                 getInstance().logInfo("Screenshot: " + name);
+                
+                // Add screenshot to current step result for display in report
+                try {
+                    CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+                    if (runner != null) {
+                        Map<String, Object> scenarioContext = runner.getScenarioContext();
+                        if (scenarioContext != null) {
+                            Map<String, Object> currentStepResult = (Map<String, Object>) scenarioContext.get("current_step_result");
+                            if (currentStepResult != null) {
+                                currentStepResult.put("screenshot", screenshotFile.getAbsolutePath());
+                                logger.info("Screenshot attached to step result");
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not attach screenshot to step: {}", e.getMessage());
+                }
             }
         } catch (Exception e) {
             logger.warn("Failed to capture screenshot: {}", e.getMessage());
         }
+    }
+    
+    /**
+     * Capture screenshot and return the path or base64 data
+     */
+    private static String captureScreenshotAndGetPath(String name) {
+        logger.info("Attempting to capture screenshot: {}", name);
+        
+        try {
+            // Check if WebDriver is available first
+            WebDriver driver = null;
+            try {
+                driver = CSWebDriverManager.getDriver();
+                if (driver == null) {
+                    logger.warn("No active WebDriver session available for screenshot capture");
+                    return null;
+                }
+                logger.info("WebDriver available: {}", driver.getClass().getSimpleName());
+                
+                // Log current URL and page title for debugging
+                try {
+                    String currentUrl = driver.getCurrentUrl();
+                    String pageTitle = driver.getTitle();
+                    logger.info("Screenshot capture - Current URL: {}, Page Title: {}", currentUrl, pageTitle);
+                    
+                    // Check if page is loaded properly
+                    if (currentUrl == null || currentUrl.equals("data:,") || currentUrl.startsWith("chrome://")) {
+                        logger.warn("WebDriver appears to be on a blank page: {}", currentUrl);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Could not get page details: {}", e.getMessage());
+                }
+                
+                // Wait a moment to ensure page is ready for screenshot
+                try {
+                    Thread.sleep(1000); // Increased wait to ensure page is ready
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                
+            } catch (Exception e) {
+                logger.warn("Could not get WebDriver for screenshot: {}", e.getMessage());
+                return null;
+            }
+            
+            // Use temp directory to avoid redundancy
+            String tempDir = System.getProperty("java.io.tmpdir") + "/cs-temp-screenshots";
+            new File(tempDir).mkdirs();
+            String screenshotPath = tempDir + "/" + name + ".png";
+            
+            logger.info("Taking screenshot to: {}", screenshotPath);
+            File screenshotFile = CSWebDriverManager.takeScreenshot(screenshotPath);
+            
+            if (screenshotFile != null && screenshotFile.exists()) {
+                long fileSize = screenshotFile.length();
+                logger.info("Screenshot captured successfully: {} (size: {} bytes)", screenshotFile.getAbsolutePath(), fileSize);
+                getInstance().logInfo("Screenshot: " + name + " (" + fileSize + " bytes)");
+                
+                // Convert screenshot to optimized base64 for embedding in HTML
+                String base64Screenshot = null;
+                try {
+                    // Check if compression is enabled (default: true)
+                    boolean enableCompression = config.getBooleanProperty("cs.screenshot.compression.enabled", true);
+                    logger.info("Screenshot compression enabled: {}", enableCompression);
+                    
+                    if (enableCompression) {
+                        // Use compressed/optimized version for better performance
+                        int maxWidth = config.getIntegerProperty("cs.screenshot.max.width", 800);
+                        float quality = config.getFloatProperty("cs.screenshot.quality", 0.7f);
+                        
+                        logger.info("Compressing screenshot: maxWidth={}, quality={}", maxWidth, quality);
+                        base64Screenshot = CSImageUtils.compressImageToBase64(screenshotFile.getAbsolutePath(), maxWidth, quality);
+                        
+                        if (base64Screenshot != null) {
+                            logger.info("Screenshot optimized for web display (size: {})", CSImageUtils.getBase64Size(base64Screenshot));
+                        } else {
+                            logger.warn("Compression failed, falling back to original");
+                        }
+                    }
+                    
+                    // Fallback to original approach if compression disabled or failed
+                    if (base64Screenshot == null) {
+                        logger.info("Using uncompressed screenshot conversion");
+                        byte[] fileContent = Files.readAllBytes(screenshotFile.toPath());
+                        base64Screenshot = "data:image/png;base64," + Base64.getEncoder().encodeToString(fileContent);
+                        logger.info("Screenshot converted to base64 (uncompressed, size: {})", CSImageUtils.getBase64Size(base64Screenshot));
+                    }
+                } catch (Exception e) {
+                    logger.error("Could not convert screenshot to base64: {}", e.getMessage(), e);
+                    base64Screenshot = screenshotFile.getAbsolutePath();
+                }
+                
+                // Add screenshot to current step result for display in report
+                try {
+                    CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+                    if (runner != null) {
+                        Map<String, Object> scenarioContext = runner.getScenarioContext();
+                        if (scenarioContext != null) {
+                            Map<String, Object> currentStepResult = (Map<String, Object>) scenarioContext.get("current_step_result");
+                            if (currentStepResult != null) {
+                                // Store both file path and base64 for different uses
+                                currentStepResult.put("screenshot", screenshotFile.getAbsolutePath());
+                                currentStepResult.put("screenshotBase64", base64Screenshot);
+                                logger.info("Screenshot attached to step result: {}", screenshotFile.getName());
+                            }
+                            
+                            // CRITICAL: Also set test-level screenshot for Failure Analysis display
+                            // This ensures the screenshot appears in the Failure Analysis modal
+                            String testId = currentTestId.get();
+                            if (testId != null) {
+                                CSTestResult testResult = getInstance().testResults.get(testId);
+                                if (testResult != null) {
+                                    testResult.setScreenshotPath(base64Screenshot != null ? base64Screenshot : screenshotFile.getAbsolutePath());
+                                    logger.info("Screenshot also attached to test result for Failure Analysis: {}", testId);
+                                }
+                            } else {
+                                logger.warn("No current test ID available for screenshot attachment");
+                            }
+                        } else {
+                            logger.warn("No scenario context available for screenshot attachment");
+                        }
+                    } else {
+                        logger.warn("No CSScenarioRunner available for screenshot attachment");
+                    }
+                } catch (Exception e) {
+                    logger.error("Could not attach screenshot to step: {}", e.getMessage(), e);
+                }
+                
+                logger.info("Screenshot processing completed successfully");
+                return base64Screenshot != null ? base64Screenshot : screenshotFile.getAbsolutePath();
+            } else {
+                logger.error("Screenshot file was not created or does not exist: {}", screenshotPath);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to capture screenshot '{}': {}", name, e.getMessage(), e);
+        }
+        
+        logger.warn("Screenshot capture failed for: {}", name);
+        return null;
     }
     
     /**
@@ -710,7 +950,7 @@ public class CSReportManager {
     public static void startStep(String stepType, String stepText) {
         CSStepReport step = new CSStepReport(stepType, stepText);
         currentStep.set(step);
-        logger.info("Step started: {} {}", stepType, stepText);
+        logger.info("Step started in thread {}: {} {}", Thread.currentThread().getName(), stepType, stepText);
     }
     
     /**
@@ -756,7 +996,39 @@ public class CSReportManager {
         if (step != null) {
             CSStepAction action = new CSStepAction(actionType, description);
             step.addAction(action);
-            logger.debug("Action: {} - {}", actionType, description);
+            logger.info("Added action to CSStepReport: {} - {}", actionType, description);
+            return;
+        } else {
+            logger.warn("No current step in ThreadLocal to add action: {} - {}", actionType, description);
+        }
+        
+        // Simple fallback: try scenario runner context only
+        try {
+            CSScenarioRunner runner = CSScenarioRunner.getCurrentInstance();
+            if (runner != null) {
+                Map<String, Object> scenarioContext = runner.getScenarioContext();
+                if (scenarioContext != null) {
+                    Map<String, Object> currentStepResult = (Map<String, Object>) scenarioContext.get("current_step_result");
+                    if (currentStepResult != null) {
+                        List<Map<String, Object>> actions = (List<Map<String, Object>>) currentStepResult.get("actions");
+                        if (actions == null) {
+                            actions = new ArrayList<>();
+                            currentStepResult.put("actions", actions);
+                        }
+                        
+                        Map<String, Object> actionMap = new HashMap<>();
+                        actionMap.put("type", actionType);
+                        actionMap.put("description", description);
+                        actionMap.put("timestamp", LocalDateTime.now().toString());
+                        actionMap.put("status", actionType.equals("FAIL") ? "failed" : "passed");
+                        actions.add(actionMap);
+                        
+                        logger.debug("Action added: {} - {}", actionType, description);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not add action: {}", e.getMessage());
         }
     }
     
@@ -812,15 +1084,24 @@ public class CSReportManager {
         lastCompletedStep.remove();
     }
     
+    
     /**
      * Get actions from the last completed step
      */
     public static List<Map<String, Object>> getLastStepActions() {
         CSStepReport step = lastCompletedStep.get();
-        if (step != null && step.getActions() != null && !step.getActions().isEmpty()) {
-            return step.getActions().stream()
-                .map(CSStepAction::toMap)
-                .collect(Collectors.toList());
+        if (step != null) {
+            logger.info("Found last completed step with {} actions", 
+                step.getActions() != null ? step.getActions().size() : 0);
+            if (step.getActions() != null && !step.getActions().isEmpty()) {
+                List<Map<String, Object>> actionMaps = step.getActions().stream()
+                    .map(CSStepAction::toMap)
+                    .collect(Collectors.toList());
+                logger.info("Returning {} action maps", actionMaps.size());
+                return actionMaps;
+            }
+        } else {
+            logger.warn("No last completed step found in ThreadLocal");
         }
         return null;
     }

@@ -28,32 +28,72 @@ import java.util.stream.Collectors;
  */
 public abstract class CSBasePage {
     protected static final Logger logger = LoggerFactory.getLogger(CSBasePage.class);
-    protected WebDriver driver;
-    protected WebDriverWait wait;
-    protected JavascriptExecutor jsExecutor;
-    protected Actions actions;
+    // CRITICAL FIX: Don't store driver as instance field - always get from ThreadLocal
+    protected transient WebDriver driver;
+    protected transient WebDriverWait wait;
+    protected transient JavascriptExecutor jsExecutor;
+    protected transient Actions actions;
     protected CSConfigManager config;
     
     private final Map<String, WebElement> elementCache = new ConcurrentHashMap<>();
     private final Map<String, By> locatorCache = new ConcurrentHashMap<>();
     
     public CSBasePage() {
-        this.driver = CSWebDriverManager.getDriver();
         this.config = CSConfigManager.getInstance();
         
-        if (this.driver == null) {
-            logger.error("Driver is null in CSBasePage constructor for thread: {}. This will cause NullPointerException!", Thread.currentThread().getName());
-            throw new RuntimeException("WebDriver is not initialized. Ensure test setup is complete before creating page objects.");
-        }
-        
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(config.getIntProperty("cs.browser.explicit.wait", 30)));
-        this.jsExecutor = (JavascriptExecutor) driver;
-        this.actions = new Actions(driver);
+        // Don't initialize driver-dependent objects here - do it lazily when needed
+        // This ensures each thread gets its own driver context
         
         initializePage();
         
         // Use CSPageFactory for self-healing element initialization
         CSPageFactory.initElements(this);
+    }
+    
+    /**
+     * Get the current thread's WebDriver - ALWAYS call this instead of using driver field
+     */
+    protected WebDriver getDriver() {
+        WebDriver currentDriver = CSWebDriverManager.getDriver();
+        if (currentDriver == null) {
+            logger.error("Driver is null for thread: {}. This will cause NullPointerException!", Thread.currentThread().getName());
+            throw new RuntimeException("WebDriver is not initialized for thread: " + Thread.currentThread().getName());
+        }
+        
+        // Update cached references if driver changed
+        if (this.driver != currentDriver) {
+            logger.debug("Thread {} driver reference updated", Thread.currentThread().getName());
+            this.driver = currentDriver;
+            this.wait = new WebDriverWait(driver, Duration.ofSeconds(config.getIntProperty("cs.browser.explicit.wait", 30)));
+            this.jsExecutor = (JavascriptExecutor) driver;
+            this.actions = new Actions(driver);
+        }
+        
+        return this.driver;
+    }
+    
+    /**
+     * Get WebDriverWait for current thread
+     */
+    protected WebDriverWait getWait() {
+        getDriver(); // Ensures wait is initialized
+        return this.wait;
+    }
+    
+    /**
+     * Get JavascriptExecutor for current thread
+     */
+    protected JavascriptExecutor getJsExecutor() {
+        getDriver(); // Ensures jsExecutor is initialized
+        return this.jsExecutor;
+    }
+    
+    /**
+     * Get Actions for current thread  
+     */
+    protected Actions getActions() {
+        getDriver(); // Ensures actions is initialized
+        return this.actions;
     }
     
     /**
@@ -164,7 +204,7 @@ public abstract class CSBasePage {
         logger.info("Navigating to: {}", url);
         CSReportManager.info("[INFO] Navigating to URL: " + url);
         CSReportManager.addAction("navigate", "Navigate to URL", url);
-        driver.get(url);
+        getDriver().get(url);
         CSReportManager.pass("[PASS] Successfully navigated to: " + url);
     }
     
@@ -181,25 +221,25 @@ public abstract class CSBasePage {
     
     public void navigateBack() {
         logger.info("Navigating back");
-        driver.navigate().back();
+        getDriver().navigate().back();
     }
     
     public void navigateForward() {
         logger.info("Navigating forward");
-        driver.navigate().forward();
+        getDriver().navigate().forward();
     }
     
     public void refresh() {
         logger.info("Refreshing page");
-        driver.navigate().refresh();
+        getDriver().navigate().refresh();
     }
     
     public String getCurrentUrl() {
-        return driver.getCurrentUrl();
+        return getDriver().getCurrentUrl();
     }
     
     public String getTitle() {
-        return driver.getTitle();
+        return getDriver().getTitle();
     }
     
     // ===== Element Finding Methods =====
@@ -226,15 +266,15 @@ public abstract class CSBasePage {
     }
     
     public List<WebElement> findElements(By by) {
-        return driver.findElements(by);
+        return getDriver().findElements(by);
     }
     
     public WebElement findVisibleElement(By by) {
-        return wait.until(ExpectedConditions.visibilityOfElementLocated(by));
+        return getWait().until(ExpectedConditions.visibilityOfElementLocated(by));
     }
     
     public WebElement findClickableElement(By by) {
-        return wait.until(ExpectedConditions.elementToBeClickable(by));
+        return getWait().until(ExpectedConditions.elementToBeClickable(by));
     }
     
     // ===== Wait Methods =====
@@ -248,7 +288,7 @@ public abstract class CSBasePage {
     
     public void waitForPageLoad(int timeoutSeconds) {
         WebDriverWait pageWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
-        pageWait.until(driver -> jsExecutor.executeScript("return document.readyState").equals("complete"));
+        pageWait.until(driver -> getJsExecutor().executeScript("return document.readyState").equals("complete"));
     }
     
     public void waitForAjax() {
@@ -258,8 +298,8 @@ public abstract class CSBasePage {
     public void waitForAjax(int timeoutSeconds) {
         WebDriverWait ajaxWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
         ajaxWait.until(driver -> {
-            Boolean jQueryDone = (Boolean) jsExecutor.executeScript("return jQuery.active == 0");
-            Boolean jsReady = (Boolean) jsExecutor.executeScript("return document.readyState == 'complete'");
+            Boolean jQueryDone = (Boolean) getJsExecutor().executeScript("return jQuery.active == 0");
+            Boolean jsReady = (Boolean) getJsExecutor().executeScript("return document.readyState == 'complete'");
             return jQueryDone && jsReady;
         });
     }
@@ -311,7 +351,7 @@ public abstract class CSBasePage {
     
     public void waitForJavaScriptCondition(String script, int timeoutSeconds) {
         WebDriverWait jsWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
-        jsWait.until(driver -> (Boolean) jsExecutor.executeScript(script));
+        jsWait.until(driver -> (Boolean) getJsExecutor().executeScript(script));
     }
     
     // ===== Action Methods =====
@@ -401,30 +441,30 @@ public abstract class CSBasePage {
     
     public void clickJS(By by) {
         WebElement element = findElement(by);
-        jsExecutor.executeScript("arguments[0].click();", element);
+        getJsExecutor().executeScript("arguments[0].click();", element);
         logger.info("Clicked element using JavaScript: {}", by);
     }
     
     public void scrollToElement(By by) {
         WebElement element = findElement(by);
-        jsExecutor.executeScript("arguments[0].scrollIntoView(true);", element);
+        getJsExecutor().executeScript("arguments[0].scrollIntoView(true);", element);
         logger.info("Scrolled to element: {}", by);
     }
     
     public void scrollToTop() {
-        jsExecutor.executeScript("window.scrollTo(0, 0);");
+        getJsExecutor().executeScript("window.scrollTo(0, 0);");
         logger.info("Scrolled to top of page");
     }
     
     public void scrollToBottom() {
-        jsExecutor.executeScript("window.scrollTo(0, document.body.scrollHeight);");
+        getJsExecutor().executeScript("window.scrollTo(0, document.body.scrollHeight);");
         logger.info("Scrolled to bottom of page");
     }
     
     public void highlightElement(WebElement element) {
         if (config.getBooleanProperty("cs.element.highlight.elements", true)) {
             String originalStyle = element.getAttribute("style");
-            jsExecutor.executeScript(
+            getJsExecutor().executeScript(
                 "arguments[0].setAttribute('style', arguments[1]);",
                 element,
                 "border: 2px solid " + config.getProperty("cs.element.highlight.color", "red") + "; " + originalStyle
@@ -436,7 +476,7 @@ public abstract class CSBasePage {
                 Thread.currentThread().interrupt();
             }
             
-            jsExecutor.executeScript(
+            getJsExecutor().executeScript(
                 "arguments[0].setAttribute('style', arguments[1]);",
                 element,
                 originalStyle
@@ -448,7 +488,7 @@ public abstract class CSBasePage {
     
     public boolean isElementPresent(By by) {
         try {
-            driver.findElement(by);
+            getDriver().findElement(by);
             CSReportManager.info("Element is present: " + by);
             return true;
         } catch (org.openqa.selenium.NoSuchElementException e) {
@@ -500,7 +540,7 @@ public abstract class CSBasePage {
     
     public void acceptAlert() {
         CSReportManager.info("Accepting alert");
-        Alert alert = wait.until(ExpectedConditions.alertIsPresent());
+        Alert alert = getWait().until(ExpectedConditions.alertIsPresent());
         String alertText = alert.getText();
         alert.accept();
         logger.info("Accepted alert");
@@ -508,18 +548,18 @@ public abstract class CSBasePage {
     }
     
     public void dismissAlert() {
-        Alert alert = wait.until(ExpectedConditions.alertIsPresent());
+        Alert alert = getWait().until(ExpectedConditions.alertIsPresent());
         alert.dismiss();
         logger.info("Dismissed alert");
     }
     
     public String getAlertText() {
-        Alert alert = wait.until(ExpectedConditions.alertIsPresent());
+        Alert alert = getWait().until(ExpectedConditions.alertIsPresent());
         return alert.getText();
     }
     
     public void typeInAlert(String text) {
-        Alert alert = wait.until(ExpectedConditions.alertIsPresent());
+        Alert alert = getWait().until(ExpectedConditions.alertIsPresent());
         alert.sendKeys(text);
         logger.info("Typed '{}' in alert", text);
     }
@@ -528,24 +568,24 @@ public abstract class CSBasePage {
     
     public void switchToFrame(String frameNameOrId) {
         CSReportManager.info("Switching to frame: " + frameNameOrId);
-        driver.switchTo().frame(frameNameOrId);
+        getDriver().switchTo().frame(frameNameOrId);
         logger.info("Switched to frame: {}", frameNameOrId);
         CSReportManager.pass("Successfully switched to frame: " + frameNameOrId);
     }
     
     public void switchToFrame(int frameIndex) {
-        driver.switchTo().frame(frameIndex);
+        getDriver().switchTo().frame(frameIndex);
         logger.info("Switched to frame index: {}", frameIndex);
     }
     
     public void switchToFrame(WebElement frameElement) {
-        driver.switchTo().frame(frameElement);
+        getDriver().switchTo().frame(frameElement);
         logger.info("Switched to frame element");
     }
     
     public void switchToDefaultContent() {
         CSReportManager.info("Switching to default content");
-        driver.switchTo().defaultContent();
+        getDriver().switchTo().defaultContent();
         logger.info("Switched to default content");
         CSReportManager.pass("Successfully switched to default content");
     }
@@ -553,16 +593,16 @@ public abstract class CSBasePage {
     // ===== Window Methods =====
     
     public void switchToWindow(String windowHandle) {
-        driver.switchTo().window(windowHandle);
+        getDriver().switchTo().window(windowHandle);
         logger.info("Switched to window: {}", windowHandle);
     }
     
     public void switchToNewWindow() {
-        String currentWindow = driver.getWindowHandle();
-        Set<String> windows = driver.getWindowHandles();
+        String currentWindow = getDriver().getWindowHandle();
+        Set<String> windows = getDriver().getWindowHandles();
         for (String window : windows) {
             if (!window.equals(currentWindow)) {
-                driver.switchTo().window(window);
+                getDriver().switchTo().window(window);
                 logger.info("Switched to new window: {}", window);
                 break;
             }
@@ -570,7 +610,7 @@ public abstract class CSBasePage {
     }
     
     public void closeCurrentWindow() {
-        driver.close();
+        getDriver().close();
         logger.info("Closed current window");
     }
     

@@ -4032,12 +4032,15 @@ public class CSHtmlReportGenerator {
         js.append("                detailsHtml += '</div>';\n");
         js.append("                detailsHtml += '<div class=\"step-duration\" style=\"color: #dc2626;\">' + formatDuration(step.duration) + '</div>';\n");
         js.append("                detailsHtml += '<div id=\"step-details-' + uniqueIndex + '\" style=\"margin-top: 0.5rem;\">';\n");
-        js.append("                if (step.errorMessage) {\n");
+        js.append("                // Only show error message if there's no FAIL action (to avoid duplication)\n");
+        js.append("                var hasFailAction = step.actions && step.actions.some(a => a.type === 'FAIL' || a.actionType === 'FAIL');\n");
+        js.append("                if (step.errorMessage && !hasFailAction) {\n");
         js.append("                    detailsHtml += '<div style=\"background: #fee2e2; border: 1px solid #fecaca; padding: 0.5rem; border-radius: 0.25rem; font-size: 0.875rem;\">' + step.errorMessage + '</div>';\n");
         js.append("                }\n");
         js.append("                \n");
-        js.append("                // Display actions for failed steps too\n");
-        js.append("                if (step.actions && step.actions.length > 0) {\n");
+        js.append("                // Display only FAIL actions for failed steps\n");
+        js.append("                const failActions = step.actions ? step.actions.filter(a => a.type === 'FAIL' || a.actionType === 'FAIL') : [];\n");
+        js.append("                if (failActions.length > 0) {\n");
         js.append("                    detailsHtml += '<div style=\"margin-left: 1.5rem; font-size: 0.875rem;\">';\n");
         js.append("                    detailsHtml += '<div style=\"font-weight: 600; color: #dc2626; margin-bottom: 0.25rem;\">Actions:</div>';\n");
         js.append("                    detailsHtml += '<div style=\"background-color: #fef2f2; border-radius: 4px; padding: 0.5rem; margin-top: 0.25rem;\">';\n");
@@ -4053,7 +4056,7 @@ public class CSHtmlReportGenerator {
         js.append("                    detailsHtml += '</tr>';\n");
         js.append("                    detailsHtml += '</thead>';\n");
         js.append("                    detailsHtml += '<tbody>';\n");
-        js.append("                    step.actions.forEach((action, index) => {\n");
+        js.append("                    failActions.forEach((action, index) => {\n");
         js.append("                        const actionPassed = !action.error || action.passed !== false;\n");
         js.append("                        const rowBg = index % 2 === 0 ? '#ffffff' : '#fef2f2';\n");
         js.append("                        detailsHtml += '<tr style=\"background-color: ' + rowBg + '; border-bottom: 1px solid #fecaca;\">';\n");
@@ -4094,6 +4097,31 @@ public class CSHtmlReportGenerator {
         js.append("                            detailsHtml += '</tr><tr style=\"background-color: ' + rowBg + ';\">';\n");
         js.append("                            detailsHtml += '<td colspan=\"5\" style=\"padding: 0.25rem 0.5rem 0.5rem 3rem; color: #ef4444; font-style: italic; font-size: 0.75rem;\">';\n");
         js.append("                            detailsHtml += '<i class=\"fas fa-exclamation-triangle\" style=\"margin-right: 0.25rem;\"></i>' + (action.error || 'Unknown error') + '';\n");
+        js.append("                            detailsHtml += '</td>';\n");
+        js.append("                        }\n");
+        js.append("                        \n");
+        js.append("                        // Screenshot display for FAIL actions\n");
+        js.append("                        if (action.screenshot && action.screenshot !== 'null' && action.screenshot !== 'undefined' && (action.actionType === 'FAIL' || action.type === 'FAIL')) {\n");
+        js.append("                            detailsHtml += '</tr><tr style=\"background-color: ' + rowBg + ';\">';\n");
+        js.append("                            detailsHtml += '<td colspan=\"5\" style=\"padding: 0.5rem;\">';\n");
+        js.append("                            detailsHtml += '<div style=\"margin-top: 0.5rem;\">';\n");
+        js.append("                            const screenshotId = testId + '_fail_' + index;\n");
+        js.append("                            detailsHtml += '<button onclick=\"toggleScreenshot(\\'' + screenshotId + '\\')\" style=\"background-color: #ef4444; color: white; padding: 0.25rem 0.5rem; border: none; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;\">';\n");
+        js.append("                            detailsHtml += '<i class=\"fas fa-camera\"></i> View Screenshot';\n");
+        js.append("                            detailsHtml += '</button>';\n");
+        js.append("                            detailsHtml += '<div id=\"' + screenshotId + '\" style=\"display: none; margin-top: 0.5rem;\">';\n");
+        js.append("                            // Check if screenshot is embedded or external file\n");
+        js.append("                            if (action.screenshot.startsWith('data:image')) {\n");
+        js.append("                                detailsHtml += '<img src=\"' + action.screenshot + '\" style=\"max-width: 100%; border: 1px solid #ccc; border-radius: 0.25rem;\" />';\n");
+        js.append("                            } else {\n");
+        js.append("                                // For external file paths, try to convert to relative path or show path info\n");
+        js.append("                                detailsHtml += '<div style=\"padding: 0.5rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.25rem;\">';\n");
+        js.append("                                detailsHtml += '<i class=\"fas fa-image\"></i> Screenshot saved at: <br/>';\n");
+        js.append("                                detailsHtml += '<code style=\"font-size: 0.75rem; word-break: break-all;\">' + action.screenshot + '</code>';\n");
+        js.append("                                detailsHtml += '</div>';\n");
+        js.append("                            }\n");
+        js.append("                            detailsHtml += '</div>';\n");
+        js.append("                            detailsHtml += '</div>';\n");
         js.append("                            detailsHtml += '</td>';\n");
         js.append("                        }\n");
         js.append("                        \n");
@@ -4242,6 +4270,13 @@ public class CSHtmlReportGenerator {
         js.append("}\n\n");
         
         // Toggle step details function
+        js.append("function toggleScreenshot(id) {\n");
+        js.append("    const screenshotDiv = document.getElementById(id);\n");
+        js.append("    if (screenshotDiv) {\n");
+        js.append("        screenshotDiv.style.display = screenshotDiv.style.display === 'none' ? 'block' : 'none';\n");
+        js.append("    }\n");
+        js.append("}\n");
+        js.append("\n");
         js.append("function toggleStepDetails(stepIndex) {\n");
         js.append("    const detailsDiv = document.getElementById('step-details-' + stepIndex);\n");
         js.append("    const toggleIcon = document.getElementById('step-toggle-' + stepIndex);\n");
@@ -5364,6 +5399,12 @@ public class CSHtmlReportGenerator {
             if (test.getScreenshotPath() != null && !test.getScreenshotPath().isEmpty()) {
                 String oldPath = test.getScreenshotPath();
                 
+                // CRITICAL: Skip processing if screenshot is already a base64 data URI (from soft-fail)
+                if (oldPath.startsWith("data:image/")) {
+                    logger.debug("Screenshot is already base64 data URI, skipping file processing for test: {}", test.getTestName());
+                    continue; // Skip this screenshot as it's already embedded
+                }
+                
                 // Handle both absolute and relative paths
                 File oldFile;
                 if (new File(oldPath).isAbsolute()) {
@@ -5460,10 +5501,22 @@ public class CSHtmlReportGenerator {
             // Process the screenshots list
             if (test.getScreenshots() != null && !test.getScreenshots().isEmpty()) {
                 for (CSTestResult.Screenshot screenshot : test.getScreenshots()) {
-                    String base64DataUri = CSImageUtils.imageToBase64DataUri(screenshot.getPath());
+                    String currentPath = screenshot.getPath();
+                    
+                    // CRITICAL FIX: Check if path is already a base64 data URI (from hard failure screenshots)
+                    if (currentPath != null && currentPath.startsWith("data:image/")) {
+                        logger.debug("Screenshot is already base64 data URI, skipping conversion: {}", screenshot.getName());
+                        // Already a base64 data URI, no conversion needed
+                        continue;
+                    }
+                    
+                    // Convert file path to base64 data URI (for soft fail screenshots)
+                    String base64DataUri = CSImageUtils.imageToBase64DataUri(currentPath);
                     if (base64DataUri != null) {
                         screenshot.setPath(base64DataUri);
                         logger.debug("Embedded screenshot: {}", screenshot.getName());
+                    } else {
+                        logger.warn("Failed to convert screenshot to base64: {}", currentPath);
                     }
                 }
             }

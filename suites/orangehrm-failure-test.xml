@@ -8,12 +8,12 @@
     <!-- Environment Configuration -->
     <parameter name="environment.name" value="qa"/>
     
-    <!-- BDD Configuration - Run multiple scenarios for better parallel distribution -->
+    <!-- Disable ADO integration to prevent hanging -->
+    <parameter name="cs.azure.devops.enabled" value="false"/>
+    
+    <!-- BDD Configuration -->
     <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature"/>
     <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
-    <parameter name="cs.bdd.cucumber.options" value=""/>
-    <parameter name="cs.bdd.tags" value=""/>
-    <parameter name="cs.bdd.exclude.tags" value=""/>
     
     <test name="OrangeHRM Failure Test">
         <classes>

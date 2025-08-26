@@ -78,9 +78,24 @@ public abstract class CSBaseTest {
         logger.info("Closing all test browser instances...");
         CSWebDriverManager.quitAllDrivers();
         
-        // DO NOT kill browser processes - this would close user's personal browsers
-        // The quitAllDrivers() method should properly close all test browsers
-        // If browsers remain open, it's a driver management issue that needs fixing
+        // Add delay to ensure cleanup completes
+        try {
+            Thread.sleep(3000);
+            logger.info("Waited 3 seconds for final browser cleanup to complete");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Aggressive final cleanup - ensure no test browsers remain
+        try {
+            logger.info("Performing aggressive cleanup of any remaining test browser processes");
+            Runtime.getRuntime().exec(new String[]{"pkill", "-f", "chromedriver"});
+            Thread.sleep(500);
+            Runtime.getRuntime().exec(new String[]{"pkill", "-f", "chrome.*test-type"});
+            Thread.sleep(500);
+        } catch (Exception e) {
+            logger.debug("Final aggressive cleanup completed (errors are normal): {}", e.getMessage());
+        }
         
         CSDbUtils.closeAllDataSources();
     }

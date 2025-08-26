@@ -86,6 +86,14 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
             testResult.setStatus(CSTestResult.Status.PASSED);
             testResult.setEndTime(LocalDateTime.now());
             testResult.setDuration(result.getEndMillis() - result.getStartMillis());
+            
+            // Pass the test result to report manager
+            try {
+                reportManager.addTestResult(testResult);
+                logger.info("Passed test result added to report manager: {}", testResult.getTestName());
+            } catch (Exception e) {
+                logger.error("Failed to add passed test result to report manager: {}", e.getMessage());
+            }
         }
         
         // Clean up
@@ -127,6 +135,16 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
             captureFailureArtifacts(result, testResult);
         }
         
+        // CRITICAL: Pass the test result to report manager
+        if (testResult != null) {
+            try {
+                reportManager.addTestResult(testResult);
+                logger.info("Test result with failure artifacts added to report manager: {}", testResult.getTestName());
+            } catch (Exception e) {
+                logger.error("Failed to add test result to report manager: {}", e.getMessage());
+            }
+        }
+        
         // Clean up
         cleanupAfterTest(result);
     }
@@ -143,6 +161,14 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
             testResult.setEndTime(LocalDateTime.now());
             if (result.getThrowable() != null) {
                 testResult.setErrorMessage(result.getThrowable().getMessage());
+            }
+            
+            // Pass the test result to report manager
+            try {
+                reportManager.addTestResult(testResult);
+                logger.info("Skipped test result added to report manager: {}", testResult.getTestName());
+            } catch (Exception e) {
+                logger.error("Failed to add skipped test result to report manager: {}", e.getMessage());
             }
         }
         
@@ -263,27 +289,76 @@ public class CSTestListener implements ITestListener, ISuiteListener, IInvokedMe
         try {
             // Take screenshot if browser is available
             if (CSWebDriverManager.getDriver() != null) {
-                // Use cs-reports as temporary location, will be moved during report generation
-                String screenshotDir = config.getProperty("cs.screenshot.directory", "cs-reports");
+                logger.info("Capturing failure artifacts for test: {}", result.getMethod().getMethodName());
                 
-                // Ensure directory exists
-                File dir = new File(screenshotDir);
-                if (!dir.exists()) {
-                    dir.mkdirs();
-                }
+                // Use temp directory like soft fails for consistency
+                String tempDir = System.getProperty("java.io.tmpdir") + "/cs-temp-screenshots";
+                new File(tempDir).mkdirs();
                 
-                String screenshotName = String.format("failure_%s_%s.png",
+                // Use unique timestamp and thread ID to avoid conflicts - make sure it's different from soft fail
+                String screenshotName = String.format("HARD_FAILURE_%s_Thread_%s_Time_%s.png",
                     result.getMethod().getMethodName(),
+                    Thread.currentThread().getId(),
                     System.currentTimeMillis());
-                String screenshotPath = screenshotDir + File.separator + screenshotName;
+                String screenshotPath = tempDir + File.separator + screenshotName;
+                
+                // Log current page information for debugging
+                try {
+                    String currentUrl = CSWebDriverManager.getDriver().getCurrentUrl();
+                    String pageTitle = CSWebDriverManager.getDriver().getTitle();
+                    logger.info("Capturing failure screenshot - URL: {}, Title: {}", currentUrl, pageTitle);
+                } catch (Exception e) {
+                    logger.warn("Could not get page details for failure screenshot: {}", e.getMessage());
+                }
                 
                 File screenshot = CSWebDriverManager.takeScreenshot(screenshotPath);
                 if (screenshot != null && screenshot.exists()) {
-                    testResult.addAttachment("Failure Screenshot", screenshot.getAbsolutePath());
-                    logger.info("Screenshot captured: {}", screenshotPath);
+                    logger.info("Failure screenshot captured: {}", screenshotPath);
+                    
+                    // Convert to optimized base64 like soft fails
+                    try {
+                        String base64Screenshot = null;
+                        boolean enableCompression = config.getBooleanProperty("cs.screenshot.compression.enabled", true);
+                        
+                        if (enableCompression) {
+                            int maxWidth = config.getIntegerProperty("cs.screenshot.max.width", 800);
+                            float quality = config.getFloatProperty("cs.screenshot.quality", 0.7f);
+                            
+                            // Import CSImageUtils for compression
+                            base64Screenshot = com.testforge.cs.utils.CSImageUtils.compressImageToBase64(
+                                screenshot.getAbsolutePath(), maxWidth, quality);
+                            
+                            if (base64Screenshot != null) {
+                                logger.info("Failure screenshot optimized for web display (size: {})", 
+                                           com.testforge.cs.utils.CSImageUtils.getBase64Size(base64Screenshot));
+                            }
+                        }
+                        
+                        // Fallback to uncompressed if compression failed
+                        if (base64Screenshot == null) {
+                            byte[] fileContent = java.nio.file.Files.readAllBytes(screenshot.toPath());
+                            base64Screenshot = "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(fileContent);
+                            logger.info("Failure screenshot converted to base64 (uncompressed)");
+                        }
+                        
+                        // Set the base64 screenshot on the test result
+                        testResult.setScreenshotPath(base64Screenshot);
+                        testResult.addAttachment("Failure Screenshot", base64Screenshot);
+                        logger.info("Base64 failure screenshot attached to test result");
+                        
+                    } catch (Exception e) {
+                        logger.error("Failed to convert failure screenshot to base64: {}", e.getMessage());
+                        // Fallback to file path
+                        testResult.addAttachment("Failure Screenshot", screenshot.getAbsolutePath());
+                        testResult.setScreenshotPath(screenshot.getAbsolutePath());
+                    }
+                } else {
+                    logger.warn("Failed to capture failure screenshot");
                 }
                 
                 // Page source capture is disabled - not needed for production reports
+            } else {
+                logger.warn("No WebDriver available for failure artifact capture");
             }
             
         } catch (Exception e) {

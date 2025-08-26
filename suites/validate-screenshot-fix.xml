@@ -1,0 +1,25 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Validate Screenshot Fix Suite" parallel="methods" thread-count="2">
+    
+    <!-- Browser Configuration -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="cs.browser.headless" value="true"/>
+    
+    <!-- Environment Configuration -->
+    <parameter name="environment.name" value="qa"/>
+    
+    <!-- Disable ADO integration to prevent hanging -->
+    <parameter name="cs.azure.devops.enabled" value="false"/>
+    
+    <!-- BDD Configuration -->
+    <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature"/>
+    <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
+    <parameter name="cs.bdd.scenario.tags" value="@deliberate-failure"/>
+    
+    <test name="Screenshot Fix Validation">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

@@ -155,6 +155,14 @@ public class CSBDDRunner extends CSBaseTest {
         // Call parent teardown - this handles screenshots and cleanup based on configuration
         super.teardownTest(method, result);
         
+        // Check if browser should be closed after each test
+        boolean reuseBrowser = config.getBooleanProperty("cs.browser.reuse.instance", true);
+        if (!reuseBrowser) {
+            // Clear ThreadLocal data when browser is not reused
+            logger.info("[{}] Browser reuse=false - clearing ThreadLocal data", threadName);
+            CSThreadLocalStepRegistry.clearThreadData();
+        }
+        
         // Parent teardown already handles browser lifecycle based on cs.browser.reuse.instance
         // No need for additional browser closing here - let the framework handle it
         // Browsers will be closed:
@@ -168,22 +176,45 @@ public class CSBDDRunner extends CSBaseTest {
         String threadName = Thread.currentThread().getName();
         logger.info("BDD Runner @AfterClass for thread: {}", threadName);
         
-        // Ensure any remaining browser for this thread is closed
-        try {
-            WebDriver existingDriver = CSWebDriverManager.getDriver();
-            if (existingDriver != null) {
-                logger.info("[{}] Closing remaining browser in @AfterClass", threadName);
-                CSWebDriverManager.quitDriver();
-                driver = null;
-            } else if (driver != null) {
-                // Fallback - if driver field is set but not in ThreadLocal
-                logger.info("[{}] Closing driver field in @AfterClass", threadName);
-                driver.quit();
-                driver = null;
+        // Clear ThreadLocal data for this thread
+        logger.info("[{}] Clearing ThreadLocal data in @AfterClass", threadName);
+        CSThreadLocalStepRegistry.clearThreadData();
+        
+        // Clear page manager ThreadLocal instances for this thread
+        if (isClassAvailable("com.testforge.cs.page.CSPageManager")) {
+            try {
+                Class<?> pageManagerClass = Class.forName("com.testforge.cs.page.CSPageManager");
+                pageManagerClass.getMethod("clearThreadPages").invoke(null);
+                logger.info("[{}] Cleared CSPageManager page instances", threadName);
+            } catch (Exception e) {
+                logger.debug("Could not clear CSPageManager: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            logger.warn("[{}] Error closing browser in @AfterClass: {}", threadName, e.getMessage());
         }
+        
+        // CRITICAL FIX: Close ALL browsers from ALL threads, not just current thread
+        logger.info("[{}] Closing ALL browsers from all threads", threadName);
+        CSWebDriverManager.quitAllDrivers();
+        driver = null;
+        
+        // Add delay to ensure cleanup completes before moving on
+        try {
+            Thread.sleep(2000);
+            logger.info("[{}] Waited 2 seconds for browser cleanup to complete", threadName);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        // Force final cleanup - kill any remaining chrome processes
+        try {
+            logger.info("[{}] Performing force cleanup of any remaining browser processes", threadName);
+            Runtime.getRuntime().exec(new String[]{"pkill", "-f", "chrome"});
+            Thread.sleep(1000);
+        } catch (Exception e) {
+            logger.debug("[{}] Force cleanup had issues (this is normal): {}", threadName, e.getMessage());
+        }
+        
+        // Call parent teardown to ensure proper cleanup chain
+        super.teardownClass();
         
         logger.info("Test execution summary for this class instance:");
         logger.info("  Total tests executed: {}", testCounter.get());
@@ -242,6 +273,9 @@ public class CSBDDRunner extends CSBaseTest {
                 if (!trimmedPackage.isEmpty()) {
                     logger.info("Scanning package: {}", trimmedPackage);
                     registry.scanPackage(trimmedPackage);
+                    
+                    // Also register with ThreadLocal registry for thread safety
+                    registerPackageWithThreadLocal(trimmedPackage);
                 }
             }
             
@@ -255,6 +289,33 @@ public class CSBDDRunner extends CSBaseTest {
             logger.error("Failed to register step definitions", e);
         }
     }
+    
+    /**
+     * Register step classes with ThreadLocal registry for thread safety
+     */
+    private void registerPackageWithThreadLocal(String packageName) {
+        try {
+            // Get step classes from the existing singleton registry instead of filesystem scanning
+            CSStepRegistry registry = CSStepRegistry.getInstance();
+            Map<Class<?>, Object> stepInstances = registry.getStepInstances();
+            
+            int registeredCount = 0;
+            for (Class<?> stepClass : stepInstances.keySet()) {
+                // Check if the class belongs to this package
+                if (stepClass.getPackage() != null && 
+                    stepClass.getPackage().getName().startsWith(packageName)) {
+                    CSThreadLocalStepRegistry.registerStepClass(stepClass);
+                    registeredCount++;
+                }
+            }
+            
+            logger.info("Registered {} step classes with ThreadLocal registry from package: {}", 
+                registeredCount, packageName);
+        } catch (Exception e) {
+            logger.error("Failed to register package {} with ThreadLocal registry", packageName, e);
+        }
+    }
+    
     
     /**
      * Discover all feature files in the specified path
@@ -597,13 +658,16 @@ public class CSBDDRunner extends CSBaseTest {
     }
     
     /**
-     * Injects @CSPageInjection annotated pages into all step definitions now that WebDriver is ready.
+     * Initialize ThreadLocal pages for this thread now that WebDriver is ready.
      */
     private void injectPagesIntoStepDefinitions(String threadName) {
         try {
-            logger.info("[{}] Injecting @CSPageInjection pages into step definitions", threadName);
+            logger.info("[{}] Initializing ThreadLocal pages for this thread", threadName);
             
-            // Get all registered step definition instances
+            // Initialize ThreadLocal step instances with page injection
+            CSThreadLocalStepRegistry.initializeThreadPages();
+            
+            // Also inject pages into old singleton step definitions for backward compatibility
             Map<Class<?>, Object> stepInstances = CSStepRegistry.getStepClassInstances();
             
             for (Map.Entry<Class<?>, Object> entry : stepInstances.entrySet()) {
@@ -611,14 +675,14 @@ public class CSBDDRunner extends CSBaseTest {
                 if (stepInstance instanceof CSStepDefinitions) {
                     CSStepDefinitions stepDef = (CSStepDefinitions) stepInstance;
                     stepDef.injectAnnotatedPages();
-                    logger.debug("[{}] Injected pages for: {}", threadName, entry.getKey().getSimpleName());
+                    logger.debug("[{}] Injected pages for singleton: {}", threadName, entry.getKey().getSimpleName());
                 }
             }
             
-            logger.info("[{}] Page injection completed for all step definitions", threadName);
+            logger.info("[{}] Page initialization completed for thread", threadName);
             
         } catch (Exception e) {
-            logger.warn("[{}] Failed to inject pages into step definitions: {}", threadName, e.getMessage());
+            logger.warn("[{}] Failed to initialize pages for thread: {}", threadName, e.getMessage());
             // Don't fail the test - just log the warning and continue
         }
     }
@@ -888,8 +952,25 @@ public class CSBDDRunner extends CSBaseTest {
                 logger.warn("No executed steps found in scenario context for: {}", scenarioName);
             }
             
-            testResult.setStatus(CSTestResult.Status.PASSED);
-            reportManager.logInfo("Scenario passed: " + scenarioName);
+            // Check if any steps have soft-failed
+            boolean hasFailedSteps = false;
+            if (executedSteps != null) {
+                hasFailedSteps = executedSteps.stream()
+                    .anyMatch(step -> {
+                        String status = (String) step.get("status");
+                        Boolean softFailed = (Boolean) step.get("softFailed");
+                        return "failed".equals(status) || (softFailed != null && softFailed);
+                    });
+            }
+            
+            if (hasFailedSteps) {
+                testResult.setStatus(CSTestResult.Status.FAILED);
+                testResult.setErrorMessage("Scenario contains soft-failed steps");
+                reportManager.logInfo("Scenario failed due to soft-failed steps: " + scenarioName);
+            } else {
+                testResult.setStatus(CSTestResult.Status.PASSED);
+                reportManager.logInfo("Scenario passed: " + scenarioName);
+            }
             
         } catch (Exception e) {
             testResult.setStatus(CSTestResult.Status.FAILED);
@@ -939,13 +1020,41 @@ public class CSBDDRunner extends CSBaseTest {
             // Try to capture screenshot on failure
             try {
                 if (CSWebDriverManager.getDriver() != null) {
+                    // ALWAYS capture a fresh screenshot for the actual test failure
+                    // Do NOT reuse soft-fail screenshots as they show different failure points
                     byte[] screenshot = CSScreenshotUtils.captureScreenshot(CSWebDriverManager.getDriver());
                     if (screenshot != null && screenshot.length > 0) {
-                        String screenshotName = "failure_executeBDDScenario_" + System.currentTimeMillis();
+                        String screenshotName = "ACTUAL_FAILURE_executeBDDScenario_" + System.currentTimeMillis();
                         String path = reportManager.attachScreenshot(screenshot, screenshotName);
                         if (path != null) {
                             testResult.setScreenshotPath(path);
-                            logger.info("Screenshot captured for failed scenario: {}", path);
+                            logger.info("Fresh screenshot captured for actual test failure: {}", path);
+                        }
+                    } else {
+                        logger.warn("Could not capture fresh screenshot for test failure, will check for soft-fail fallback");
+                        
+                        // Only as a fallback, if we can't capture a fresh screenshot, use soft-fail
+                        boolean foundSoftFailScreenshot = false;
+                        if (scenarioContext != null && executedSteps != null) {
+                            for (Map<String, Object> step : executedSteps) {
+                                @SuppressWarnings("unchecked")
+                                List<Map<String, Object>> actions = (List<Map<String, Object>>) step.get("actions");
+                                if (actions != null) {
+                                    for (Map<String, Object> action : actions) {
+                                        String actionType = (String) action.get("actionType");
+                                        String type = (String) action.get("type");
+                                        String fallbackScreenshot = (String) action.get("screenshot");
+                                            
+                                        if (("FAIL".equals(actionType) || "FAIL".equals(type)) && fallbackScreenshot != null && fallbackScreenshot.startsWith("data:image/")) {
+                                            testResult.setScreenshotPath(fallbackScreenshot);
+                                            foundSoftFailScreenshot = true;
+                                            logger.info("FALLBACK: Using soft-fail screenshot only because fresh capture failed: {}", scenarioName);
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (foundSoftFailScreenshot) break;
+                            }
                         }
                     }
                 }
@@ -1516,6 +1625,18 @@ public class CSBDDRunner extends CSBaseTest {
         Matcher testSuiteMatcher = TEST_SUITE_PATTERN.matcher(tag);
         if (testSuiteMatcher.find() && metadata.getTestSuiteId() == null) {
             metadata.setTestSuiteId(Integer.parseInt(testSuiteMatcher.group(1)));
+        }
+    }
+    
+    /**
+     * Check if a class is available on the classpath
+     */
+    private boolean isClassAvailable(String className) {
+        try {
+            Class.forName(className);
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
         }
     }
 }

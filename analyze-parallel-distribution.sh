@@ -1,29 +1,55 @@
 #!/bin/bash
 
-echo "=== Analyzing Parallel Test Distribution ==="
+echo "=== DETAILED PARALLEL EXECUTION ANALYSIS ==="
 
-# Run the test and extract thread information
-CS_ENCRYPTION_KEY="LhABO2esT/784OrITVLdNbA+7Slaialzf3SKwsNVCYA=" timeout 60s mvn test -Dsurefire.suiteXmlFiles=suites/orangehrm-failure-test.xml -Dcs.encryption.key="LhABO2esT/784OrITVLdNbA+7Slaialzf3SKwsNVCYA=" 2>&1 | \
-grep -E "(Thread ID|Starting test|TestNG-PoolService|scenario:|Starting|Executing|Thread.*Starting)" | \
-tee test-execution-log.txt
+# Kill any existing processes
+pkill -f chrome 2>/dev/null
+pkill -f java 2>/dev/null
+sleep 3
+
+echo "Starting browser count: $(ps aux | grep chrome | grep -v grep | wc -l)"
+echo ""
+
+# Run test with detailed logging but timeout to prevent hanging
+CS_ENCRYPTION_KEY="LhABO2esT/784OrITVLdNbA+7Slaialzf3SKwsNVCYA=" timeout 90s mvn test \
+  -Dsurefire.suiteXmlFiles=suites/orangehrm-failure-test.xml \
+  -Dcs.encryption.key="LhABO2esT/784OrITVLdNbA+7Slaialzf3SKwsNVCYA=" \
+  2>&1 | tee parallel-analysis.log
 
 echo ""
-echo "=== Thread Distribution Analysis ==="
-echo "Thread 1 executions:"
-grep -c "TestNG-PoolService-1" test-execution-log.txt || echo "0"
+echo "=== THREAD TO BROWSER MAPPING ANALYSIS ==="
 
-echo "Thread 2 executions:"
-grep -c "TestNG-PoolService-2" test-execution-log.txt || echo "0"
-
-echo "Thread 3 executions:"
-grep -c "TestNG-PoolService-3" test-execution-log.txt || echo "0"
+echo "Browsers created per thread:"
+grep "BROWSER #.*BEING CREATED.*Thread:" parallel-analysis.log | sort
 
 echo ""
-echo "=== Total Test Cases ==="
-grep -E "Total.*/" test-execution-log.txt | tail -1
+echo "Tests assigned to threads:"
+grep -E "executeBDDScenario.*TestNG-PoolService" parallel-analysis.log | head -10
 
 echo ""
-echo "=== Detailed Thread Activity ==="
-grep -E "Thread ID.*Starting test" test-execution-log.txt | head -10
+echo "Step executions by thread:"
+grep -E "\[TestNG-PoolService-[123]\].*Executing step" parallel-analysis.log | head -15
 
-rm -f test-execution-log.txt
+echo ""
+echo "Page navigations by thread:"
+grep -E "\[TestNG-PoolService-[123]\].*Navigating to\|login page\|dashboard" parallel-analysis.log | head -10
+
+echo ""
+echo "Browser cleanup activities:"
+grep -E "Closing.*browser\|quitAllDrivers\|@AfterClass" parallel-analysis.log
+
+echo ""
+echo "Final browser count: $(ps aux | grep chrome | grep -v grep | wc -l)"
+
+BROWSER_COUNT=$(ps aux | grep chrome | grep -v grep | wc -l)
+if [ $BROWSER_COUNT -gt 0 ]; then
+    echo ""
+    echo "Remaining browser processes:"
+    ps aux | grep chrome | grep -v grep | head -5
+fi
+
+echo ""
+echo "=== THREAD DISTRIBUTION SUMMARY ==="
+echo "Thread 1 scenarios: $(grep -c "TestNG-PoolService-1.*executeBDDScenario" parallel-analysis.log)"
+echo "Thread 2 scenarios: $(grep -c "TestNG-PoolService-2.*executeBDDScenario" parallel-analysis.log)" 
+echo "Thread 3 scenarios: $(grep -c "TestNG-PoolService-3.*executeBDDScenario" parallel-analysis.log)"

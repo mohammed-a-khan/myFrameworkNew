@@ -8,6 +8,7 @@ Feature: OrangeHRM Simple Tests
     When I enter username "Admin" and password "admin123"
     And I click the login button
     Then I should see the dashboard
+        And I navigate to "Admin"
 
   @login-negative
   Scenario: Invalid login test

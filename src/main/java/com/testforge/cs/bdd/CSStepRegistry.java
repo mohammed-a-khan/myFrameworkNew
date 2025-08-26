@@ -21,6 +21,9 @@ public class CSStepRegistry {
     
     private final Map<CSStepDefinition.StepType, List<CSStepDefinition>> stepDefinitions;
     private final Map<Class<?>, Object> stepClassInstances;
+    // CRITICAL FIX: Thread-local step instances for automatic page injection
+    // Each thread needs its own step instance to avoid field sharing issues
+    private final ThreadLocal<Map<Class<?>, Object>> threadLocalStepInstances;
     private final Map<String, List<CSStepDefinition>> stepsByPattern;
     private final Map<String, List<Method>> methodsByName;
     private final Set<String> validationErrors;
@@ -28,6 +31,7 @@ public class CSStepRegistry {
     private CSStepRegistry() {
         this.stepDefinitions = new ConcurrentHashMap<>();
         this.stepClassInstances = new ConcurrentHashMap<>();
+        this.threadLocalStepInstances = ThreadLocal.withInitial(ConcurrentHashMap::new);
         this.stepsByPattern = new ConcurrentHashMap<>();
         this.methodsByName = new ConcurrentHashMap<>();
         this.validationErrors = new HashSet<>();
@@ -253,6 +257,15 @@ public class CSStepRegistry {
         try {
             Object[] parameters = stepDef.extractParameters(stepText);
             logger.debug("Executing step: {} with {} parameters", stepText, parameters.length);
+            
+            // Set test context for step reporting before execution
+            CSScenarioRunner currentRunner = CSScenarioRunner.getCurrentInstance();
+            if (currentRunner != null && currentRunner.getCurrentTestResult() != null) {
+                com.testforge.cs.reporting.CSReportManager.setCurrentTestContext(
+                    currentRunner.getCurrentTestResult().getTestId()
+                );
+            }
+            
             stepDef.execute(parameters);
         } catch (Exception e) {
             throw new CSBddException("Failed to execute step: " + stepText, e);
@@ -284,6 +297,15 @@ public class CSStepRegistry {
         try {
             Object[] parameters = stepDef.extractParametersWithContext(stepText, context);
             logger.debug("Executing step: {} with {} parameters (context-aware)", stepText, parameters.length);
+            
+            // Set test context for step reporting before execution
+            CSScenarioRunner currentRunner = CSScenarioRunner.getCurrentInstance();
+            if (currentRunner != null && currentRunner.getCurrentTestResult() != null) {
+                com.testforge.cs.reporting.CSReportManager.setCurrentTestContext(
+                    currentRunner.getCurrentTestResult().getTestId()
+                );
+            }
+            
             stepDef.execute(parameters);
         } catch (Exception e) {
             throw new CSBddException("Failed to execute step: " + stepText, e);
@@ -520,5 +542,44 @@ public class CSStepRegistry {
             if (type == char.class) return '\0';
         }
         return null; // For reference types
+    }
+    
+    /**
+     * Get thread-local step instance for the given class.
+     * Each thread gets its own instance to ensure field isolation for automatic page injection.
+     */
+    public Object getThreadLocalStepInstance(Class<?> stepClass) {
+        Map<Class<?>, Object> threadInstances = threadLocalStepInstances.get();
+        
+        return threadInstances.computeIfAbsent(stepClass, clazz -> {
+            try {
+                String threadName = Thread.currentThread().getName();
+                logger.debug("[{}] Creating thread-local step instance for: {}", threadName, clazz.getSimpleName());
+                
+                Constructor<?> constructor = clazz.getDeclaredConstructor();
+                constructor.setAccessible(true);
+                Object instance = constructor.newInstance();
+                
+                logger.debug("[{}] Created thread-local step instance: {}", threadName, clazz.getSimpleName());
+                return instance;
+                
+            } catch (Exception e) {
+                logger.error("Failed to create thread-local step instance for: {}", clazz.getName(), e);
+                throw new RuntimeException("Failed to create thread-local step instance", e);
+            }
+        });
+    }
+    
+    /**
+     * Clear thread-local step instances for the current thread
+     */
+    public void clearThreadLocalInstances() {
+        Map<Class<?>, Object> threadInstances = threadLocalStepInstances.get();
+        if (!threadInstances.isEmpty()) {
+            String threadName = Thread.currentThread().getName();
+            logger.debug("[{}] Clearing {} thread-local step instances", threadName, threadInstances.size());
+            threadInstances.clear();
+        }
+        threadLocalStepInstances.remove();
     }
 }

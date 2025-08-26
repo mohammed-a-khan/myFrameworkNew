@@ -367,6 +367,28 @@ public class CSConfigManager {
     }
     
     /**
+     * Get float property
+     */
+    public float getFloatProperty(String key, float defaultValue) {
+        String value = getProperty(key);
+        if (value != null) {
+            try {
+                return Float.parseFloat(value);
+            } catch (NumberFormatException e) {
+                logger.warn("Invalid float value for property {}: {}", key, value);
+            }
+        }
+        return defaultValue;
+    }
+    
+    /**
+     * Get integer property (alias for getIntProperty)
+     */
+    public int getIntegerProperty(String key, int defaultValue) {
+        return getIntProperty(key, defaultValue);
+    }
+    
+    /**
      * Get long property
      */
     public long getLongProperty(String key, long defaultValue) {
