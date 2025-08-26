@@ -443,20 +443,44 @@ public class CSStepRegistry {
         String packagePath = packageName.replace('.', '/');
         
         try {
-            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-            java.util.Enumeration<java.net.URL> resources = classLoader.getResources(packagePath);
+            // Try multiple class loaders to handle different deployment scenarios
+            ClassLoader[] classLoaders = {
+                Thread.currentThread().getContextClassLoader(),
+                CSStepRegistry.class.getClassLoader(),
+                ClassLoader.getSystemClassLoader()
+            };
             
-            while (resources.hasMoreElements()) {
-                java.net.URL resource = resources.nextElement();
+            Set<java.net.URL> allResources = new HashSet<>();
+            
+            for (ClassLoader classLoader : classLoaders) {
+                if (classLoader != null) {
+                    try {
+                        java.util.Enumeration<java.net.URL> resources = classLoader.getResources(packagePath);
+                        while (resources.hasMoreElements()) {
+                            allResources.add(resources.nextElement());
+                        }
+                    } catch (Exception e) {
+                        logger.debug("Failed to get resources from classloader {}: {}", classLoader, e.getMessage());
+                    }
+                }
+            }
+            
+            logger.debug("Found {} resource locations for package: {}", allResources.size(), packageName);
+            
+            for (java.net.URL resource : allResources) {
+                logger.debug("Scanning resource: {} (protocol: {})", resource, resource.getProtocol());
                 
                 if (resource.getProtocol().equals("file")) {
-                    // Handle file system
+                    // Handle file system (consumer project's compiled classes)
                     classes.addAll(findClassesInDirectory(new java.io.File(resource.toURI()), packageName));
                 } else if (resource.getProtocol().equals("jar")) {
                     // Handle JAR files
                     classes.addAll(findClassesInJar(resource, packagePath));
                 }
             }
+            
+            logger.info("Found {} classes in package: {}", classes.size(), packageName);
+            
         } catch (Exception e) {
             logger.error("Error scanning package: {}", packageName, e);
         }
@@ -482,10 +506,36 @@ public class CSStepRegistry {
                 } else if (file.getName().endsWith(".class")) {
                     String className = packageName + '.' + file.getName().substring(0, file.getName().length() - 6);
                     try {
-                        Class<?> clazz = Class.forName(className);
-                        classes.add(clazz);
-                    } catch (ClassNotFoundException e) {
-                        logger.warn("Could not load class: {}", className);
+                        // Try multiple class loaders for loading the class
+                        Class<?> clazz = null;
+                        ClassNotFoundException lastException = null;
+                        
+                        ClassLoader[] classLoaders = {
+                            Thread.currentThread().getContextClassLoader(),
+                            CSStepRegistry.class.getClassLoader(),
+                            ClassLoader.getSystemClassLoader()
+                        };
+                        
+                        for (ClassLoader classLoader : classLoaders) {
+                            if (classLoader != null) {
+                                try {
+                                    clazz = Class.forName(className, false, classLoader);
+                                    break;
+                                } catch (ClassNotFoundException e) {
+                                    lastException = e;
+                                }
+                            }
+                        }
+                        
+                        if (clazz != null) {
+                            classes.add(clazz);
+                            logger.debug("Successfully loaded class: {}", className);
+                        } else {
+                            logger.warn("Could not load class {} with any classloader. Last error: {}", className, 
+                                lastException != null ? lastException.getMessage() : "unknown");
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error loading class {}: {}", className, e.getMessage());
                     }
                 }
             }
@@ -512,10 +562,36 @@ public class CSStepRegistry {
                     if (name.startsWith(packagePath) && name.endsWith(".class")) {
                         String className = name.replace('/', '.').substring(0, name.length() - 6);
                         try {
-                            Class<?> clazz = Class.forName(className);
-                            classes.add(clazz);
-                        } catch (ClassNotFoundException e) {
-                            logger.warn("Could not load class: {}", className);
+                            // Try multiple class loaders for loading the class
+                            Class<?> clazz = null;
+                            ClassNotFoundException lastException = null;
+                            
+                            ClassLoader[] classLoaders = {
+                                Thread.currentThread().getContextClassLoader(),
+                                CSStepRegistry.class.getClassLoader(),
+                                ClassLoader.getSystemClassLoader()
+                            };
+                            
+                            for (ClassLoader classLoader : classLoaders) {
+                                if (classLoader != null) {
+                                    try {
+                                        clazz = Class.forName(className, false, classLoader);
+                                        break;
+                                    } catch (ClassNotFoundException e) {
+                                        lastException = e;
+                                    }
+                                }
+                            }
+                            
+                            if (clazz != null) {
+                                classes.add(clazz);
+                                logger.debug("Successfully loaded class: {}", className);
+                            } else {
+                                logger.warn("Could not load class {} with any classloader. Last error: {}", className, 
+                                    lastException != null ? lastException.getMessage() : "unknown");
+                            }
+                        } catch (Exception e) {
+                            logger.warn("Error loading class {}: {}", className, e.getMessage());
                         }
                     }
                 }

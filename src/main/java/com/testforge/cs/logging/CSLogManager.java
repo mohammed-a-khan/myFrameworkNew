@@ -19,8 +19,34 @@ import java.nio.file.StandardCopyOption;
 public class CSLogManager {
     private static final Logger logger = LoggerFactory.getLogger(CSLogManager.class);
     private static String currentTestRunDirectory;
-    private static String originalLogFile = "target/test.log";
+    private static String originalLogFile = getLogFilePath();
     private static boolean logCaptureEnabled = false;
+    
+    /**
+     * Get the log file path, trying multiple possible locations
+     */
+    private static String getLogFilePath() {
+        // Try multiple possible log file locations
+        String[] possiblePaths = {
+            "target/test.log",                    // Default location
+            "./target/test.log",                  // Explicit relative path
+            System.getProperty("user.dir") + "/target/test.log",  // Absolute path from working directory
+            "test.log",                           // Fallback in current directory
+            "target/logs/cs-framework.log"        // Alternative location from config
+        };
+        
+        for (String path : possiblePaths) {
+            File logFile = new File(path);
+            if (logFile.exists() && logFile.canRead()) {
+                logger.debug("Found log file at: {}", logFile.getAbsolutePath());
+                return path;
+            }
+        }
+        
+        // If no existing log file found, return the default path
+        logger.debug("No existing log file found, using default: target/test.log");
+        return "target/test.log";
+    }
     
     /**
      * Initialize log capture for a specific test run directory
@@ -31,6 +57,18 @@ public class CSLogManager {
             currentTestRunDirectory = testRunDirectory;
             logCaptureEnabled = true;
             logger.info("Log capture initialized for test run: {}", testRunDirectory);
+            logger.info("Current working directory: {}", System.getProperty("user.dir"));
+            logger.info("Log file path resolved to: {}", originalLogFile);
+            
+            // Check if log file exists at initialization
+            File logFile = new File(originalLogFile);
+            if (logFile.exists()) {
+                logger.info("Log file found at initialization: {} (size: {} bytes)", 
+                    logFile.getAbsolutePath(), logFile.length());
+            } else {
+                logger.warn("Log file not found at initialization: {}", logFile.getAbsolutePath());
+            }
+            
         } catch (Exception e) {
             logger.warn("Failed to initialize log capture: {}", e.getMessage());
             logCaptureEnabled = false;
@@ -64,10 +102,36 @@ public class CSLogManager {
      */
     private static void copyLogToTestRun() {
         try {
-            File originalLog = new File(originalLogFile);
+            // Refresh log file path in case it changed during execution
+            String currentLogPath = getLogFilePath();
+            File originalLog = new File(currentLogPath);
+            
             if (!originalLog.exists()) {
-                logger.warn("Original log file not found: {}", originalLogFile);
-                return;
+                logger.warn("Original log file not found: {}. Trying alternative locations...", currentLogPath);
+                
+                // Try to find any log file in common locations
+                String[] fallbackPaths = {
+                    "target/surefire-reports/testng-results.xml.log",
+                    "target/surefire-reports/*.log",
+                    "*.log"
+                };
+                
+                boolean found = false;
+                for (String fallbackPath : fallbackPaths) {
+                    File fallbackLog = new File(fallbackPath);
+                    if (fallbackLog.exists()) {
+                        originalLog = fallbackLog;
+                        found = true;
+                        logger.info("Using fallback log file: {}", fallbackLog.getAbsolutePath());
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    logger.warn("No log file found in any location. Current working directory: {}", 
+                        System.getProperty("user.dir"));
+                    return;
+                }
             }
             
             // Create test run directory if it doesn't exist
@@ -136,5 +200,39 @@ public class CSLogManager {
      */
     public static String getCurrentTestRunDirectory() {
         return currentTestRunDirectory;
+    }
+    
+    /**
+     * Debug method to help troubleshoot log file location issues
+     */
+    public static void debugLogConfiguration() {
+        System.out.println("=== CSLogManager Debug Information ===");
+        System.out.println("Working Directory: " + System.getProperty("user.dir"));
+        System.out.println("Current Log File Path: " + originalLogFile);
+        System.out.println("Log Capture Enabled: " + logCaptureEnabled);
+        System.out.println("Test Run Directory: " + currentTestRunDirectory);
+        
+        // Check if log file exists
+        File logFile = new File(originalLogFile);
+        System.out.println("Log File Exists: " + logFile.exists());
+        System.out.println("Log File Absolute Path: " + logFile.getAbsolutePath());
+        System.out.println("Log File Can Read: " + logFile.canRead());
+        
+        // List target directory contents
+        File targetDir = new File("target");
+        if (targetDir.exists()) {
+            System.out.println("Target Directory Contents:");
+            File[] files = targetDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.getName().contains("log") || file.getName().endsWith(".log")) {
+                        System.out.println("  - " + file.getName() + " (exists: " + file.exists() + ")");
+                    }
+                }
+            }
+        } else {
+            System.out.println("Target directory does not exist");
+        }
+        System.out.println("===========================================");
     }
 }

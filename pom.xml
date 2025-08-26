@@ -36,6 +36,9 @@
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.3.1</maven-surefire-plugin.version>
         <maven-javadoc-plugin.version>3.8.0</maven-javadoc-plugin.version>
+        
+        <!-- Default test suite file -->
+        <suiteXmlFile>suites/orangehrm-failure-test.xml</suiteXmlFile>
     </properties>
 
     <dependencies>
