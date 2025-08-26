@@ -1,5 +1,5 @@
 <!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
-<suite name="Minimal Test Suite" parallel="classes" thread-count="1">
+<suite name="Test No Embed Screenshots Suite" parallel="methods" thread-count="2">
     
     <!-- Browser Configuration -->
     <parameter name="browser.name" value="chrome"/>
@@ -14,9 +14,12 @@
     <!-- BDD Configuration -->
     <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature"/>
     <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
-    <parameter name="cs.bdd.scenario.tags" value="@simple-login"/>
+    <parameter name="cs.bdd.scenario.tags" value="@deliberate-failure"/>
     
-    <test name="Minimal Test">
+    <!-- Disable embedded screenshots to test file-based approach -->
+    <parameter name="cs.report.screenshots.embed" value="false"/>
+    
+    <test name="No Embed Screenshots Test">
         <classes>
             <class name="com.testforge.cs.bdd.CSBDDRunner"/>
         </classes>

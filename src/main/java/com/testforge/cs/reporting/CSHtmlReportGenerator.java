@@ -7,6 +7,7 @@ import com.testforge.cs.environment.EnvironmentInfo;
 import com.testforge.cs.environment.EnvironmentInfoClasses.*;
 import com.testforge.cs.environment.SystemInfo;
 import com.testforge.cs.environment.JavaInfo;
+import com.testforge.cs.logging.CSLogManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +65,9 @@ public class CSHtmlReportGenerator {
                 runDir.mkdirs();
             }
             
+            // Initialize log capture for this test run
+            CSLogManager.initializeLogCapture(runPath);
+            
             // Create screenshots folder only if not embedding
             String screenshotsPath = runPath + File.separator + "screenshots";
             if (!embedScreenshots) {
@@ -102,11 +106,18 @@ public class CSHtmlReportGenerator {
             // Clean up temp screenshots directory after report generation
             cleanupTempScreenshots();
             
+            // Finalize log capture and copy logs to test run directory
+            CSLogManager.finalizeLogCapture();
+            
             logger.info("Enhanced V5 report generated: {}", filePath);
             return filePath;
             
         } catch (Exception e) {
             logger.error("Failed to generate enhanced report", e);
+            
+            // Ensure log capture is finalized even on failure
+            CSLogManager.finalizeLogCapture();
+            
             throw new RuntimeException("Failed to generate enhanced report", e);
         }
     }
