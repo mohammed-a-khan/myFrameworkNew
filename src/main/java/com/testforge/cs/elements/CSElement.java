@@ -236,67 +236,128 @@ public class CSElement {
             WebElement el = getElement();
             JavascriptExecutor js = (JavascriptExecutor) driver;
             
-            // Focus the element
-            js.executeScript("arguments[0].focus();", el);
-            
-            // Clear the field
-            js.executeScript("arguments[0].value = '';", el);
-            
-            // Set the new value
-            js.executeScript("arguments[0].value = arguments[1];", el, text);
-            
-            // Use the same cross-browser compatible event triggering
-            String eventScript = 
+            // Enhanced JavaScript that simulates actual keyboard events more realistically
+            String enhancedEventScript = 
                 "var element = arguments[0];" +
                 "var textValue = arguments[1];" +
                 "" +
-                "// Helper function to create and dispatch events (works in IE and modern browsers)" +
-                "function triggerEvent(element, eventName) {" +
+                "// Focus the element" +
+                "element.focus();" +
+                "" +
+                "// Helper to create keyboard events with proper key codes" +
+                "function createKeyboardEvent(eventType, keyChar) {" +
+                "    var keyCode = keyChar ? keyChar.charCodeAt(0) : 0;" +
                 "    var event;" +
-                "    if (typeof Event === 'function') {" +
+                "    " +
+                "    if (typeof KeyboardEvent === 'function') {" +
                 "        // Modern browsers" +
-                "        event = new Event(eventName, { bubbles: true, cancelable: true });" +
+                "        event = new KeyboardEvent(eventType, {" +
+                "            key: keyChar || ''," +
+                "            code: 'Key' + (keyChar ? keyChar.toUpperCase() : '')," +
+                "            keyCode: keyCode," +
+                "            which: keyCode," +
+                "            charCode: eventType === 'keypress' ? keyCode : 0," +
+                "            bubbles: true," +
+                "            cancelable: true," +
+                "            composed: true" +
+                "        });" +
                 "    } else if (document.createEvent) {" +
-                "        // Legacy browsers (IE)" +
-                "        event = document.createEvent('HTMLEvents');" +
-                "        event.initEvent(eventName, true, true);" +
-                "    } else if (element.fireEvent) {" +
-                "        // Very old IE" +
-                "        element.fireEvent('on' + eventName);" +
-                "        return;" +
+                "        // Legacy browsers" +
+                "        event = document.createEvent('KeyboardEvent');" +
+                "        if (event.initKeyboardEvent) {" +
+                "            // Chrome/Safari/Opera" +
+                "            event.initKeyboardEvent(eventType, true, true, window, keyChar, 0, '', false, '');" +
+                "        } else if (event.initKeyEvent) {" +
+                "            // Firefox" +
+                "            event.initKeyEvent(eventType, true, true, window, false, false, false, false, keyCode, keyCode);" +
+                "        }" +
+                "        // Set keyCode/which manually as some browsers don't set it properly" +
+                "        Object.defineProperty(event, 'keyCode', { value: keyCode, writable: true });" +
+                "        Object.defineProperty(event, 'which', { value: keyCode, writable: true });" +
+                "        Object.defineProperty(event, 'charCode', { value: eventType === 'keypress' ? keyCode : 0, writable: true });" +
                 "    }" +
-                "    element.dispatchEvent(event);" +
+                "    return event;" +
                 "}" +
                 "" +
-                "// Trigger all relevant events for clear and type" +
-                "triggerEvent(element, 'focus');" +
-                "triggerEvent(element, 'keydown');" +
-                "triggerEvent(element, 'keypress');" +
-                "triggerEvent(element, 'input');" +
-                "triggerEvent(element, 'keyup');" +
-                "triggerEvent(element, 'change');" +
-                "triggerEvent(element, 'blur');" +
+                "// Helper to trigger input event" +
+                "function triggerInputEvent(element) {" +
+                "    var event;" +
+                "    if (typeof InputEvent === 'function') {" +
+                "        event = new InputEvent('input', { bubbles: true, cancelable: true, composed: true });" +
+                "    } else if (typeof Event === 'function') {" +
+                "        event = new Event('input', { bubbles: true, cancelable: true });" +
+                "    } else if (document.createEvent) {" +
+                "        event = document.createEvent('HTMLEvents');" +
+                "        event.initEvent('input', true, true);" +
+                "    }" +
+                "    if (event) element.dispatchEvent(event);" +
+                "}" +
                 "" +
-                "// Handle React's synthetic events if React is present" +
-                "if (typeof React !== 'undefined' && element._valueTracker) {" +
+                "// Clear the field first" +
+                "element.value = '';" +
+                "triggerInputEvent(element);" +
+                "" +
+                "// Type each character with proper keyboard events" +
+                "for (var i = 0; i < textValue.length; i++) {" +
+                "    var char = textValue.charAt(i);" +
+                "    " +
+                "    // Trigger keydown" +
+                "    element.dispatchEvent(createKeyboardEvent('keydown', char));" +
+                "    " +
+                "    // Trigger keypress" +
+                "    element.dispatchEvent(createKeyboardEvent('keypress', char));" +
+                "    " +
+                "    // Update the value" +
+                "    element.value += char;" +
+                "    " +
+                "    // Trigger input event after each character" +
+                "    triggerInputEvent(element);" +
+                "    " +
+                "    // Trigger keyup" +
+                "    element.dispatchEvent(createKeyboardEvent('keyup', char));" +
+                "}" +
+                "" +
+                "// Final change event" +
+                "var changeEvent;" +
+                "if (typeof Event === 'function') {" +
+                "    changeEvent = new Event('change', { bubbles: true, cancelable: true });" +
+                "} else if (document.createEvent) {" +
+                "    changeEvent = document.createEvent('HTMLEvents');" +
+                "    changeEvent.initEvent('change', true, true);" +
+                "}" +
+                "if (changeEvent) element.dispatchEvent(changeEvent);" +
+                "" +
+                "// Handle React if present" +
+                "if (typeof React !== 'undefined') {" +
                 "    try {" +
                 "        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(" +
                 "            window.HTMLInputElement.prototype, 'value').set;" +
                 "        if (nativeInputValueSetter) {" +
                 "            nativeInputValueSetter.call(element, textValue);" +
+                "            triggerInputEvent(element);" +
                 "        }" +
-                "        triggerEvent(element, 'input');" +
-                "    } catch(e) {" +
-                "        // Fallback if React handling fails" +
-                "    }" +
+                "    } catch(e) {}" +
                 "}" +
                 "" +
-                "// Trigger jQuery events if jQuery is present" +
-                "if (typeof jQuery !== 'undefined' && jQuery(element).length) {" +
-                "    jQuery(element).trigger('change').trigger('input');" +
-                "}";
+                "// Handle Angular if present" + 
+                "if (typeof angular !== 'undefined') {" +
+                "    try {" +
+                "        angular.element(element).val(textValue).trigger('input').trigger('change');" +
+                "    } catch(e) {}" +
+                "}" +
+                "" +
+                "// Handle jQuery if present" +
+                "if (typeof jQuery !== 'undefined') {" +
+                "    try {" +
+                "        jQuery(element).val(textValue).trigger('input').trigger('change');" +
+                "    } catch(e) {}" +
+                "}" +
+                "" +
+                "// Blur and refocus to ensure validation runs" +
+                "element.blur();" +
+                "element.focus();";
             
-            js.executeScript(eventScript, el, text);
+            js.executeScript(enhancedEventScript, el, text);
             
             CSReportManager.pass("Cleared and typed text using JS '" + text + "' into " + description);
         });
@@ -594,6 +655,346 @@ public class CSElement {
         CSWaitUtils.waitForElementClickable(driver, locator, timeoutSeconds);
         CSReportManager.pass("Element " + description + " is clickable");
         return this;
+    }
+    
+    /**
+     * Wait for element to be present in DOM (doesn't have to be visible)
+     */
+    public CSElement waitForPresent() {
+        return waitForPresent(config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to be present with custom timeout
+     */
+    public CSElement waitForPresent(int timeoutSeconds) {
+        logger.debug("Wait for element to be present: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to be present (timeout: " + timeoutSeconds + "s)");
+        
+        try {
+            WebElement element = CSWaitUtils.waitForElementPresent(driver, locator, timeoutSeconds);
+            if (element != null) {
+                CSReportManager.pass("Element " + description + " is present");
+                this.element = element; // Cache the found element
+                return this;
+            }
+        } catch (Exception e) {
+            String errorMsg = String.format("Element '%s' not present after %d seconds", description, timeoutSeconds);
+            logger.error(errorMsg);
+            CSReportManager.fail(errorMsg);
+            throw new CSElementNotFoundException(errorMsg, timeoutSeconds);
+        }
+        
+        String errorMsg = String.format("Element '%s' not found after %d seconds", description, timeoutSeconds);
+        throw new CSElementNotFoundException(errorMsg, timeoutSeconds);
+    }
+    
+    /**
+     * Wait for element to be enabled
+     */
+    public CSElement waitForEnabled() {
+        return waitForEnabled(config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to be enabled with custom timeout
+     */
+    public CSElement waitForEnabled(int timeoutSeconds) {
+        logger.debug("Wait for element to be enabled: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to be enabled (timeout: " + timeoutSeconds + "s)");
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                WebElement el = getElement();
+                if (el != null && el.isEnabled()) {
+                    CSReportManager.pass("Element " + description + " is enabled");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element not enabled yet: {}", e.getMessage());
+            }
+            
+            try {
+                Thread.sleep(500); // Check every 500ms
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' not enabled after %d seconds", description, timeoutSeconds);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg, lastException);
+    }
+    
+    /**
+     * Wait for element to be disabled
+     */
+    public CSElement waitForDisabled() {
+        return waitForDisabled(config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to be disabled with custom timeout
+     */
+    public CSElement waitForDisabled(int timeoutSeconds) {
+        logger.debug("Wait for element to be disabled: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to be disabled (timeout: " + timeoutSeconds + "s)");
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                WebElement el = getElement();
+                if (el != null && !el.isEnabled()) {
+                    CSReportManager.pass("Element " + description + " is disabled");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element not disabled yet: {}", e.getMessage());
+            }
+            
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' not disabled after %d seconds", description, timeoutSeconds);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg, lastException);
+    }
+    
+    /**
+     * Wait for element to be selected (for checkboxes, radio buttons)
+     */
+    public CSElement waitForSelected() {
+        return waitForSelected(config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to be selected with custom timeout
+     */
+    public CSElement waitForSelected(int timeoutSeconds) {
+        logger.debug("Wait for element to be selected: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to be selected (timeout: " + timeoutSeconds + "s)");
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                WebElement el = getElement();
+                if (el != null && el.isSelected()) {
+                    CSReportManager.pass("Element " + description + " is selected");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element not selected yet: {}", e.getMessage());
+            }
+            
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' not selected after %d seconds", description, timeoutSeconds);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg, lastException);
+    }
+    
+    /**
+     * Wait for element to disappear/not be present
+     */
+    public CSElement waitForNotPresent() {
+        return waitForNotPresent(config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to disappear with custom timeout
+     */
+    public CSElement waitForNotPresent(int timeoutSeconds) {
+        logger.debug("Wait for element to disappear: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to disappear (timeout: " + timeoutSeconds + "s)");
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                driver.findElement(locator);
+                // Element still exists, wait and try again
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            } catch (NoSuchElementException e) {
+                // Element is gone - success!
+                CSReportManager.pass("Element " + description + " has disappeared");
+                this.element = null; // Clear cached element
+                return this;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' still present after %d seconds", description, timeoutSeconds);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg);
+    }
+    
+    /**
+     * Wait for element to be invisible (present in DOM but not visible)
+     */
+    public CSElement waitForInvisible() {
+        return waitForInvisible(config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to be invisible with custom timeout
+     */
+    public CSElement waitForInvisible(int timeoutSeconds) {
+        logger.debug("Wait for element to be invisible: {} (timeout: {}s)", description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to be invisible (timeout: " + timeoutSeconds + "s)");
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                WebElement el = driver.findElement(locator);
+                if (!el.isDisplayed()) {
+                    CSReportManager.pass("Element " + description + " is invisible");
+                    return this;
+                }
+            } catch (NoSuchElementException e) {
+                // Element not found - also counts as invisible
+                CSReportManager.pass("Element " + description + " is not present (invisible)");
+                return this;
+            } catch (Exception e) {
+                lastException = e;
+            }
+            
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' still visible after %d seconds", description, timeoutSeconds);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg, lastException);
+    }
+    
+    /**
+     * Wait for element to contain specific text
+     */
+    public CSElement waitForText(String expectedText) {
+        return waitForText(expectedText, config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element to contain text with custom timeout
+     */
+    public CSElement waitForText(String expectedText, int timeoutSeconds) {
+        logger.debug("Wait for element to contain text '{}': {} (timeout: {}s)", expectedText, description, timeoutSeconds);
+        CSReportManager.info("Waiting for " + description + " to contain text '" + expectedText + "' (timeout: " + timeoutSeconds + "s)");
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        String actualText = "";
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                actualText = getElement().getText();
+                if (actualText.contains(expectedText)) {
+                    CSReportManager.pass("Element " + description + " contains text '" + expectedText + "'");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Text not found yet: {}", e.getMessage());
+            }
+            
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' does not contain text '%s' after %d seconds. Actual text: '%s'", 
+            description, expectedText, timeoutSeconds, actualText);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg, lastException);
+    }
+    
+    /**
+     * Wait for element's attribute to have specific value
+     */
+    public CSElement waitForAttribute(String attributeName, String expectedValue) {
+        return waitForAttribute(attributeName, expectedValue, config.getInt("cs.wait.timeout", 30));
+    }
+    
+    /**
+     * Wait for element's attribute with custom timeout
+     */
+    public CSElement waitForAttribute(String attributeName, String expectedValue, int timeoutSeconds) {
+        logger.debug("Wait for element attribute '{}' to be '{}': {} (timeout: {}s)", 
+            attributeName, expectedValue, description, timeoutSeconds);
+        CSReportManager.info(String.format("Waiting for %s attribute '%s' to be '%s' (timeout: %ds)", 
+            description, attributeName, expectedValue, timeoutSeconds));
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        String actualValue = "";
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                actualValue = getElement().getAttribute(attributeName);
+                if (expectedValue.equals(actualValue)) {
+                    CSReportManager.pass(String.format("Element %s attribute '%s' has value '%s'", 
+                        description, attributeName, expectedValue));
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Attribute not matching yet: {}", e.getMessage());
+            }
+            
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        String errorMsg = String.format("Element '%s' attribute '%s' is not '%s' after %d seconds. Actual: '%s'", 
+            description, attributeName, expectedValue, timeoutSeconds, actualValue);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        throw new CSElementException(errorMsg, lastException);
     }
     
     /**
