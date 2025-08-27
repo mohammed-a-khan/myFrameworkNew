@@ -532,20 +532,39 @@ public class CSElement {
         logger.debug("Check if element is displayed: {} (timeout: {}s)", description, timeoutSeconds);
         CSReportManager.info("[INFO] Checking if " + description + " is displayed");
         
-        try {
-            WebElement element = CSWaitUtils.waitForElementPresent(driver, locator, timeoutSeconds);
-            boolean displayed = element != null && element.isDisplayed();
-            if (displayed) {
-                CSReportManager.pass("[PASS] " + description + " is displayed");
-            } else {
-                CSReportManager.fail("[FAIL] " + description + " is not displayed");
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                // Use getElement() which includes self-healing mechanism
+                WebElement element = getElement();
+                boolean displayed = element != null && element.isDisplayed();
+                if (displayed) {
+                    CSReportManager.pass("[PASS] " + description + " is displayed");
+                    return true;
+                } else {
+                    CSReportManager.info("[INFO] " + description + " is present but not displayed, retrying...");
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element check attempt failed: {}", e.getMessage());
             }
-            return displayed;
-        } catch (Exception e) {
-            logger.debug("Element not displayed: {}", e.getMessage());
-            CSReportManager.fail("[FAIL] " + description + " is not displayed: " + e.getMessage());
-            return false;
+            
+            // Wait before retrying
+            try {
+                Thread.sleep(500); // Check every 500ms
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
+        
+        // Timeout reached
+        String errorMsg = lastException != null ? lastException.getMessage() : "Element not found within timeout";
+        logger.debug("Element not displayed after {}s: {}", timeoutSeconds, errorMsg);
+        CSReportManager.fail("[FAIL] " + description + " is not displayed after " + timeoutSeconds + "s: " + errorMsg);
+        return false;
     }
     
     /**
@@ -634,9 +653,36 @@ public class CSElement {
     public CSElement waitForVisible(int timeoutSeconds) {
         logger.debug("Wait for element to be visible: {}", description);
         CSReportManager.info("Waiting for " + description + " to be visible (timeout: " + timeoutSeconds + "s)");
-        CSWaitUtils.waitForElementVisible(driver, locator, timeoutSeconds);
-        CSReportManager.pass("Element " + description + " is visible");
-        return this;
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                // Use getElement() which includes self-healing mechanism
+                WebElement element = getElement();
+                if (element != null && element.isDisplayed()) {
+                    CSReportManager.pass("Element " + description + " is visible");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element visibility check failed: {}", e.getMessage());
+            }
+            
+            // Wait before retrying
+            try {
+                Thread.sleep(500); // Check every 500ms
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        // Timeout reached
+        String errorMsg = lastException != null ? lastException.getMessage() : "Element not visible within timeout";
+        CSReportManager.fail("Element " + description + " not visible after " + timeoutSeconds + "s: " + errorMsg);
+        throw new RuntimeException("Element " + description + " not visible within " + timeoutSeconds + " seconds: " + errorMsg);
     }
     
     /**
@@ -652,9 +698,36 @@ public class CSElement {
     public CSElement waitForClickable(int timeoutSeconds) {
         logger.debug("Wait for element to be clickable: {}", description);
         CSReportManager.info("Waiting for " + description + " to be clickable (timeout: " + timeoutSeconds + "s)");
-        CSWaitUtils.waitForElementClickable(driver, locator, timeoutSeconds);
-        CSReportManager.pass("Element " + description + " is clickable");
-        return this;
+        
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                // Use getElement() which includes self-healing mechanism
+                WebElement element = getElement();
+                if (element != null && element.isDisplayed() && element.isEnabled()) {
+                    CSReportManager.pass("Element " + description + " is clickable");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element clickable check failed: {}", e.getMessage());
+            }
+            
+            // Wait before retrying
+            try {
+                Thread.sleep(500); // Check every 500ms
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        // Timeout reached
+        String errorMsg = lastException != null ? lastException.getMessage() : "Element not clickable within timeout";
+        CSReportManager.fail("Element " + description + " not clickable after " + timeoutSeconds + "s: " + errorMsg);
+        throw new RuntimeException("Element " + description + " not clickable within " + timeoutSeconds + " seconds: " + errorMsg);
     }
     
     /**
@@ -671,22 +744,39 @@ public class CSElement {
         logger.debug("Wait for element to be present: {} (timeout: {}s)", description, timeoutSeconds);
         CSReportManager.info("Waiting for " + description + " to be present (timeout: " + timeoutSeconds + "s)");
         
-        try {
-            WebElement element = CSWaitUtils.waitForElementPresent(driver, locator, timeoutSeconds);
-            if (element != null) {
-                CSReportManager.pass("Element " + description + " is present");
-                this.element = element; // Cache the found element
-                return this;
+        long endTime = System.currentTimeMillis() + (timeoutSeconds * 1000);
+        Exception lastException = null;
+        
+        while (System.currentTimeMillis() < endTime) {
+            try {
+                // Use getElement() which includes self-healing mechanism
+                WebElement element = getElement();
+                if (element != null) {
+                    CSReportManager.pass("Element " + description + " is present");
+                    return this;
+                }
+            } catch (Exception e) {
+                lastException = e;
+                logger.debug("Element presence check failed: {}", e.getMessage());
             }
-        } catch (Exception e) {
-            String errorMsg = String.format("Element '%s' not present after %d seconds", description, timeoutSeconds);
-            logger.error(errorMsg);
-            CSReportManager.fail(errorMsg);
-            throw new CSElementNotFoundException(errorMsg, timeoutSeconds);
+            
+            try {
+                Thread.sleep(500); // Wait 500ms before retrying
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
         }
         
-        String errorMsg = String.format("Element '%s' not found after %d seconds", description, timeoutSeconds);
-        throw new CSElementNotFoundException(errorMsg, timeoutSeconds);
+        String errorMsg = String.format("Element '%s' not present after %d seconds", description, timeoutSeconds);
+        logger.error(errorMsg);
+        CSReportManager.fail(errorMsg);
+        
+        if (lastException != null) {
+            throw new CSElementNotFoundException(errorMsg + ". Last error: " + lastException.getMessage(), timeoutSeconds);
+        } else {
+            throw new CSElementNotFoundException(errorMsg, timeoutSeconds);
+        }
     }
     
     /**
