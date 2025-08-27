@@ -88,6 +88,274 @@ public class CSElement {
     }
     
     /**
+     * Type text slowly character by character - for React/Angular/Vue inputs
+     * This method helps with inputs that have JavaScript event listeners
+     */
+    public CSElement typeSlowly(String text) {
+        return typeSlowly(text, 100); // Default 100ms delay between characters
+    }
+    
+    /**
+     * Type text slowly with custom delay between characters
+     */
+    public CSElement typeSlowly(String text, int delayMs) {
+        logger.debug("Type slowly '{}' into element: {} (delay: {}ms)", text, description, delayMs);
+        CSReportManager.info("Typing slowly '" + text + "' into " + description);
+        
+        return performActionWithValue("typeSlowly", text, () -> {
+            WebElement el = getElement();
+            for (char c : text.toCharArray()) {
+                el.sendKeys(String.valueOf(c));
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            CSReportManager.pass("Typed text slowly '" + text + "' into " + description);
+        });
+    }
+    
+    /**
+     * Clear and type text slowly - for problematic React/Angular/Vue inputs
+     */
+    public CSElement clearAndTypeSlowly(String text) {
+        return clearAndTypeSlowly(text, 100);
+    }
+    
+    /**
+     * Clear and type text slowly with custom delay
+     */
+    public CSElement clearAndTypeSlowly(String text, int delayMs) {
+        logger.debug("Clear and type slowly '{}' into element: {} (delay: {}ms)", text, description, delayMs);
+        CSReportManager.info("Clearing and typing slowly '" + text + "' into " + description);
+        
+        return performActionWithValue("clearAndTypeSlowly", text, () -> {
+            WebElement el = getElement();
+            el.clear();
+            try {
+                Thread.sleep(200); // Wait after clear
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
+            for (char c : text.toCharArray()) {
+                el.sendKeys(String.valueOf(c));
+                try {
+                    Thread.sleep(delayMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            CSReportManager.pass("Cleared and typed text slowly '" + text + "' into " + description);
+        });
+    }
+    
+    /**
+     * Type text using JavaScript - bypasses all event listeners
+     */
+    public CSElement typeUsingJS(String text) {
+        logger.debug("Type using JS '{}' into element: {}", text, description);
+        CSReportManager.info("Typing using JavaScript '" + text + "' into " + description);
+        
+        return performActionWithValue("typeUsingJS", text, () -> {
+            WebElement el = getElement();
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+            
+            // Focus the element first
+            js.executeScript("arguments[0].focus();", el);
+            
+            // Set the value
+            js.executeScript("arguments[0].value = arguments[1];", el, text);
+            
+            // Trigger comprehensive set of events - compatible with both legacy and modern browsers
+            String eventScript = 
+                "var element = arguments[0];" +
+                "var textValue = arguments[1];" +
+                "" +
+                "// Helper function to create and dispatch events (works in IE and modern browsers)" +
+                "function triggerEvent(element, eventName) {" +
+                "    var event;" +
+                "    if (typeof Event === 'function') {" +
+                "        // Modern browsers" +
+                "        event = new Event(eventName, { bubbles: true, cancelable: true });" +
+                "    } else if (document.createEvent) {" +
+                "        // Legacy browsers (IE)" +
+                "        event = document.createEvent('HTMLEvents');" +
+                "        event.initEvent(eventName, true, true);" +
+                "    } else if (element.fireEvent) {" +
+                "        // Very old IE" +
+                "        element.fireEvent('on' + eventName);" +
+                "        return;" +
+                "    }" +
+                "    element.dispatchEvent(event);" +
+                "}" +
+                "" +
+                "// Trigger all relevant events" +
+                "triggerEvent(element, 'focus');" +
+                "triggerEvent(element, 'keydown');" +
+                "triggerEvent(element, 'keypress');" +
+                "triggerEvent(element, 'input');" +
+                "triggerEvent(element, 'keyup');" +
+                "triggerEvent(element, 'change');" +
+                "triggerEvent(element, 'blur');" +
+                "" +
+                "// Handle React's synthetic events if React is present" +
+                "if (typeof React !== 'undefined' && element._valueTracker) {" +
+                "    try {" +
+                "        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(" +
+                "            window.HTMLInputElement.prototype, 'value').set;" +
+                "        if (nativeInputValueSetter) {" +
+                "            nativeInputValueSetter.call(element, textValue);" +
+                "        }" +
+                "        triggerEvent(element, 'input');" +
+                "    } catch(e) {" +
+                "        // Fallback if React handling fails" +
+                "    }" +
+                "}" +
+                "" +
+                "// Trigger jQuery events if jQuery is present" +
+                "if (typeof jQuery !== 'undefined' && jQuery(element).length) {" +
+                "    jQuery(element).trigger('change').trigger('input');" +
+                "}";
+            
+            js.executeScript(eventScript, el, text);
+            
+            CSReportManager.pass("Typed text using JS '" + text + "' into " + description);
+        });
+    }
+    
+    /**
+     * Clear and type using JavaScript
+     */
+    public CSElement clearAndTypeUsingJS(String text) {
+        logger.debug("Clear and type using JS '{}' into element: {}", text, description);
+        CSReportManager.info("Clearing and typing using JavaScript '" + text + "' into " + description);
+        
+        return performActionWithValue("clearAndTypeUsingJS", text, () -> {
+            WebElement el = getElement();
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+            
+            // Focus the element
+            js.executeScript("arguments[0].focus();", el);
+            
+            // Clear the field
+            js.executeScript("arguments[0].value = '';", el);
+            
+            // Set the new value
+            js.executeScript("arguments[0].value = arguments[1];", el, text);
+            
+            // Use the same cross-browser compatible event triggering
+            String eventScript = 
+                "var element = arguments[0];" +
+                "var textValue = arguments[1];" +
+                "" +
+                "// Helper function to create and dispatch events (works in IE and modern browsers)" +
+                "function triggerEvent(element, eventName) {" +
+                "    var event;" +
+                "    if (typeof Event === 'function') {" +
+                "        // Modern browsers" +
+                "        event = new Event(eventName, { bubbles: true, cancelable: true });" +
+                "    } else if (document.createEvent) {" +
+                "        // Legacy browsers (IE)" +
+                "        event = document.createEvent('HTMLEvents');" +
+                "        event.initEvent(eventName, true, true);" +
+                "    } else if (element.fireEvent) {" +
+                "        // Very old IE" +
+                "        element.fireEvent('on' + eventName);" +
+                "        return;" +
+                "    }" +
+                "    element.dispatchEvent(event);" +
+                "}" +
+                "" +
+                "// Trigger all relevant events for clear and type" +
+                "triggerEvent(element, 'focus');" +
+                "triggerEvent(element, 'keydown');" +
+                "triggerEvent(element, 'keypress');" +
+                "triggerEvent(element, 'input');" +
+                "triggerEvent(element, 'keyup');" +
+                "triggerEvent(element, 'change');" +
+                "triggerEvent(element, 'blur');" +
+                "" +
+                "// Handle React's synthetic events if React is present" +
+                "if (typeof React !== 'undefined' && element._valueTracker) {" +
+                "    try {" +
+                "        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(" +
+                "            window.HTMLInputElement.prototype, 'value').set;" +
+                "        if (nativeInputValueSetter) {" +
+                "            nativeInputValueSetter.call(element, textValue);" +
+                "        }" +
+                "        triggerEvent(element, 'input');" +
+                "    } catch(e) {" +
+                "        // Fallback if React handling fails" +
+                "    }" +
+                "}" +
+                "" +
+                "// Trigger jQuery events if jQuery is present" +
+                "if (typeof jQuery !== 'undefined' && jQuery(element).length) {" +
+                "    jQuery(element).trigger('change').trigger('input');" +
+                "}";
+            
+            js.executeScript(eventScript, el, text);
+            
+            CSReportManager.pass("Cleared and typed text using JS '" + text + "' into " + description);
+        });
+    }
+    
+    /**
+     * Clear and type with Actions API - alternative approach
+     */
+    public CSElement clearAndTypeWithActions(String text) {
+        logger.debug("Clear and type with Actions '{}' into element: {}", text, description);
+        CSReportManager.info("Clearing and typing with Actions '" + text + "' into " + description);
+        
+        return performActionWithValue("clearAndTypeWithActions", text, () -> {
+            WebElement el = getElement();
+            Actions actions = new Actions(driver);
+            
+            // Click to focus
+            actions.click(el).perform();
+            
+            // Select all and delete
+            actions.keyDown(Keys.CONTROL)
+                   .sendKeys("a")
+                   .keyUp(Keys.CONTROL)
+                   .sendKeys(Keys.DELETE)
+                   .perform();
+            
+            // Type the text
+            actions.sendKeys(text).perform();
+            
+            CSReportManager.pass("Cleared and typed with Actions '" + text + "' into " + description);
+        });
+    }
+    
+    /**
+     * Clear field using multiple methods - for stubborn fields
+     */
+    public CSElement clearCompletely() {
+        logger.debug("Clear completely element: {}", description);
+        CSReportManager.info("Clearing completely " + description);
+        
+        return performAction("clearCompletely", () -> {
+            WebElement el = getElement();
+            
+            // Method 1: Standard clear
+            el.clear();
+            
+            // Method 2: Select all and delete
+            el.sendKeys(Keys.chord(Keys.CONTROL, "a"));
+            el.sendKeys(Keys.DELETE);
+            
+            // Method 3: JavaScript clear
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+            js.executeScript("arguments[0].value = '';", el);
+            
+            CSReportManager.pass("Cleared completely " + description);
+        });
+    }
+    
+    /**
      * Click element
      */
     public CSElement click() {
@@ -658,6 +926,12 @@ public class CSElement {
             case "click": return "Click element";
             case "clearAndType": return "Clear and type text";
             case "type": return "Type text";
+            case "typeSlowly": return "Type text slowly";
+            case "clearAndTypeSlowly": return "Clear and type text slowly";
+            case "typeUsingJS": return "Type text using JavaScript";
+            case "clearAndTypeUsingJS": return "Clear and type using JavaScript";
+            case "clearAndTypeWithActions": return "Clear and type with Actions";
+            case "clearCompletely": return "Clear field completely";
             case "clear": return "Clear field";
             case "submit": return "Submit form";
             case "selectByText": return "Select by text";
