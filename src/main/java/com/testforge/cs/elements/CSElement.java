@@ -1221,16 +1221,25 @@ public class CSElement {
                 // Try alternative locators
                 if (alternativeLocators != null && alternativeLocators.length > 0) {
                     logger.debug("Trying {} alternative locators", alternativeLocators.length);
-                    for (String altLocator : alternativeLocators) {
+                    for (int i = 0; i < alternativeLocators.length; i++) {
+                        String altLocator = alternativeLocators[i];
                         try {
                             By by = parseLocator(altLocator);
-                            logger.debug("Trying alternative locator: {}", altLocator);
-                            return driver.findElement(by);
-                        } catch (NoSuchElementException altE) {
-                            logger.debug("Alternative locator failed: {}", altLocator);
+                            logger.debug("Trying alternative locator {}/{}: {} -> {}", 
+                                i + 1, alternativeLocators.length, altLocator, by);
+                            WebElement foundElement = driver.findElement(by);
+                            logger.info("Self-healing SUCCESS: Element '{}' found using alternative locator {}: {} -> {}", 
+                                description, i + 1, altLocator, by);
+                            reportManager.logInfo("Self-healing activated: Found element using alternative locator: " + by);
+                            return foundElement;
+                        } catch (Exception altE) {
+                            logger.debug("Alternative locator {}/{} failed: {} ({})", 
+                                i + 1, alternativeLocators.length, altLocator, altE.getMessage());
                             // Continue to next alternative
                         }
                     }
+                    logger.debug("All {} alternative locators failed for element: {}", 
+                        alternativeLocators.length, description);
                 }
                 
                 attempts++;
@@ -1264,6 +1273,28 @@ public class CSElement {
      * Parse locator string to By object
      */
     private By parseLocator(String locatorString) {
+        // Handle By.toString() format (e.g., "By.xpath: //table[@id='resultsTable']")
+        if (locatorString.startsWith("By.")) {
+            if (locatorString.startsWith("By.xpath: ")) {
+                return By.xpath(locatorString.substring("By.xpath: ".length()));
+            } else if (locatorString.startsWith("By.id: ")) {
+                return By.id(locatorString.substring("By.id: ".length()));
+            } else if (locatorString.startsWith("By.cssSelector: ")) {
+                return By.cssSelector(locatorString.substring("By.cssSelector: ".length()));
+            } else if (locatorString.startsWith("By.name: ")) {
+                return By.name(locatorString.substring("By.name: ".length()));
+            } else if (locatorString.startsWith("By.className: ")) {
+                return By.className(locatorString.substring("By.className: ".length()));
+            } else if (locatorString.startsWith("By.tagName: ")) {
+                return By.tagName(locatorString.substring("By.tagName: ".length()));
+            } else if (locatorString.startsWith("By.linkText: ")) {
+                return By.linkText(locatorString.substring("By.linkText: ".length()));
+            } else if (locatorString.startsWith("By.partialLinkText: ")) {
+                return By.partialLinkText(locatorString.substring("By.partialLinkText: ".length()));
+            }
+        }
+        
+        // Handle standard format (e.g., "xpath://table[@id='resultsTable']")
         if (locatorString.contains(":")) {
             String[] parts = locatorString.split(":", 2);
             String type = parts[0].toLowerCase();

@@ -165,7 +165,7 @@ public class CSLocatorResolver {
     /**
      * Parse locator string in format "type:value"
      */
-    private By parseLocatorString(String locatorString) {
+    public By parseLocatorString(String locatorString) {
         if (locatorString.contains(":")) {
             String[] parts = locatorString.split(":", 2);
             String type = parts[0].toLowerCase();
