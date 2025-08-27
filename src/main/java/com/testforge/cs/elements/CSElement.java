@@ -226,13 +226,15 @@ public class CSElement {
         logger.debug("Check if element is displayed: {}", description);
         CSReportManager.info("Checking if " + description + " is displayed");
         
-        // Perform the function with single attempt since findElement already has retries
-        // This avoids multiplicative wait times (3 function retries x 3 findElement retries = 9 total attempts)
-        return performFunctionSingleAttempt("isDisplayed", () -> {
+        try {
             boolean displayed = getElement().isDisplayed();
             CSReportManager.info("Element " + description + " is " + (displayed ? "displayed" : "not displayed"));
             return displayed;
-        });
+        } catch (Exception e) {
+            logger.debug("Element not displayed: {}", e.getMessage());
+            CSReportManager.info("Element " + description + " is not displayed: " + e.getMessage());
+            return false;
+        }
     }
     
     /**
@@ -242,11 +244,15 @@ public class CSElement {
         logger.debug("Check if element is enabled: {}", description);
         CSReportManager.info("Checking if " + description + " is enabled");
         
-        return performFunction("isEnabled", () -> {
+        try {
             boolean enabled = getElement().isEnabled();
             CSReportManager.info("Element " + description + " is " + (enabled ? "enabled" : "disabled"));
             return enabled;
-        });
+        } catch (Exception e) {
+            logger.debug("Element not enabled/found: {}", e.getMessage());
+            CSReportManager.info("Element " + description + " is not enabled/found: " + e.getMessage());
+            return false;
+        }
     }
     
     /**
@@ -256,11 +262,15 @@ public class CSElement {
         logger.debug("Check if element is selected: {}", description);
         CSReportManager.info("Checking if " + description + " is selected");
         
-        return performFunction("isSelected", () -> {
+        try {
             boolean selected = getElement().isSelected();
             CSReportManager.info("Element " + description + " is " + (selected ? "selected" : "not selected"));
             return selected;
-        });
+        } catch (Exception e) {
+            logger.debug("Element not selected/found: {}", e.getMessage());
+            CSReportManager.info("Element " + description + " is not selected/found: " + e.getMessage());
+            return false;
+        }
     }
     
     /**

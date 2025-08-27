@@ -253,12 +253,12 @@ public abstract class CSBasePage {
      */
     public CSElement findElement(String locatorString, String description) {
         By by = parseLocatorString(locatorString);
-        return new CSElement(driver, by, description);
+        return new CSElement(getDriver(), by, description);
     }
     
     public WebElement findElement(By by, int timeoutSeconds) {
         try {
-            WebDriverWait customWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+            WebDriverWait customWait = new WebDriverWait(getDriver(), Duration.ofSeconds(timeoutSeconds));
             return customWait.until(ExpectedConditions.presenceOfElementLocated(by));
         } catch (TimeoutException e) {
             throw new CSElementNotFoundException(by.toString(), timeoutSeconds, e);
@@ -287,7 +287,7 @@ public abstract class CSBasePage {
     }
     
     public void waitForPageLoad(int timeoutSeconds) {
-        WebDriverWait pageWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        WebDriverWait pageWait = new WebDriverWait(getDriver(), Duration.ofSeconds(timeoutSeconds));
         pageWait.until(driver -> getJsExecutor().executeScript("return document.readyState").equals("complete"));
     }
     
@@ -296,7 +296,7 @@ public abstract class CSBasePage {
     }
     
     public void waitForAjax(int timeoutSeconds) {
-        WebDriverWait ajaxWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        WebDriverWait ajaxWait = new WebDriverWait(getDriver(), Duration.ofSeconds(timeoutSeconds));
         ajaxWait.until(driver -> {
             Boolean jQueryDone = (Boolean) getJsExecutor().executeScript("return jQuery.active == 0");
             Boolean jsReady = (Boolean) getJsExecutor().executeScript("return document.readyState == 'complete'");
@@ -306,51 +306,51 @@ public abstract class CSBasePage {
     
     public void waitForTitle(String title) {
         CSReportManager.addAction("wait", "Wait for title", title);
-        wait.until(ExpectedConditions.titleIs(title));
+        getWait().until(ExpectedConditions.titleIs(title));
     }
     
     public void waitForTitleContains(String titlePart) {
         CSReportManager.addAction("wait", "Wait for title to contain", titlePart);
-        wait.until(ExpectedConditions.titleContains(titlePart));
+        getWait().until(ExpectedConditions.titleContains(titlePart));
     }
     
     public void waitForUrl(String url) {
         CSReportManager.addAction("wait", "Wait for URL", url);
-        wait.until(ExpectedConditions.urlToBe(url));
+        getWait().until(ExpectedConditions.urlToBe(url));
     }
     
     public void waitForUrlContains(String urlPart) {
         CSReportManager.addAction("wait", "Wait for URL to contain", urlPart);
-        wait.until(ExpectedConditions.urlContains(urlPart));
+        getWait().until(ExpectedConditions.urlContains(urlPart));
     }
     
     public void waitForElementVisible(By by) {
-        wait.until(ExpectedConditions.visibilityOfElementLocated(by));
+        getWait().until(ExpectedConditions.visibilityOfElementLocated(by));
     }
     
     public void waitForElementInvisible(By by) {
-        wait.until(ExpectedConditions.invisibilityOfElementLocated(by));
+        getWait().until(ExpectedConditions.invisibilityOfElementLocated(by));
     }
     
     public void waitForElementClickable(By by) {
-        wait.until(ExpectedConditions.elementToBeClickable(by));
+        getWait().until(ExpectedConditions.elementToBeClickable(by));
     }
     
     public void waitForTextPresent(By by, String text) {
-        wait.until(ExpectedConditions.textToBePresentInElementLocated(by, text));
+        getWait().until(ExpectedConditions.textToBePresentInElementLocated(by, text));
     }
     
     public void waitForAttributeValue(By by, String attribute, String value) {
-        wait.until(ExpectedConditions.attributeToBe(by, attribute, value));
+        getWait().until(ExpectedConditions.attributeToBe(by, attribute, value));
     }
     
     public <T> T waitForCondition(Function<WebDriver, T> condition, int timeoutSeconds) {
-        WebDriverWait customWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        WebDriverWait customWait = new WebDriverWait(getDriver(), Duration.ofSeconds(timeoutSeconds));
         return customWait.until(condition);
     }
     
     public void waitForJavaScriptCondition(String script, int timeoutSeconds) {
-        WebDriverWait jsWait = new WebDriverWait(driver, Duration.ofSeconds(timeoutSeconds));
+        WebDriverWait jsWait = new WebDriverWait(getDriver(), Duration.ofSeconds(timeoutSeconds));
         jsWait.until(driver -> (Boolean) getJsExecutor().executeScript(script));
     }
     
