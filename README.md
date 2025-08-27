@@ -28,7 +28,7 @@ A comprehensive Selenium automation framework with native BDD support, Azure Dev
 
 ### Core Framework
 - **CSBaseTest & CSBasePage**: Base classes providing common functionality
-- **CSElement**: Enhanced WebElement wrapper with 30+ convenience methods
+- **CSElement**: Enhanced WebElement wrapper with 50+ convenience methods including advanced typing and wait strategies
 - **CSDriverFactory**: Automatic WebDriver management with WebDriverManager
 - **CSThreadContext**: Thread-safe execution for parallel testing
 - **Custom Annotations**: @CSTest, @CSPage, @CSLocator, @CSRetry, @CSDataSource, @CSStep
@@ -106,6 +106,132 @@ mvn clean install -DskipTests
 mvn test -Dsurefire.suiteXmlFiles=suites/orangehrm-simple-only.xml
 ```
 
+## CSElement - Enhanced WebElement Wrapper
+
+### Overview
+CSElement is the core of the framework, providing an enhanced WebElement wrapper with 50+ convenience methods, advanced typing strategies, comprehensive wait methods, and built-in reporting.
+
+### Key Features
+- **Advanced Typing Methods**: Multiple strategies for handling problematic input fields
+- **Comprehensive Wait Methods**: Extensive wait conditions with custom timeouts
+- **Built-in Retry Logic**: Automatic retry on failures with configurable attempts
+- **Screenshot Capture**: Automatic screenshots on failures
+- **Cross-browser Event Support**: JavaScript event triggering compatible with legacy and modern browsers
+- **Framework Integration**: Works seamlessly with React, Angular, Vue, and jQuery
+
+### Enhanced Typing Methods
+
+CSElement provides multiple typing strategies to handle different types of input fields:
+
+```java
+// Standard typing methods
+element.type("text");                    // Basic typing
+element.clearAndType("text");           // Clear then type
+
+// For problematic React/Angular/Vue inputs
+element.typeSlowly("text");             // Types character by character with delay
+element.clearAndTypeSlowly("text");     // Clear then type slowly
+element.typeSlowly("text", 150);        // Custom delay between characters
+
+// For fields with complex validation or formatting
+element.typeUsingJS("text");            // JavaScript typing with comprehensive events
+element.clearAndTypeUsingJS("text");    // Clear and type using JavaScript
+
+// Alternative approaches
+element.clearAndTypeWithActions("text"); // Using Selenium Actions API
+element.clearCompletely();              // Multi-method field clearing
+```
+
+### Comprehensive Wait Methods
+
+CSElement provides extensive wait conditions with both default (30s) and custom timeouts:
+
+```java
+// Element presence
+element.waitForPresent();               // Wait for element in DOM
+element.waitForPresent(10);             // Custom timeout
+element.waitForNotPresent();            // Wait for element to disappear
+
+// Element state
+element.waitForEnabled();               // Wait for element to be enabled
+element.waitForEnabled(5);              // Custom timeout
+element.waitForDisabled();              // Wait for element to be disabled
+element.waitForSelected();              // Wait for checkbox/radio selection
+
+// Element visibility
+element.waitForVisible();               // Wait for element to be visible
+element.waitForInvisible();             // Wait for element to be invisible
+element.waitForClickable();             // Wait for element to be clickable
+
+// Element content
+element.waitForText("Success");         // Wait for specific text
+element.waitForText("Success", 10);     // Custom timeout
+element.waitForAttribute("class", "active"); // Wait for attribute value
+
+// Method chaining
+element.waitForPresent(10)
+       .waitForVisible(5)
+       .waitForEnabled(5)
+       .clearAndTypeSlowly("text")
+       .waitForAttribute("value", "text")
+       .click();
+```
+
+### Boolean Methods (Exception-Safe)
+
+All boolean methods return true/false instead of throwing exceptions:
+
+```java
+if (element.isDisplayed()) {            // Safe - returns false if not found
+    element.click();
+}
+
+if (element.isEnabled()) {              // Safe - returns false if not found
+    element.type("text");
+}
+
+if (element.isPresent()) {              // Safe - returns false if not found
+    String text = element.getText();
+}
+
+if (element.exists()) {                 // Safe - returns false if not found
+    element.waitForVisible();
+}
+```
+
+### Direct Selenium Access
+
+You can access the underlying WebElement when needed:
+
+```java
+CSElement element = page.findElement("id:username", "Username field");
+
+// Direct Selenium access (loses framework benefits)
+WebElement webElement = element.getElement();
+webElement.sendKeys("text");
+
+// Recommended: Use CSElement methods for full framework benefits
+element.clearAndTypeSlowly("text");     // Includes retry, reporting, screenshots
+```
+
+### Exception Handling and Reporting
+
+CSElement automatically handles exceptions and provides detailed reporting:
+
+```java
+// Automatic exception handling with retries
+element.waitForPresent(10);             // Throws CSElementNotFoundException after timeout
+
+// Detailed error messages
+element.waitForText("Expected", 5);     // Shows actual vs expected text in error
+
+// Automatic screenshot capture on failures
+element.click();                        // Screenshots captured automatically on failure
+
+// Built-in reporting integration
+element.clearAndType("text");           // Automatically logged to reports
+```
+
 ## Page Object Model
 
 ### Creating Page Objects
@@ -146,13 +272,23 @@ public class LoginPageNew extends CSBasePage {
     
     public void enterUsername(String username) {
         logger.info("Entering username: {}", username);
-        usernameField.waitForVisible();
-        usernameField.clearAndType(username);
+        usernameField.waitForVisible()
+                    .waitForEnabled(5)
+                    .clearAndTypeSlowly(username);  // Uses slow typing for reliability
     }
     
     public void enterPassword(String password) {
         logger.info("Entering password");
-        passwordField.clearAndType(password);
+        passwordField.waitForPresent()
+                    .clearAndType(password);
+    }
+    
+    public boolean isLoginButtonEnabled() {
+        return loginButton.isEnabled();  // Safe boolean method
+    }
+    
+    public void waitForLoginButtonToBeEnabled() {
+        loginButton.waitForEnabled(10);  // Wait up to 10 seconds
     }
     
     public void clickLogin() {
@@ -595,20 +731,50 @@ java -cp "target/classes:target/test-classes:target/dependency/*" \
    - Check browser version compatibility
    - Verify PATH settings
 
-2. **Azure DevOps Integration**
+2. **Input Field Issues**
+   - If only last character is typed, use `element.clearAndTypeSlowly("text")`
+   - For React/Angular/Vue fields, try `element.typeUsingJS("text")`
+   - If element.type() fails, use `element.clearAndTypeWithActions("text")`
+   - For stubborn fields, use `element.clearCompletely()` then type
+
+3. **Element Wait Issues**
+   - Use `element.waitForPresent(timeout)` before interacting
+   - For button enabling after form validation, use `element.waitForEnabled(timeout)`
+   - For dynamic content, use `element.waitForText("expected text", timeout)`
+   - Chain waits: `element.waitForPresent().waitForVisible().click()`
+
+4. **Boolean Method Issues**
+   - All boolean methods (isDisplayed, isEnabled, etc.) return false instead of throwing exceptions
+   - Use `if (element.isPresent())` instead of try-catch blocks
+   - Boolean methods are safe to use in conditions without exception handling
+
+5. **Azure DevOps Integration**
    - Ensure PAT token has correct permissions
    - Verify test case IDs exist in ADO
    - Check network connectivity
 
-3. **Certificate Authentication**
+6. **Certificate Authentication**
    - Verify certificate files exist in `src/test/resources/certificates/`
    - Check certificate password is correct
    - Ensure certificate is not expired
 
-4. **BDD Tests**
+7. **BDD Tests**
    - Verify feature files exist in specified path
    - Check step definitions package is correct
    - Ensure CSBDDRunner is used in suite file
+
+### CSElement Method Selection Guide
+
+| Problem | Recommended Solution |
+|---------|---------------------|
+| Only last character typed | `element.clearAndTypeSlowly("text")` |
+| Input validation prevents typing | `element.typeUsingJS("text")` |
+| Button doesn't enable after form fill | `element.waitForEnabled(timeout)` |
+| Element not found exceptions | Use `element.isPresent()` first |
+| React/Angular controlled inputs | `element.clearAndTypeSlowly("text")` |
+| Field won't clear properly | `element.clearCompletely()` |
+| Element appears after delay | `element.waitForPresent(timeout)` |
+| Text appears dynamically | `element.waitForText("expected", timeout)` |
 
 ## Support
 

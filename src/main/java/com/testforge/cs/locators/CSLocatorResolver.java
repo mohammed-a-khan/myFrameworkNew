@@ -94,42 +94,60 @@ public class CSLocatorResolver {
      * Resolve locator from annotation
      */
     public By resolveLocator(CSLocator annotation) {
+        logger.debug("Resolving locator from annotation:");
+        logger.debug("  locatorKey: '{}'", annotation.locatorKey());
+        logger.debug("  xpath: '{}'", annotation.xpath());
+        logger.debug("  id: '{}'", annotation.id());
+        logger.debug("  css: '{}'", annotation.css());
+        logger.debug("  value: '{}'", annotation.value());
+        
         // First check if locatorKey is specified
         if (!annotation.locatorKey().isEmpty()) {
+            logger.debug("Using locatorKey: {}", annotation.locatorKey());
             return resolveFromRepository(annotation.locatorKey());
         }
         
         // Check direct locator specifications
         if (!annotation.id().isEmpty()) {
+            logger.debug("Using id: {}", annotation.id());
             return By.id(annotation.id());
         }
         if (!annotation.name().isEmpty()) {
+            logger.debug("Using name: {}", annotation.name());
             return By.name(annotation.name());
         }
         if (!annotation.css().isEmpty()) {
+            logger.debug("Using css: {}", annotation.css());
             return By.cssSelector(annotation.css());
         }
         if (!annotation.xpath().isEmpty()) {
+            logger.debug("Using xpath: {}", annotation.xpath());
             return By.xpath(annotation.xpath());
         }
         if (!annotation.className().isEmpty()) {
+            logger.debug("Using className: {}", annotation.className());
             return By.className(annotation.className());
         }
         if (!annotation.tagName().isEmpty()) {
+            logger.debug("Using tagName: {}", annotation.tagName());
             return By.tagName(annotation.tagName());
         }
         if (!annotation.linkText().isEmpty()) {
+            logger.debug("Using linkText: {}", annotation.linkText());
             return By.linkText(annotation.linkText());
         }
         if (!annotation.partialLinkText().isEmpty()) {
+            logger.debug("Using partialLinkText: {}", annotation.partialLinkText());
             return By.partialLinkText(annotation.partialLinkText());
         }
         
         // Check value attribute
         if (!annotation.value().isEmpty()) {
+            logger.debug("Using value: {}", annotation.value());
             return parseLocatorString(annotation.value());
         }
         
+        logger.error("No valid locator specified in annotation");
         throw new CSLocatorException("No valid locator specified in annotation");
     }
     
@@ -195,19 +213,29 @@ public class CSLocatorResolver {
     public List<By> getAlternativeLocators(CSLocator annotation) {
         List<By> alternatives = new ArrayList<>();
         
+        logger.debug("Processing {} alternative locators", annotation.alternativeLocators().length);
+        
         for (String altLocator : annotation.alternativeLocators()) {
+            logger.debug("Processing alternative locator: '{}'", altLocator);
             try {
                 // Check if it's a repository key or direct locator
                 if (objectRepository.containsKey(altLocator)) {
-                    alternatives.add(resolveFromRepository(altLocator));
+                    logger.debug("Found '{}' in object repository", altLocator);
+                    By resolved = resolveFromRepository(altLocator);
+                    alternatives.add(resolved);
+                    logger.debug("Resolved to: {}", resolved);
                 } else {
-                    alternatives.add(parseLocatorString(altLocator));
+                    logger.debug("'{}' not in repository, treating as direct locator", altLocator);
+                    By parsed = parseLocatorString(altLocator);
+                    alternatives.add(parsed);
+                    logger.debug("Parsed to: {}", parsed);
                 }
             } catch (Exception e) {
-                logger.warn("Failed to parse alternative locator: {}", altLocator, e);
+                logger.warn("Failed to parse alternative locator '{}': {}", altLocator, e.getMessage());
             }
         }
         
+        logger.debug("Total alternative locators resolved: {}", alternatives.size());
         return alternatives;
     }
     

@@ -5,6 +5,7 @@ import com.testforge.cs.annotations.CSPage;
 import com.testforge.cs.core.CSBasePage;
 import com.testforge.cs.driver.CSWebDriverManager;
 import com.testforge.cs.elements.CSElement;
+import com.testforge.cs.elements.CSElementList;
 import com.testforge.cs.elements.CSSelfHealingLocator;
 import com.testforge.cs.exceptions.CSPageInitializationException;
 import org.openqa.selenium.WebDriver;
@@ -97,9 +98,10 @@ public class CSPageFactory {
                     Type[] typeArgs = paramType.getActualTypeArguments();
                     
                     if (typeArgs.length > 0 && typeArgs[0] == CSElement.class) {
-                        // Initialize as empty list - will be populated on demand
-                        field.set(page, new ArrayList<CSElement>());
-                        logger.debug("Initialized List<CSElement> field: {}", fieldName);
+                        // Initialize with CSElementList that populates on-demand
+                        CSElementList elementList = new CSElementList(annotation, fieldName);
+                        field.set(page, elementList);
+                        logger.debug("Initialized List<CSElement> field with CSElementList: {}", fieldName);
                     }
                 }
             }
