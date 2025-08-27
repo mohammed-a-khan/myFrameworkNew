@@ -41,52 +41,71 @@ public class CSLocatorResolver {
     
     /**
      * Load object repository from properties file
+     * Uses configuration value cs.object.repository.paths instead of hardcoded paths
      */
     private void loadObjectRepository() {
-        // Try multiple locations for the object repository
-        String[] repositoryFiles = {
-            "object-repositories/object-repository.properties",
-            "resources/config/object-repository.properties",
-            "locators.properties",
-            "object-repository.properties",
-            "config/object-repository.properties",
-            "src/test/resources/locators.properties"
-        };
+        // Get configured paths from CSConfigManager
+        CSConfigManager configManager = CSConfigManager.getInstance();
+        String repositoryPaths = configManager.getString("cs.object.repository.paths", "object-repositories");
         
+        // Split comma-separated paths
+        String[] paths = repositoryPaths.split(",");
         boolean loaded = false;
-        for (String repositoryFile : repositoryFiles) {
-            // Try as classpath resource
-            try (InputStream is = getClass().getClassLoader().getResourceAsStream(repositoryFile)) {
-                if (is != null) {
-                    Properties props = new Properties();
-                    props.load(is);
-                    props.forEach((key, value) -> objectRepository.put(key.toString(), value.toString()));
-                    logger.info("Loaded {} locators from object repository: {}", objectRepository.size(), repositoryFile);
-                    loaded = true;
-                    break;
-                }
-            } catch (Exception e) {
-                // Try next file
-            }
+        
+        for (String path : paths) {
+            path = path.trim();
+            if (path.isEmpty()) continue;
             
-            // Also try as file path
-            try {
-                File file = new File(repositoryFile);
-                if (file.exists()) {
-                    Properties props = new Properties();
-                    props.load(new FileInputStream(file));
-                    props.forEach((key, value) -> objectRepository.put(key.toString(), value.toString()));
-                    logger.info("Loaded {} locators from object repository file: {}", objectRepository.size(), repositoryFile);
-                    loaded = true;
-                    break;
+            File pathFile = new File(path);
+            
+            // Check if it's a directory
+            if (pathFile.isDirectory()) {
+                // Load all .properties files from directory
+                File[] propFiles = pathFile.listFiles((dir, name) -> name.endsWith(".properties"));
+                if (propFiles != null) {
+                    for (File file : propFiles) {
+                        try (FileInputStream fis = new FileInputStream(file)) {
+                            Properties props = new Properties();
+                            props.load(fis);
+                            props.forEach((key, value) -> objectRepository.put(key.toString(), value.toString()));
+                            logger.info("Loaded {} locators from: {}", props.size(), file.getPath());
+                            loaded = true;
+                        } catch (Exception e) {
+                            logger.warn("Failed to load repository file: {}", file.getPath(), e);
+                        }
+                    }
                 }
-            } catch (Exception e) {
-                // Try next file
+            } else if (pathFile.isFile() && path.endsWith(".properties")) {
+                // Load single file
+                try (FileInputStream fis = new FileInputStream(pathFile)) {
+                    Properties props = new Properties();
+                    props.load(fis);
+                    props.forEach((key, value) -> objectRepository.put(key.toString(), value.toString()));
+                    logger.info("Loaded {} locators from: {}", props.size(), pathFile.getPath());
+                    loaded = true;
+                } catch (Exception e) {
+                    logger.warn("Failed to load repository file: {}", pathFile.getPath(), e);
+                }
+            } else {
+                // Try as classpath resource
+                try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
+                    if (is != null) {
+                        Properties props = new Properties();
+                        props.load(is);
+                        props.forEach((key, value) -> objectRepository.put(key.toString(), value.toString()));
+                        logger.info("Loaded {} locators from classpath: {}", props.size(), path);
+                        loaded = true;
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to load repository from classpath: {}", path, e);
+                }
             }
         }
         
-        if (!loaded) {
-            logger.warn("Object repository file not found in any location");
+        if (loaded) {
+            logger.info("Total locators loaded in CSLocatorResolver: {}", objectRepository.size());
+        } else {
+            logger.warn("No object repository files loaded from paths: {}", repositoryPaths);
         }
     }
     
