@@ -697,22 +697,10 @@ public class CSBDDRunner extends CSBaseTest {
         String threadName = Thread.currentThread().getName();
         long threadId = Thread.currentThread().getId();
         
-        // Add thread synchronization to prevent race conditions during parallel startup
-        int testNumber;
-        synchronized (CSBDDRunner.class) {
-            testNumber = testCounter.incrementAndGet();
-            logger.info("[{}] Thread ID {} Starting test #{} for scenario: {} with data: {}", 
-                threadName, threadId, testNumber, scenario.getName(), scenario.getDataRow());
-            
-            // Small stagger for thread initialization to prevent browser creation conflicts
-            if (testNumber <= 2) {
-                try {
-                    Thread.sleep(500 * testNumber); // 500ms for first test, 1000ms for second
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
+        // Thread-safe counter increment without synchronization bottleneck
+        int testNumber = testCounter.incrementAndGet();
+        logger.info("[{}] Thread ID {} Starting test #{} for scenario: {} with data: {}", 
+            threadName, threadId, testNumber, scenario.getName(), scenario.getDataRow());
         
         logger.info("[ISOLATION] Feature file: {}, Feature name: {}, Scenario: {}", 
             featureFile, feature.getName(), scenario.getName());

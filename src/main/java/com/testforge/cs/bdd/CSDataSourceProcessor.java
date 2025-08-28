@@ -342,23 +342,67 @@ public class CSDataSourceProcessor {
                 Map<String, Object> rootObject = CSJsonUtils.jsonToMap(jsonContent);
                 logger.debug("Root JSON object keys: {}", rootObject.keySet());
                 
-                // Extract the array from the path (simplified for $.testData[*])
-                if (jsonPath.equals("$.testData[*]") && rootObject.containsKey("testData")) {
-                    Object testDataObj = rootObject.get("testData");
-                    if (testDataObj instanceof List) {
+                // Enhanced JSON path support for nested structures
+                if (jsonPath.startsWith("$.") && jsonPath.endsWith("[*]")) {
+                    String pathWithoutPrefix = jsonPath.substring(2, jsonPath.length() - 3); // Remove $. and [*]
+                    logger.debug("Processing JSON path: {} -> extracting path: {}", jsonPath, pathWithoutPrefix);
+                    
+                    // Navigate through the JSON structure following the path
+                    Object current = rootObject;
+                    String[] pathParts = pathWithoutPrefix.split("\\.");
+                    
+                    logger.debug("Navigating through path parts: {}", Arrays.toString(pathParts));
+                    
+                    for (int i = 0; i < pathParts.length; i++) {
+                        String part = pathParts[i];
+                        logger.debug("Processing path part [{}]: '{}', current object type: {}", 
+                                   i, part, current != null ? current.getClass().getSimpleName() : "null");
+                        
+                        if (current instanceof Map) {
+                            Map<?, ?> currentMap = (Map<?, ?>) current;
+                            if (currentMap.containsKey(part)) {
+                                current = currentMap.get(part);
+                                logger.debug("Found key '{}', navigating to: {}", 
+                                           part, current != null ? current.getClass().getSimpleName() : "null");
+                            } else {
+                                logger.error("Key '{}' not found in JSON object. Available keys: {}", 
+                                           part, currentMap.keySet());
+                                throw new CSBddException("JSON path key not found: " + part + " in path: " + jsonPath);
+                            }
+                        } else {
+                            logger.error("Expected Map object at path part '{}' but found: {}", 
+                                       part, current != null ? current.getClass().getSimpleName() : "null");
+                            throw new CSBddException("Invalid JSON path structure at: " + part + " in path: " + jsonPath);
+                        }
+                    }
+                    
+                    // At this point, current should be a List (array)
+                    if (current instanceof List) {
+                        List<?> dataList = (List<?>) current;
                         jsonData = new ArrayList<>();
-                        for (Object item : (List<?>) testDataObj) {
+                        
+                        logger.debug("Found array with {} items at path: {}", dataList.size(), jsonPath);
+                        
+                        for (Object item : dataList) {
                             if (item instanceof Map) {
                                 jsonData.add((Map<String, Object>) item);
+                            } else {
+                                logger.warn("Array item is not a Map object, skipping: {}", 
+                                          item != null ? item.getClass().getSimpleName() : "null");
                             }
                         }
-                        logger.debug("Extracted {} records from JSON path {}", jsonData.size(), jsonPath);
+                        
+                        logger.info("Successfully extracted {} records from JSON path: {}", jsonData.size(), jsonPath);
                     } else {
-                        throw new CSBddException("JSON path " + jsonPath + " does not point to an array");
+                        logger.error("JSON path does not point to an array. Found: {}", 
+                                   current != null ? current.getClass().getSimpleName() : "null");
+                        throw new CSBddException("JSON path " + jsonPath + " does not point to an array. Found: " + 
+                                               (current != null ? current.getClass().getSimpleName() : "null"));
                     }
                 } else {
-                    // For other paths, fall back to trying to parse as array
-                    throw new CSBddException("Unsupported JSON path: " + jsonPath);
+                    logger.error("Unsupported JSON path format: {}", jsonPath);
+                    throw new CSBddException("Unsupported JSON path format: " + jsonPath + 
+                                           ". Supported format: $.path.to.array[*]");
                 }
             } catch (Exception e) {
                 logger.error("Failed to extract data using JSON path: {}", jsonPath, e);

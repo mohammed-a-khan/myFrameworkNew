@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suite name="Enhanced Reporting Demo" parallel="none" thread-count="1">
+    
+    <parameter name="browser.name" value="chrome" />
+    <parameter name="environment.name" value="qa" />
+    <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature" />
+    <parameter name="cs.bdd.tags" value="@simple" />
+    <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs" />
+    <parameter name="cs.azure.devops.enabled" value="false" />
+    <parameter name="cs.browser.headless" value="false" />
+    
+    <!-- Enhanced Reporting Configuration -->
+    <parameter name="cs.report.generate.latest.html" value="false" />
+    <parameter name="cs.report.compress.testrun.folder" value="true" />
+    <parameter name="cs.report.compress.delete.original" value="true" />
+    
+    <test name="Enhanced Reporting Tests" preserve-order="true">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

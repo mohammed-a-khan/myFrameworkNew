@@ -515,4 +515,113 @@ public class OrangeHRMSteps extends CSStepDefinitions {
                 logger.info("Navigating to {} menu", menuItem);
         }
     }
+    
+    // ================== BROWSER SWITCHING STEP DEFINITIONS ==================
+    
+    @CSStep(description = "I switch to {browserType} browser")
+    public void switchToBrowser(String browserType) {
+        logger.info("Switching to {} browser", browserType);
+        
+        // Use CSBasePage's switchBrowser method through loginPage
+        loginPage.switchBrowser(browserType);
+        
+        logger.info("Successfully switched to {} browser", browserType);
+    }
+    
+    @CSStep(description = "I restart the current browser")
+    public void restartCurrentBrowser() {
+        logger.info("Restarting current browser");
+        
+        // Use CSBasePage's restartBrowser method through loginPage
+        loginPage.restartBrowser();
+        
+        logger.info("Successfully restarted current browser");
+    }
+    
+    @CSStep(description = "I force restart {browserType} browser")
+    public void restartBrowser(String browserType) {
+        logger.info("Force restarting {} browser", browserType);
+        
+        // Use CSBasePage's enhanced switchBrowser with force restart
+        loginPage.switchBrowser(browserType, true);
+        
+        logger.info("Successfully force restarted {} browser", browserType);
+    }
+    
+    @CSStep(description = "I am using {browserType} browser")
+    public void usingBrowser(String browserType) {
+        logger.info("Ensuring I am using {} browser", browserType);
+        
+        String currentBrowser = loginPage.getCurrentBrowserType();
+        if (currentBrowser == null || !currentBrowser.equalsIgnoreCase(browserType)) {
+            logger.info("Current browser is {}, switching to {}", currentBrowser, browserType);
+            switchToBrowser(browserType);
+        } else {
+            logger.info("Already using {} browser", browserType);
+        }
+    }
+    
+    @CSStep(description = "I verify the current browser is {browserType}")
+    public void verifyCurrentBrowser(String browserType) {
+        String currentBrowser = loginPage.getCurrentBrowserType();
+        logger.info("Current browser: {}, Expected: {}", currentBrowser, browserType);
+        
+        if (currentBrowser == null) {
+            throw new AssertionError("No browser is currently active");
+        }
+        
+        // Flexible browser matching to handle different browser name reporting
+        boolean browserMatches = isBrowserTypeMatch(currentBrowser, browserType);
+        
+        if (!browserMatches) {
+            throw new AssertionError("Expected browser: " + browserType + ", but current browser is: " + currentBrowser);
+        }
+        
+        logger.info("Browser verification passed - using {} as expected (reported as: {})", browserType, currentBrowser);
+    }
+    
+    /**
+     * Check if browser types match, handling different browser name variations
+     */
+    private boolean isBrowserTypeMatch(String actualBrowser, String expectedBrowser) {
+        if (actualBrowser == null || expectedBrowser == null) {
+            return false;
+        }
+        
+        String actual = actualBrowser.toLowerCase();
+        String expected = expectedBrowser.toLowerCase();
+        
+        // Direct match
+        if (actual.equals(expected)) {
+            return true;
+        }
+        
+        // Handle Edge browser variations
+        if (expected.equals("edge")) {
+            return actual.contains("edge") || actual.contains("msedge") || actual.equals("microsoftedge");
+        }
+        
+        // Handle Chrome browser variations
+        if (expected.equals("chrome")) {
+            return actual.contains("chrome") || actual.equals("googlechrome");
+        }
+        
+        // Handle Firefox browser variations
+        if (expected.equals("firefox")) {
+            return actual.contains("firefox") || actual.equals("mozilla");
+        }
+        
+        // Handle IE browser variations
+        if (expected.equals("ie") || expected.equals("internetexplorer")) {
+            return actual.contains("internet") || actual.contains("explorer") || actual.equals("ie");
+        }
+        
+        return false;
+    }
+    
+    @CSStep(description = "I switch back to {browserType} browser")
+    public void switchBackToBrowser(String browserType) {
+        logger.info("Switching back to {} browser", browserType);
+        switchToBrowser(browserType); // Same implementation - creates fresh browser instance
+    }
 }

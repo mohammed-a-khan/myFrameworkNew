@@ -12,17 +12,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 import com.testforge.cs.utils.CSImageUtils;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * Enhanced V5 report generator with comprehensive features matching demo_report.html
@@ -100,14 +106,40 @@ public class CSHtmlReportGenerator {
             // Save trend data for future comparison
             saveTrendData(reportData);
             
-            // Update latest report link to point to the new run folder
-            updateLatestReportLink(reportDir, runFolder + "/cs_test_run_report.html");
-            
-            // Clean up temp screenshots directory after report generation
+            // Clean up temp screenshots directory first
             cleanupTempScreenshots();
             
-            // Finalize log capture and copy logs to test run directory
+            // IMPORTANT: Finalize log capture BEFORE compression so logs are included in ZIP
+            // This copies console-summary.txt and test-execution.log to the test run directory
+            logger.info("Finalizing log capture before compression for test run: {}", runPath);
             CSLogManager.finalizeLogCapture();
+            
+            // Verify log files exist in the test run directory
+            File testRunDir = new File(runPath);
+            File[] allFiles = testRunDir.listFiles();
+            logger.info("Files in test run directory after log finalization:");
+            if (allFiles != null) {
+                for (File file : allFiles) {
+                    logger.info("  - {} ({})", file.getName(), 
+                        file.isDirectory() ? "directory" : file.length() + " bytes");
+                }
+            } else {
+                logger.warn("No files found in test run directory: {}", runPath);
+            }
+            
+            // Update latest report link to point to the new run folder (configurable)
+            CSConfigManager configManager = CSConfigManager.getInstance();
+            boolean generateLatestHtml = configManager.getBooleanProperty("cs.report.generate.latest.html", false);
+            if (generateLatestHtml) {
+                updateLatestReportLink(reportDir, runFolder + "/cs_test_run_report.html");
+            }
+            
+            // Compress the test run folder AFTER all files are written (including logs)
+            boolean compressTestRunFolder = configManager.getBooleanProperty("cs.report.compress.testrun.folder", false);
+            if (compressTestRunFolder) {
+                logger.debug("Starting compression of test run folder after all files are finalized");
+                compressTestRunFolder(reportDir + File.separator + runFolder);
+            }
             
             logger.info("Enhanced V5 report generated: {}", filePath);
             return filePath;
@@ -6134,5 +6166,187 @@ public class CSHtmlReportGenerator {
         
         // Fallback to report name
         return reportData.getReportName() != null ? reportData.getReportName() : "Unknown Suite";
+    }
+    
+    /**
+     * Compress test run folder to ZIP file and optionally delete original folder
+     */
+    private void compressTestRunFolder(String testRunFolderPath) {
+        try {
+            File testRunFolder = new File(testRunFolderPath);
+            if (!testRunFolder.exists() || !testRunFolder.isDirectory()) {
+                logger.warn("Test run folder not found or not a directory: {}", testRunFolderPath);
+                return;
+            }
+            
+            // List all files that will be included in ZIP
+            logger.debug("Files to be compressed in {}: ", testRunFolderPath);
+            File[] files = testRunFolder.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    logger.debug("  - {} ({})", file.getName(), file.isDirectory() ? "directory" : file.length() + " bytes");
+                }
+            }
+            
+            String zipFilePath = testRunFolderPath + ".zip";
+            logger.info("Compressing test run folder with {} files: {} -> {}", 
+                files != null ? files.length : 0, testRunFolderPath, zipFilePath);
+            
+            try (FileOutputStream fos = new FileOutputStream(zipFilePath);
+                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+                
+                int fileCount = zipFolder(testRunFolder, "", zos);
+                logger.info("Successfully created ZIP archive with {} entries: {}", fileCount, zipFilePath);
+                
+                // Optionally delete the original folder after successful compression
+                CSConfigManager config = CSConfigManager.getInstance();
+                boolean deleteAfterCompress = config.getBooleanProperty("cs.report.compress.delete.original", true);
+                
+                if (deleteAfterCompress) {
+                    try {
+                        // Try NIO first (more robust on Windows)
+                        deleteDirectoryNIO(testRunFolder.toPath());
+                        logger.info("Successfully deleted original test run folder after compression: {}", testRunFolderPath);
+                    } catch (IOException e) {
+                        logger.warn("NIO deletion failed, trying legacy method: {}", e.getMessage());
+                        try {
+                            deleteDirectory(testRunFolder);
+                            logger.info("Successfully deleted original test run folder using legacy method: {}", testRunFolderPath);
+                        } catch (IOException e2) {
+                            logger.error("Failed to delete original test run folder after compression: {} - {}", testRunFolderPath, e2.getMessage());
+                            logger.warn("ZIP file created successfully but original folder could not be deleted (possibly due to file locks)");
+                        }
+                    }
+                } else {
+                    logger.info("Keeping original test run folder (cs.report.compress.delete.original=false)");
+                }
+                
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to compress test run folder: {}", testRunFolderPath, e);
+        }
+    }
+    
+    /**
+     * Recursively zip a folder - reusing logic from ADO integration
+     * @return number of files added to ZIP
+     */
+    private int zipFolder(File folder, String parentPath, ZipOutputStream zos) throws IOException {
+        File[] files = folder.listFiles();
+        if (files == null) return 0;
+        
+        int fileCount = 0;
+        for (File file : files) {
+            String entryName = parentPath.isEmpty() ? file.getName() : parentPath + "/" + file.getName();
+            
+            if (file.isDirectory()) {
+                // Add directory entry
+                zos.putNextEntry(new ZipEntry(entryName + "/"));
+                zos.closeEntry();
+                logger.trace("Added directory to ZIP: {}", entryName);
+                
+                // Recursively zip folder contents
+                fileCount += zipFolder(file, entryName, zos);
+            } else {
+                // Add file entry
+                logger.debug("Adding file to ZIP: {} ({} bytes)", entryName, file.length());
+                zos.putNextEntry(new ZipEntry(entryName));
+                
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+                    byte[] buffer = new byte[4096];
+                    int length;
+                    while ((length = fis.read(buffer)) > 0) {
+                        zos.write(buffer, 0, length);
+                    }
+                }
+                
+                zos.closeEntry();
+                fileCount++;
+            }
+        }
+        return fileCount;
+    }
+    
+    /**
+     * Recursively delete a directory and all its contents
+     */
+    private void deleteDirectory(File directory) throws IOException {
+        if (!directory.exists()) {
+            logger.debug("Directory does not exist, nothing to delete: {}", directory.getAbsolutePath());
+            return;
+        }
+        
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    deleteDirectory(file);
+                } else {
+                    // Try multiple times for Windows file locking issues
+                    boolean deleted = false;
+                    for (int i = 0; i < 3; i++) {
+                        if (file.delete()) {
+                            deleted = true;
+                            break;
+                        }
+                        try {
+                            Thread.sleep(100); // Wait a bit for file locks to release
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                    if (!deleted) {
+                        logger.warn("Failed to delete file after 3 attempts: {}", file.getAbsolutePath());
+                        throw new IOException("Cannot delete file: " + file.getAbsolutePath());
+                    }
+                }
+            }
+        }
+        
+        // Try multiple times to delete directory
+        boolean deleted = false;
+        for (int i = 0; i < 3; i++) {
+            if (directory.delete()) {
+                deleted = true;
+                break;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        
+        if (!deleted) {
+            logger.error("Failed to delete directory after 3 attempts: {}", directory.getAbsolutePath());
+            throw new IOException("Cannot delete directory: " + directory.getAbsolutePath());
+        }
+    }
+    
+    /**
+     * Delete directory using NIO (more robust on Windows)
+     */
+    private void deleteDirectoryNIO(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            logger.debug("Directory does not exist (NIO), nothing to delete: {}", directory);
+            return;
+        }
+        
+        Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+            
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }

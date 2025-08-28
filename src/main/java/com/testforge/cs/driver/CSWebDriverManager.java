@@ -3,9 +3,13 @@ package com.testforge.cs.driver;
 import com.testforge.cs.config.CSConfigManager;
 import com.testforge.cs.exceptions.CSFrameworkException;
 import com.testforge.cs.exceptions.CSWebDriverException;
+import com.testforge.cs.page.CSPageManager;
 import com.testforge.cs.screenshot.CSScreenshotUtils;
 import io.github.bonigarcia.wdm.WebDriverManager;
 import io.github.bonigarcia.wdm.config.DriverManagerType;
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -58,6 +62,10 @@ public class CSWebDriverManager {
     private static volatile int maxBrowsersAllowed = Integer.MAX_VALUE;
     private static Semaphore browserSemaphore = new Semaphore(Integer.MAX_VALUE);
     private static final Object ieDriverLock = new Object(); // Synchronization for IE driver creation
+    private static final Set<String> setupDriverTypes = ConcurrentHashMap.newKeySet(); // Cache for WebDriverManager setup
+    
+    // Browser switching support - track current browser type per thread
+    private static final ThreadLocal<String> currentBrowserType = ThreadLocal.withInitial(() -> null);
     
     // Register shutdown hook to ensure all browsers are closed
     static {
@@ -154,37 +162,202 @@ public class CSWebDriverManager {
     }
     
     /**
-     * Setup WebDriverManager with proxy configuration if needed
-     * This method ensures proxy is properly configured for each driver download
+     * Setup local driver from configured directory if available
+     * @param browserType The browser type (chrome, firefox, edge, ie, safari)
+     * @return true if local driver was found and configured, false otherwise
      */
-    private static void setupWebDriverManager(WebDriverManager manager) {
-        // The proxy is already configured via system properties in static block
-        // But we can add additional WebDriverManager-specific proxy settings here if needed
-        
-        boolean proxyEnabled = config.getBooleanProperty("cs.proxy.enabled", false);
-        if (proxyEnabled) {
-            String proxyHost = config.getProperty("cs.proxy.host", "");
-            String proxyPort = config.getProperty("cs.proxy.port", "");
-            
-            if (!proxyHost.isEmpty() && !proxyPort.isEmpty()) {
-                // WebDriverManager also supports proxy configuration via its own API
-                String proxyUrl = "http://" + proxyHost + ":" + proxyPort;
-                manager.proxy(proxyUrl);
-                
-                // Set proxy user/pass if provided
-                String proxyUser = config.getProperty("cs.proxy.username", "");
-                String proxyPass = config.getProperty("cs.proxy.password", "");
-                if (!proxyUser.isEmpty() && !proxyPass.isEmpty()) {
-                    manager.proxyUser(proxyUser);
-                    manager.proxyPass(proxyPass);
-                }
-                
-                logger.debug("WebDriverManager configured with proxy: {}", proxyUrl);
-            }
+    private static boolean setupLocalDriver(String browserType) {
+        boolean localLookupEnabled = config.getBooleanProperty("cs.driver.local.lookup.enabled", true);
+        if (!localLookupEnabled) {
+            logger.debug("Local driver lookup is disabled");
+            return false;
         }
         
-        // Now setup the driver
-        manager.setup();
+        String localDriverPath = config.getProperty("cs.driver.local.path", "server");
+        String executableName = getDriverExecutableName(browserType);
+        
+        if (executableName == null) {
+            logger.debug("No executable name configured for browser: {}", browserType);
+            return false;
+        }
+        
+        // Resolve the driver path (support both relative and absolute paths)
+        Path driverDir;
+        if (Paths.get(localDriverPath).isAbsolute()) {
+            driverDir = Paths.get(localDriverPath);
+        } else {
+            // Relative to project root
+            driverDir = Paths.get(System.getProperty("user.dir"), localDriverPath);
+        }
+        
+        File driverFile = driverDir.resolve(executableName).toFile();
+        
+        if (driverFile.exists() && driverFile.isFile()) {
+            String driverPath = driverFile.getAbsolutePath();
+            logger.info("Found local {} driver at: {}", browserType, driverPath);
+            
+            // Set the appropriate system property for the driver
+            String systemProperty = getDriverSystemProperty(browserType);
+            if (systemProperty != null) {
+                System.setProperty(systemProperty, driverPath);
+                logger.info("Configured {} driver system property: {} = {}", browserType, systemProperty, driverPath);
+                return true;
+            } else {
+                logger.warn("Unknown system property for browser type: {}", browserType);
+            }
+        } else {
+            logger.debug("Local {} driver not found at: {}", browserType, driverFile.getAbsolutePath());
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Get the executable name for a browser type
+     */
+    private static String getDriverExecutableName(String browserType) {
+        switch (browserType.toLowerCase()) {
+            case "chrome":
+                return config.getProperty("cs.driver.chrome.executable", "chromedriver.exe");
+            case "firefox":
+                return config.getProperty("cs.driver.firefox.executable", "geckodriver.exe");
+            case "edge":
+                return config.getProperty("cs.driver.edge.executable", "msedgedriver.exe");
+            case "ie":
+            case "internet explorer":
+                return config.getProperty("cs.driver.ie.executable", "IEDriverServer.exe");
+            case "safari":
+                return config.getProperty("cs.driver.safari.executable", "safaridriver");
+            default:
+                return null;
+        }
+    }
+    
+    /**
+     * Get the system property name for a browser type
+     */
+    private static String getDriverSystemProperty(String browserType) {
+        switch (browserType.toLowerCase()) {
+            case "chrome":
+                return "webdriver.chrome.driver";
+            case "firefox":
+                return "webdriver.gecko.driver";
+            case "edge":
+                return "webdriver.edge.driver";
+            case "ie":
+            case "internet explorer":
+                return "webdriver.ie.driver";
+            case "safari":
+                return "webdriver.safari.driver";
+            default:
+                return null;
+        }
+    }
+    
+    /**
+     * Setup driver with local lookup first, fallback to WebDriverManager
+     * This method ensures offline-first approach for all browsers
+     * OPTIMIZED: Uses caching to avoid multiple setup calls for the same driver type
+     */
+    private static void setupWebDriverManager(WebDriverManager manager) {
+        // Get driver type for caching
+        String driverType = manager.getClass().getSimpleName().toLowerCase().replace("drivermanager", "");
+        
+        // Check if this driver type has already been setup
+        if (setupDriverTypes.contains(driverType)) {
+            logger.debug("Driver for {} already setup, skipping", driverType);
+            return;
+        }
+        
+        // Synchronize only the first-time setup for each driver type
+        synchronized (setupDriverTypes) {
+            // Double-check after acquiring lock
+            if (setupDriverTypes.contains(driverType)) {
+                logger.debug("Driver for {} already setup by another thread, skipping", driverType);
+                return;
+            }
+            
+            logger.info("Setting up driver for {} (first time)", driverType);
+            
+            // Step 1: Try local driver lookup first
+            if (setupLocalDriver(driverType)) {
+                logger.info("Successfully configured local {} driver, skipping WebDriverManager", driverType);
+                setupDriverTypes.add(driverType);
+                return;
+            }
+            
+            // Step 2: Fallback to WebDriverManager if local driver not found
+            logger.info("Local {} driver not found, attempting WebDriverManager setup", driverType);
+            
+            // The proxy is already configured via system properties in static block
+            // But we can add additional WebDriverManager-specific proxy settings here if needed
+            
+            boolean proxyEnabled = config.getBooleanProperty("cs.proxy.enabled", false);
+            if (proxyEnabled) {
+                String proxyHost = config.getProperty("cs.proxy.host", "");
+                String proxyPort = config.getProperty("cs.proxy.port", "");
+                
+                if (!proxyHost.isEmpty() && !proxyPort.isEmpty()) {
+                    // WebDriverManager also supports proxy configuration via its own API
+                    String proxyUrl = "http://" + proxyHost + ":" + proxyPort;
+                    manager.proxy(proxyUrl);
+                    
+                    // Set proxy user/pass if provided
+                    String proxyUser = config.getProperty("cs.proxy.username", "");
+                    String proxyPass = config.getProperty("cs.proxy.password", "");
+                    if (!proxyUser.isEmpty() && !proxyPass.isEmpty()) {
+                        manager.proxyUser(proxyUser);
+                        manager.proxyPass(proxyPass);
+                    }
+                    
+                    logger.debug("WebDriverManager configured with proxy: {}", proxyUrl);
+                }
+            }
+            
+            // Configure offline/cache behavior
+            boolean offlineFirst = config.getBooleanProperty("cs.webdrivermanager.offline.first", true);
+            boolean avoidBrowserDetection = config.getBooleanProperty("cs.webdrivermanager.avoid.browser.detection", true);
+            
+            if (offlineFirst) {
+                logger.debug("Configuring WebDriverManager for {} with offline-first mode", driverType);
+                manager.cachePath(System.getProperty("user.home") + "/.cache/selenium");
+                
+                // Configure timeout settings to fail fast if network is unavailable
+                int timeoutSeconds = config.getIntegerProperty("cs.webdrivermanager.timeout.seconds", 10);
+                manager.timeout(timeoutSeconds);
+            }
+            
+            if (avoidBrowserDetection) {
+                logger.debug("Configuring WebDriverManager for {} to avoid browser detection", driverType);
+                // This helps avoid network calls to detect browser versions
+                manager.avoidBrowserDetection();
+                
+            }
+            
+            // Try to setup the driver with fallback handling
+            try {
+                logger.debug("Setting up WebDriverManager for {} (attempting online setup)", driverType);
+                manager.setup();
+                logger.info("WebDriverManager online setup successful for {}", driverType);
+            } catch (Exception e) {
+                logger.warn("WebDriverManager online setup failed for {}: {}. Attempting fallback...", driverType, e.getMessage());
+                try {
+                    // Try to use cached driver if available
+                    manager.clearResolutionCache();
+                    manager.setup();
+                    logger.info("WebDriverManager fallback setup successful for {}", driverType);
+                } catch (Exception fallbackException) {
+                    logger.error("WebDriverManager fallback setup also failed for {}: {}", driverType, fallbackException.getMessage());
+                    throw new RuntimeException("Unable to setup WebDriverManager for " + driverType + 
+                        " - both online and fallback attempts failed. Please check network connectivity or manually place driver in PATH.", 
+                        fallbackException);
+                }
+            }
+            
+            // Mark this driver type as setup
+            setupDriverTypes.add(driverType);
+            logger.info("WebDriverManager for {} setup completed and cached", driverType);
+        }
     }
     
     /**
@@ -216,6 +389,8 @@ public class CSWebDriverManager {
         try {
             logger.info("Thread {} attempting to acquire browser permit. Available permits: {}", 
                 threadName, browserSemaphore.availablePermits());
+            
+            // Use non-blocking tryAcquire for both modes to allow proper parallel batching
             acquired = browserSemaphore.tryAcquire();
             if (!acquired) {
                 logger.error("!!! BROWSER LIMIT REACHED !!! Thread {} cannot create browser. Max allowed: {}", 
@@ -253,6 +428,9 @@ public class CSWebDriverManager {
             // Store in pool with thread ID
             String threadIdKey = String.valueOf(threadId);
             driverPool.put(threadIdKey, driver);
+            
+            // Track current browser type for browser switching
+            currentBrowserType.set(browserType.toLowerCase());
             
             logger.info("Browser successfully created for thread {}. Active browsers: {}", 
                 threadName, driverPool.size());
@@ -383,7 +561,7 @@ public class CSWebDriverManager {
      * Create Edge driver
      */
     private static WebDriver createEdgeDriver(boolean headless, Map<String, Object> capabilities) {
-        // Setup EdgeDriver using WebDriverManager with proxy support
+        // Setup EdgeDriver using local lookup first, then WebDriverManager fallback
         setupWebDriverManager(WebDriverManager.edgedriver());
         
         EdgeOptions options = new EdgeOptions();
@@ -949,10 +1127,11 @@ public class CSWebDriverManager {
      */
     public static WebDriver getDriver() {
         WebDriver driver = threadLocalDriver.get();
+        String driverInfo = driver != null ? driver.getClass().getSimpleName() + " - " + driver.toString() : "NULL";
         logger.debug("Getting driver for thread {} (ID: {}): {}", 
             Thread.currentThread().getName(), 
             Thread.currentThread().getId(),
-            driver != null ? "FOUND" : "NULL");
+            driverInfo);
         return driver;
     }
     
@@ -983,8 +1162,179 @@ public class CSWebDriverManager {
                 // Release the semaphore permit
                 browserSemaphore.release();
                 logger.info("Released browser permit. Available permits: {}", browserSemaphore.availablePermits());
+                // Clear current browser type when quitting
+                currentBrowserType.remove();
             }
         }
+    }
+    
+    /**
+     * Switch to a different browser type
+     * This will close the current browser (if any) and create a new browser of the specified type
+     * 
+     * @param newBrowserType The browser type to switch to (chrome, firefox, edge, ie, safari)
+     * @return The newly created WebDriver instance
+     */
+    public static WebDriver switchBrowser(String newBrowserType) {
+        String threadName = Thread.currentThread().getName();
+        long threadId = Thread.currentThread().getId();
+        
+        logger.info("[{}] Browser switch requested to: {}", threadName, newBrowserType);
+        
+        // Validate browser type
+        if (newBrowserType == null || newBrowserType.trim().isEmpty()) {
+            throw new CSFrameworkException("Browser type cannot be null or empty");
+        }
+        
+        // Get current driver and browser type
+        WebDriver currentDriver = getDriver();
+        String currentType = currentBrowserType.get();
+        
+        // Check if we're already using the requested browser type
+        if (currentDriver != null && currentType != null && currentType.equalsIgnoreCase(newBrowserType)) {
+            logger.info("[{}] Already using {} browser, no switch needed (use restartBrowser() to restart same browser)", threadName, newBrowserType);
+            return currentDriver;
+        }
+        
+        // If there's a current browser, close it
+        if (currentDriver != null) {
+            logger.info("[{}] Closing current {} browser before switching", threadName, currentType);
+            quitDriver();
+        }
+        
+        // Create new browser of the requested type
+        logger.info("[{}] Creating new {} browser", threadName, newBrowserType);
+        
+        // Get headless configuration from config
+        boolean headless = config.getBooleanProperty("cs.browser.headless", false);
+        
+        // Create the new driver
+        WebDriver newDriver = createDriver(newBrowserType, headless, null);
+        
+        // Update the current browser type
+        if (newDriver != null) {
+            currentBrowserType.set(newBrowserType.toLowerCase());
+            
+            // Clear cached page objects to ensure they get fresh driver references
+            CSPageManager.clearThreadPages();
+            logger.debug("[{}] Cleared cached page objects after browser switch", threadName);
+            
+            // Force garbage collection to clear any lingering references
+            System.gc();
+            logger.debug("[{}] Triggered garbage collection after browser switch", threadName);
+            
+            logger.info("[{}] Successfully switched to {} browser", threadName, newBrowserType);
+        } else {
+            logger.error("[{}] Failed to create {} browser", threadName, newBrowserType);
+            throw new CSWebDriverException("Failed to create " + newBrowserType + " browser");
+        }
+        
+        return newDriver;
+    }
+    
+    /**
+     * Restart the current browser (same type, fresh instance)
+     * Useful for scenarios like login with different credentials, clearing all data, etc.
+     * 
+     * @return WebDriver instance of restarted browser
+     * @throws CSWebDriverException if browser restart fails
+     */
+    public static WebDriver restartBrowser() {
+        String threadName = Thread.currentThread().getName();
+        String currentType = getCurrentBrowserType();
+        
+        if (currentType == null) {
+            logger.warn("[{}] No browser is currently active, creating new browser instead", threadName);
+            return getDriver(); // This will create a new browser using default type
+        }
+        
+        logger.info("[{}] Browser restart requested for: {}", threadName, currentType);
+        
+        // Close current browser
+        logger.info("[{}] Closing current {} browser for restart", threadName, currentType);
+        quitDriver();
+        
+        // Clear page cache to ensure fresh page objects with new browser
+        CSPageManager.clearThreadPages();
+        logger.debug("[{}] Cleared cached page objects after browser restart", threadName);
+        
+        // Force garbage collection to clear any lingering references
+        System.gc();
+        logger.debug("[{}] Triggered garbage collection after browser restart", threadName);
+        
+        // Create fresh browser of the same type
+        logger.info("[{}] Creating fresh {} browser", threadName, currentType);
+        
+        // Get headless configuration from config
+        boolean headless = config.getBooleanProperty("cs.browser.headless", false);
+        
+        WebDriver newDriver = createDriver(currentType, headless, null);
+        
+        if (newDriver != null) {
+            logger.info("[{}] Successfully restarted {} browser with fresh session", threadName, currentType);
+        } else {
+            logger.error("[{}] Failed to restart {} browser", threadName, currentType);
+            throw new CSWebDriverException("Failed to restart " + currentType + " browser");
+        }
+        
+        return newDriver;
+    }
+    
+    /**
+     * Enhanced switchBrowser that supports restarting same browser type
+     * 
+     * @param newBrowserType The browser type to switch to (chrome, firefox, edge, etc.)
+     * @param forceRestart If true, will restart even if same browser type is already running
+     * @return WebDriver instance of the switched/restarted browser
+     * @throws CSWebDriverException if browser switch fails
+     */
+    public static WebDriver switchBrowser(String newBrowserType, boolean forceRestart) {
+        String threadName = Thread.currentThread().getName();
+        String currentType = getCurrentBrowserType();
+        
+        logger.info("[{}] Browser switch requested to: {} (force restart: {})", threadName, newBrowserType, forceRestart);
+        
+        // Validate browser type
+        if (newBrowserType == null || newBrowserType.trim().isEmpty()) {
+            throw new CSFrameworkException("Browser type cannot be null or empty");
+        }
+        
+        WebDriver currentDriver = getDriver();
+        
+        // Check if we're already using the requested browser type
+        if (currentDriver != null && currentType != null && currentType.equalsIgnoreCase(newBrowserType)) {
+            if (!forceRestart) {
+                logger.info("[{}] Already using {} browser, no switch needed", threadName, newBrowserType);
+                return currentDriver;
+            } else {
+                logger.info("[{}] Same browser type but force restart requested", threadName);
+                return restartBrowser();
+            }
+        }
+        
+        // Different browser type - use normal switch logic
+        return switchBrowser(newBrowserType);
+    }
+    
+    /**
+     * Get the current browser type for the thread
+     * 
+     * @return The current browser type (chrome, firefox, edge, etc.) or null if no browser is active
+     */
+    public static String getCurrentBrowserType() {
+        String type = currentBrowserType.get();
+        if (type == null) {
+            // If not set but driver exists, try to determine from driver
+            WebDriver driver = getDriver();
+            if (driver != null) {
+                String browserName = ((RemoteWebDriver) driver).getCapabilities().getBrowserName();
+                if (browserName != null) {
+                    type = browserName.toLowerCase();
+                    currentBrowserType.set(type);
+                }
+            }
+        }
+        return type;
     }
     
     /**

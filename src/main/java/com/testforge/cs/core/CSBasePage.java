@@ -62,14 +62,19 @@ public abstract class CSBasePage {
         
         // Update cached references if driver changed
         if (this.driver != currentDriver) {
-            logger.debug("Thread {} driver reference updated", Thread.currentThread().getName());
+            logger.debug("Thread {} driver reference updated from {} to {}", 
+                Thread.currentThread().getName(), 
+                this.driver != null ? this.driver.getClass().getSimpleName() : "null",
+                currentDriver.getClass().getSimpleName());
             this.driver = currentDriver;
             this.wait = new WebDriverWait(driver, Duration.ofSeconds(config.getIntProperty("cs.browser.explicit.wait", 30)));
             this.jsExecutor = (JavascriptExecutor) driver;
             this.actions = new Actions(driver);
         }
         
-        return this.driver;
+        // Always return the current driver (not cached) to ensure browser switching works correctly
+        logger.debug("Thread {} returning driver: {}", Thread.currentThread().getName(), currentDriver.getClass().getSimpleName());
+        return currentDriver;
     }
     
     /**
@@ -240,6 +245,107 @@ public abstract class CSBasePage {
     
     public String getTitle() {
         return getDriver().getTitle();
+    }
+    
+    // ===== Browser Switching Methods =====
+    
+    /**
+     * Switch to a different browser type
+     * This will close the current browser and create a new browser of the specified type
+     * 
+     * @param browserType The browser type to switch to (chrome, firefox, edge, ie, safari)
+     */
+    public void switchBrowser(String browserType) {
+        logger.info("Switching to {} browser", browserType);
+        CSReportManager.info("Switching to " + browserType + " browser");
+        
+        try {
+            WebDriver newDriver = CSWebDriverManager.switchBrowser(browserType);
+            
+            // Reinitialize driver-dependent objects for this page
+            refreshDriverContext();
+            
+            CSReportManager.pass("Successfully switched to " + browserType + " browser");
+            logger.info("Successfully switched to {} browser", browserType);
+        } catch (Exception e) {
+            CSReportManager.fail("Failed to switch to " + browserType + " browser: " + e.getMessage());
+            logger.error("Failed to switch to {} browser", browserType, e);
+            throw new CSFrameworkException("Browser switch failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Enhanced browser switch with restart option
+     */
+    public void switchBrowser(String browserType, boolean forceRestart) {
+        logger.info("Switching to {} browser (force restart: {})", browserType, forceRestart);
+        CSReportManager.info("Switching to " + browserType + " browser" + (forceRestart ? " (force restart)" : ""));
+        
+        try {
+            WebDriver newDriver = CSWebDriverManager.switchBrowser(browserType, forceRestart);
+            
+            // Reinitialize driver-dependent objects for this page
+            refreshDriverContext();
+            
+            CSReportManager.pass("Successfully switched to " + browserType + " browser" + (forceRestart ? " (restarted)" : ""));
+            logger.info("Successfully switched to {} browser", browserType);
+        } catch (Exception e) {
+            CSReportManager.fail("Failed to switch to " + browserType + " browser: " + e.getMessage());
+            logger.error("Failed to switch to {} browser", browserType, e);
+            throw new CSFrameworkException("Browser switch failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Restart the current browser (same type, fresh instance)
+     * Useful for scenarios like login with different credentials, clearing all data, etc.
+     */
+    public void restartBrowser() {
+        String currentType = CSWebDriverManager.getCurrentBrowserType();
+        logger.info("Restarting current browser: {}", currentType);
+        CSReportManager.info("Restarting current browser" + (currentType != null ? " (" + currentType + ")" : ""));
+        
+        try {
+            WebDriver newDriver = CSWebDriverManager.restartBrowser();
+            
+            // Reinitialize driver-dependent objects for this page
+            refreshDriverContext();
+            
+            CSReportManager.pass("Successfully restarted browser" + (currentType != null ? " (" + currentType + ")" : ""));
+            logger.info("Successfully restarted browser: {}", currentType);
+        } catch (Exception e) {
+            CSReportManager.fail("Failed to restart browser: " + e.getMessage());
+            logger.error("Failed to restart browser", e);
+            throw new CSFrameworkException("Browser restart failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get the current browser type
+     * 
+     * @return The current browser type (chrome, firefox, edge, etc.) or null if no browser is active
+     */
+    public String getCurrentBrowserType() {
+        return CSWebDriverManager.getCurrentBrowserType();
+    }
+    
+    /**
+     * Refresh the driver context after switching browsers
+     * This reinitializes driver-dependent objects (wait, actions, jsExecutor)
+     */
+    private void refreshDriverContext() {
+        WebDriver currentDriver = getDriver();
+        if (currentDriver != null) {
+            this.driver = currentDriver;
+            this.wait = new WebDriverWait(currentDriver, Duration.ofSeconds(config.getIntProperty("cs.browser.explicit.wait", 30)));
+            this.jsExecutor = (JavascriptExecutor) currentDriver;
+            this.actions = new Actions(currentDriver);
+            
+            // Clear element cache since we have a new browser instance
+            elementCache.clear();
+            
+            logger.debug("Driver context refreshed for new browser");
+        }
     }
     
     // ===== Element Finding Methods =====

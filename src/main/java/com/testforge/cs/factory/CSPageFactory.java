@@ -34,6 +34,23 @@ public class CSPageFactory {
             throw new CSPageInitializationException("WebDriver not initialized");
         }
         
+        // CRITICAL FIX: Validate driver is not stale (especially important after browser switching)
+        try {
+            driver.getTitle(); // This will throw if driver is stale/quit
+        } catch (Exception e) {
+            logger.warn("Driver validation failed, attempting to get fresh driver: {}", e.getMessage());
+            // Try to get driver again - might have been updated after browser switch
+            driver = CSWebDriverManager.getDriver();
+            if (driver == null) {
+                throw new CSPageInitializationException("WebDriver is null after retry");
+            }
+            try {
+                driver.getTitle(); // Validate again
+            } catch (Exception e2) {
+                throw new CSPageInitializationException("WebDriver is stale and cannot be recovered: " + e2.getMessage());
+            }
+        }
+        
         Class<?> pageClass = page.getClass();
         
         // Process CSPage annotation

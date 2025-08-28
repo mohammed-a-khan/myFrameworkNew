@@ -1,0 +1,27 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="OrangeHRM Browser Switching Demo" parallel="none">
+    
+    <!-- Browser Configuration - Start with Chrome -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="cs.browser.headless" value="false"/>
+    
+    <!-- Environment Configuration -->
+    <parameter name="environment.name" value="qa"/>
+    
+    <!-- Disable ADO integration to prevent hanging -->
+    <parameter name="cs.azure.devops.enabled" value="false"/>
+    
+    <!-- BDD Configuration to run only browser switching scenario -->
+    <parameter name="cs.bdd.features.path" value="features/orangehrm-simple-tests.feature"/>
+    <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
+    
+    <!-- Run only browser switching scenario -->
+    <parameter name="cs.bdd.tags" value="@browser-switching-demo"/>
+    
+    <test name="OrangeHRM Browser Switching Demo">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

@@ -1,0 +1,24 @@
+<!DOCTYPE suite SYSTEM "http://testng.org/testng-1.0.dtd">
+<suite name="Browser Switching Test Suite" parallel="none">
+    
+    <!-- Browser Configuration -->
+    <parameter name="browser.name" value="chrome"/>
+    <parameter name="cs.browser.headless" value="true"/>
+    
+    <!-- Environment Configuration -->
+    <parameter name="environment.name" value="qa"/>
+    
+    <!-- Disable ADO integration to prevent hanging -->
+    <parameter name="cs.azure.devops.enabled" value="false"/>
+    
+    <!-- BDD Configuration for Browser Switching Tests -->
+    <parameter name="cs.bdd.features.path" value="features/browser-switching-demo.feature"/>
+    <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs"/>
+    
+    <test name="Browser Switching Test">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

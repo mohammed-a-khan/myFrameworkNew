@@ -272,23 +272,40 @@ public abstract class CSBaseTest {
                 } else {
                     // Non-parallel mode - check for existing driver
                     boolean reuseBrowser = config.getBooleanProperty("cs.browser.reuse.instance", true);
-                    driver = reuseBrowser ? CSWebDriverManager.getDriver() : null;
+                    
+                    if (reuseBrowser) {
+                        // Try to reuse existing driver
+                        driver = CSWebDriverManager.getDriver();
+                        if (driver != null) {
+                            // Check if driver is still active
+                            try {
+                                driver.getTitle(); // Test if driver is alive
+                                logger.info("[{}] Reusing existing driver for thread (browser.reuse.instance=true)", threadName);
+                                // Clear cookies but don't navigate to about:blank
+                                driver.manage().deleteAllCookies();
+                            } catch (Exception e) {
+                                logger.warn("[{}] Existing driver is stale, will create new one: {}", threadName, e.getMessage());
+                                driver = null; // Force creation of new driver
+                            }
+                        }
+                    } else {
+                        // Browser reuse disabled - always create new driver
+                        logger.info("[{}] Browser reuse disabled (cs.browser.reuse.instance=false) - will create new driver", threadName);
+                        driver = null; // Ensure we don't use any existing driver
+                    }
+                    
+                    // Create new driver if needed
                     if (driver == null) {
                         String browserType = getBrowserType(method);
                         boolean headless = config.getBooleanProperty("cs.browser.headless", false);
-                        logger.info("[{}] Creating NEW {} driver (headless: {})", threadName, browserType, headless);
+                        logger.info("[{}] Creating NEW {} driver (headless: {}) - Reason: {}", 
+                            threadName, browserType, headless, 
+                            reuseBrowser ? "No existing driver or driver was stale" : "Browser reuse disabled");
                         driver = CSWebDriverManager.createDriver(browserType, headless, null);
-                        logger.info("[{}] Driver created: {}", threadName, driver);
-                    } else {
-                        logger.info("[{}] Reusing existing driver for thread (browser.reuse.instance=true)", threadName);
-                        // Clear cookies but don't navigate to about:blank as it creates confusion
-                        // The test will navigate to the appropriate URL
-                        try {
-                            driver.manage().deleteAllCookies();
-                            // Don't navigate to about:blank - let the test handle navigation
-                        } catch (Exception e) {
-                            logger.warn("Failed to clear browser cookies: {}", e.getMessage());
+                        if (driver == null) {
+                            throw new CSTestExecutionException("Failed to create WebDriver for test: " + testName);
                         }
+                        logger.info("[{}] New driver created successfully with hashCode: {}", threadName, driver.hashCode());
                     }
                 }
                 
@@ -373,15 +390,33 @@ public abstract class CSBaseTest {
             
             if (!reuseBrowser) {
                 // Close browser after each test when reuse is disabled
-                logger.info("[{}] Closing browser after test (browser.reuse.instance=false)", Thread.currentThread().getName());
-                CSWebDriverManager.quitDriver();
-                driver = null;
+                logger.info("[{}] Closing browser after test (cs.browser.reuse.instance=false)", Thread.currentThread().getName());
+                if (driver != null) {
+                    try {
+                        driver.quit();
+                        logger.info("[{}] Browser closed successfully", Thread.currentThread().getName());
+                    } catch (Exception e) {
+                        logger.warn("[{}] Error closing browser: {}", Thread.currentThread().getName(), e.getMessage());
+                    }
+                }
+                CSWebDriverManager.quitDriver(); // Ensure ThreadLocal cleanup
+                driver = null; // Clear instance variable
             } else if (isParallel) {
                 // Keep browser open for thread reuse in parallel mode
-                logger.info("[{}] Keeping browser open for thread reuse in parallel mode (browser.reuse.instance=true)", Thread.currentThread().getName());
+                logger.info("[{}] Keeping browser open for thread reuse in parallel mode (cs.browser.reuse.instance=true)", Thread.currentThread().getName());
             } else {
                 // In sequential mode, keep browser for next test
-                logger.info("[{}] Sequential mode - keeping browser for next test (browser.reuse.instance=true)", Thread.currentThread().getName());
+                logger.info("[{}] Sequential mode - keeping browser for next test (cs.browser.reuse.instance=true)", Thread.currentThread().getName());
+                // Verify driver is still alive for next test
+                if (driver != null) {
+                    try {
+                        driver.getTitle(); // Test if driver is still alive
+                        logger.debug("[{}] Driver validated for next test", Thread.currentThread().getName());
+                    } catch (Exception e) {
+                        logger.warn("[{}] Driver became stale, will be recreated for next test: {}", Thread.currentThread().getName(), e.getMessage());
+                        // Don't quit here - let next test handle driver creation
+                    }
+                }
             }
             
             // Clear page cache to prevent memory leaks

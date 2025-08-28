@@ -59,8 +59,16 @@ public class CSDriver {
     public void get(String url) {
         logger.info("Navigating to URL: {}", url);
         CSReportManager.info("Navigating to URL: " + url);
+        
+        // CRITICAL FIX: Always use current driver instead of cached one (for browser switching support)
+        WebDriver currentDriver = CSWebDriverManager.getDriver();
+        if (currentDriver == null) {
+            CSReportManager.fail("WebDriver is null - cannot navigate to: " + url);
+            throw new CSDriverException("WebDriver is null - cannot navigate to URL: " + url);
+        }
+        
         try {
-            driver.get(url);
+            currentDriver.get(url);
             CSReportManager.pass("Successfully navigated to: " + url);
         } catch (Exception e) {
             CSReportManager.fail("Failed to navigate to: " + url);
@@ -79,14 +87,26 @@ public class CSDriver {
      * Get current URL
      */
     public String getCurrentUrl() {
-        return driver.getCurrentUrl();
+        // CRITICAL FIX: Always use current driver instead of cached one (for browser switching support)
+        WebDriver currentDriver = CSWebDriverManager.getDriver();
+        if (currentDriver == null) {
+            logger.error("WebDriver is null - cannot get current URL");
+            throw new CSDriverException("WebDriver is null - cannot get current URL");
+        }
+        return currentDriver.getCurrentUrl();
     }
     
     /**
      * Get page title
      */
     public String getTitle() {
-        return driver.getTitle();
+        // CRITICAL FIX: Always use current driver instead of cached one (for browser switching support)
+        WebDriver currentDriver = CSWebDriverManager.getDriver();
+        if (currentDriver == null) {
+            logger.error("WebDriver is null - cannot get page title");
+            throw new CSDriverException("WebDriver is null - cannot get page title");
+        }
+        return currentDriver.getTitle();
     }
     
     /**

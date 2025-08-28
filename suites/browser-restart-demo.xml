@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suite name="Browser Restart Demo" parallel="none" thread-count="1">
+    
+    <parameter name="browser.name" value="chrome" />
+    <parameter name="environment.name" value="qa" />
+    <parameter name="cs.bdd.features.path" value="features/browser-restart-demo.feature" />
+    <parameter name="cs.bdd.tags" value="@browser-restart" />
+    <parameter name="cs.bdd.stepdefs.packages" value="com.orangehrm.stepdefs" />
+    <parameter name="cs.azure.devops.enabled" value="false" />
+    <parameter name="cs.browser.headless" value="false" />
+    
+    <test name="Browser Restart Tests" preserve-order="true">
+        <classes>
+            <class name="com.testforge.cs.bdd.CSBDDRunner"/>
+        </classes>
+    </test>
+    
+</suite>

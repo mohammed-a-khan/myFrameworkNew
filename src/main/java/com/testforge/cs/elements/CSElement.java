@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 public class CSElement {
     private static final Logger logger = LoggerFactory.getLogger(CSElement.class);
     
-    private final WebDriver driver;
+    private final WebDriver driver; // Keep for backward compatibility - will use ThreadLocal instead
     private final By locator;
     private WebElement element;
     private final String description;
@@ -37,6 +37,30 @@ public class CSElement {
     private final long retryDelay;
     private final boolean highlightElements;
     private final boolean screenshotOnAction;
+    
+    /**
+     * Get current thread's WebDriver - ALWAYS call this instead of using cached driver field
+     * This ensures CSElement works correctly with cs.browser.reuse.instance=false
+     */
+    private WebDriver getCurrentDriver() {
+        WebDriver currentDriver = com.testforge.cs.driver.CSWebDriverManager.getDriver();
+        if (currentDriver == null) {
+            logger.error("WebDriver is null for thread: {}. This will cause NullPointerException!", Thread.currentThread().getName());
+            throw new RuntimeException("WebDriver is not initialized for thread: " + Thread.currentThread().getName());
+        }
+        
+        // CRITICAL FIX: Validate driver is not stale (especially important after browser switching)
+        try {
+            currentDriver.getTitle(); // Quick validation - will throw if driver is stale
+        } catch (Exception e) {
+            logger.error("Current driver is stale for thread: {} - Element operations will fail: {}", 
+                Thread.currentThread().getName(), e.getMessage());
+            throw new RuntimeException("WebDriver is stale for thread: " + Thread.currentThread().getName() + 
+                ". This usually happens after browser switching when cached elements are used. Error: " + e.getMessage());
+        }
+        
+        return currentDriver;
+    }
     
     public CSElement(WebDriver driver, By locator, String description) {
         this(driver, locator, description, false, new String[0]);
@@ -626,7 +650,7 @@ public class CSElement {
      */
     public boolean exists() {
         try {
-            driver.findElement(locator);
+            getCurrentDriver().findElement(locator);
             return true;
         } catch (NoSuchElementException e) {
             return false;
@@ -926,7 +950,7 @@ public class CSElement {
         
         while (System.currentTimeMillis() < endTime) {
             try {
-                driver.findElement(locator);
+                getCurrentDriver().findElement(locator);
                 // Element still exists, wait and try again
                 try {
                     Thread.sleep(500);
@@ -967,7 +991,7 @@ public class CSElement {
         
         while (System.currentTimeMillis() < endTime) {
             try {
-                WebElement el = driver.findElement(locator);
+                WebElement el = getCurrentDriver().findElement(locator);
                 if (!el.isDisplayed()) {
                     CSReportManager.pass("Element " + description + " is invisible");
                     return this;
@@ -1268,8 +1292,19 @@ public class CSElement {
     
     /**
      * Get element for advanced operations
+     * Fixed to work correctly with cs.browser.reuse.instance=false
      */
     public WebElement getElement() {
+        // Check if browser reuse is disabled - if so, always find element fresh to avoid stale references
+        boolean browserReuseDisabled = !config.getBoolean("cs.browser.reuse.instance", true);
+        
+        if (browserReuseDisabled) {
+            // When browser reuse is disabled, always find element fresh to avoid stale cached references
+            logger.debug("Browser reuse is disabled - finding element fresh: {}", description);
+            return findElement();
+        }
+        
+        // Original caching behavior for when browser reuse is enabled
         if (element == null || isStale()) {
             element = findElement();
         }
@@ -1300,8 +1335,8 @@ public class CSElement {
             
             try {
                 logger.debug("Attempt {}/{} to find element: {}", attempts + 1, maxRetries, description);
-                // Try primary locator
-                return driver.findElement(locator);
+                // Try primary locator - use getCurrentDriver() instead of cached driver
+                return getCurrentDriver().findElement(locator);
             } catch (NoSuchElementException e) {
                 lastException = e;
                 long attemptDuration = System.currentTimeMillis() - attemptStartTime;
@@ -1317,7 +1352,7 @@ public class CSElement {
                             By by = parseLocator(altLocator);
                             logger.debug("Trying alternative locator {}/{}: {} -> {}", 
                                 i + 1, alternativeLocators.length, altLocator, by);
-                            WebElement foundElement = driver.findElement(by);
+                            WebElement foundElement = getCurrentDriver().findElement(by);
                             logger.info("Self-healing SUCCESS: Element '{}' found using alternative locator {}: {} -> {}", 
                                 description, i + 1, altLocator, by);
                             reportManager.logInfo("Self-healing activated: Found element using alternative locator: " + by);
@@ -1429,6 +1464,11 @@ public class CSElement {
             element.isEnabled();
             return false;
         } catch (StaleElementReferenceException e) {
+            return true;
+        } catch (Exception e) {
+            // Handle "Session ID is null" and other WebDriver session errors
+            // This happens when browser reuse is disabled and cached element is from quit session
+            logger.debug("Element staleness check failed: {}", e.getMessage());
             return true;
         }
     }

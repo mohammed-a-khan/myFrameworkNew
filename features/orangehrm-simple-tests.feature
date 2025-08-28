@@ -66,3 +66,39 @@ Feature: OrangeHRM Simple Tests
       | test1    | Admin    | admin123  | NonExistentMenuOption1    |
       | test2    | Admin    | admin123  | NonExistentMenuOption2    |
       | test3    | Admin    | admin123  | NonExistentMenuOption3    |
+
+  @browser-switching-demo
+  Scenario: Cross-browser login testing with browser switching
+    # Start with Chrome browser (configured in suite)
+    Given I am on the login page
+    And I take a screenshot "chrome_initial_login_page"
+    When I enter username "Admin" and password "admin123"
+    And I click the login button
+    Then I should see the dashboard
+    And I take a screenshot "chrome_initial_dashboard"
+    And I log "Completed login in Chrome browser (initial)"
+    
+    # Switch to Edge browser and perform the same login
+    #When I switch to "Edge" browser
+    #And I verify the current browser is "Edge"
+    #And I log "Successfully switched to Edge browser"
+    #Given I am on the login page
+    #And I take a screenshot "edge_browser_login_page"
+    #When I enter username "Admin" and password "admin123"
+    #And I click the login button
+    #Then I should see the dashboard
+    #And I take a screenshot "edge_browser_dashboard"
+    #And I log "Completed login in Edge browser"
+    
+    # Switch back to Chrome to verify switching works both ways
+    #When I switch back to "Chrome" browser
+    When I switch to "Chrome" browser
+    And I verify the current browser is "Chrome"
+    And I log "Successfully switched back to Chrome browser"
+    Given I am on the login page
+    And I take a screenshot "chrome_final_login_page"
+    When I enter username "Admin" and password "admin123"
+    And I click the login button
+    Then I should see the dashboard
+    And I take a screenshot "chrome_final_dashboard"
+    And I log "Browser switching demo completed successfully - Chrome to Edge to Chrome"

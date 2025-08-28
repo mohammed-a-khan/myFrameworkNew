@@ -71,7 +71,7 @@ public class DashboardPageNew extends CSBasePage {
             Thread.sleep(config.getIntProperty("cs.wait.medium", 2000));
             
             // Check if URL contains dashboard
-            String currentUrl = driver.getCurrentUrl();
+            String currentUrl = getDriver().getCurrentUrl();
             logger.info("Current URL: {}", currentUrl);
             
             // For OrangeHRM, after successful login, URL should contain /dashboard
@@ -97,7 +97,7 @@ public class DashboardPageNew extends CSBasePage {
     }
     
     public boolean isDashboardUrl() {
-        String currentUrl = driver.getCurrentUrl();
+        String currentUrl = getDriver().getCurrentUrl();
         return currentUrl.contains("/dashboard/index") || currentUrl.contains("/dashboard");
     }
     
